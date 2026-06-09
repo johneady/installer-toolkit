@@ -19,15 +19,14 @@ if (! is_dir($projectDir)) {
     exit(1);
 }
 
-$configFile = $projectDir.'/package-config.php';
+$configFile = $projectDir.'/package/package-config.php';
 if (! file_exists($configFile)) {
-    echo "Error: No package-config.php found in {$projectDir}\n";
+    echo "Error: No package-config.php found in {$projectDir}/package/\n";
     echo "Create one using this format:\n\n";
     echo "  return [\n";
     echo "      'name'              => 'Your App Name',\n";
     echo "      'slug'              => 'your-app',\n";
     echo "      'min_php_version'   => '8.3.0',\n";
-    echo "      'installer_version' => '1.0.0',\n";
     echo "      'essential_seeders' => [...],\n";
     echo "      'sample_seeders'    => [...],\n";
     echo "  ];\n\n";
@@ -36,7 +35,7 @@ if (! file_exists($configFile)) {
 
 $config = require $configFile;
 
-$required = ['name', 'slug', 'min_php_version', 'installer_version'];
+$required = ['name', 'slug', 'min_php_version'];
 foreach ($required as $key) {
     if (empty($config[$key])) {
         echo "Error: Missing required config key: {$key}\n";
@@ -62,11 +61,13 @@ if (! is_dir($packagesDir)) {
 echo "  Generating install.php...";
 $template = file_get_contents($toolkitDir.'/templates/install.php');
 
+$installerVersion = trim(file_get_contents($toolkitDir.'/VERSION'));
+
 $configBlock = implode("\n", [
     "define('ZIP_FILENAME', '{$zipFilename}');",
     "define('APP_FOLDER', '{$slug}');",
     "define('MIN_PHP_VERSION', '{$config['min_php_version']}');",
-    "define('INSTALLER_VERSION', '{$config['installer_version']}');",
+    "define('INSTALLER_VERSION', '{$installerVersion}');",
 ]);
 
 $template = preg_replace(
@@ -101,10 +102,10 @@ echo "  Copying scanner.php...";
 copy($toolkitDir.'/templates/scanner.php', $packageDir.'/scanner.php');
 echo " done\n";
 
-// ─── 3. Generate readme.txt ──────────────────────────────────────────────────
-echo "  Generating readme.txt...";
+// ─── 3. Generate readme.md ──────────────────────────────────────────────────
+echo "  Generating readme.md...";
 $readme = generateReadme($config);
-file_put_contents($packageDir.'/readme.txt', $readme);
+file_put_contents($packageDir.'/readme.md', $readme);
 echo " done\n";
 
 // ─── 4. Generate release-workflow.md ──────────────────────────────────────────

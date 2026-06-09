@@ -18,7 +18,6 @@
 define('ZIP_FILENAME', 'app.zip');
 define('APP_FOLDER', 'app');
 define('MIN_PHP_VERSION', '8.3.0');
-define('INSTALLER_VERSION', '1.0.0');
 // [[/INSTALLER_CONFIG]]
 
 define('EULA_TEXT', <<<'EULA'
