@@ -14,10 +14,12 @@
 // Configuration Constants - DO NOT TOUCH ANY CODE BELOW
 // ============================================================================
 
-define('ZIP_FILENAME', 'pet-adoption.zip');
-define('APP_FOLDER', 'pet-adoption');
-define('MIN_PHP_VERSION', '8.2.0');
-define('INSTALLER_VERSION', '2.0.3');
+// [[INSTALLER_CONFIG]]
+define('ZIP_FILENAME', 'app.zip');
+define('APP_FOLDER', 'app');
+define('MIN_PHP_VERSION', '8.3.0');
+define('INSTALLER_VERSION', '1.0.0');
+// [[/INSTALLER_CONFIG]]
 
 define('EULA_TEXT', <<<'EULA'
 END USER LICENSE AGREEMENT (EULA)

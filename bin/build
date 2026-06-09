@@ -62,27 +62,16 @@ if (! is_dir($packagesDir)) {
 echo "  Generating install.php...";
 $template = file_get_contents($toolkitDir.'/templates/install.php');
 
-$template = preg_replace(
-    "/define\('ZIP_FILENAME', '[^']+'\);/",
+$configBlock = implode("\n", [
     "define('ZIP_FILENAME', '{$zipFilename}');",
-    $template
-);
-
-$template = preg_replace(
-    "/define\('APP_FOLDER', '[^']+'\);/",
     "define('APP_FOLDER', '{$slug}');",
-    $template
-);
-
-$template = preg_replace(
-    "/define\('MIN_PHP_VERSION', '[^']+'\);/",
     "define('MIN_PHP_VERSION', '{$config['min_php_version']}');",
-    $template
-);
+    "define('INSTALLER_VERSION', '{$config['installer_version']}');",
+]);
 
 $template = preg_replace(
-    "/define\('INSTALLER_VERSION', '[^']+'\);/",
-    "define('INSTALLER_VERSION', '{$config['installer_version']}');",
+    '/\/\/ \[\[INSTALLER_CONFIG\]\].*?\/\/ \[\[\/INSTALLER_CONFIG\]\]/s',
+    $configBlock,
     $template
 );
 
