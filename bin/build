@@ -102,10 +102,9 @@ echo "  Copying scanner.php...";
 copy($toolkitDir.'/templates/scanner.php', $packageDir.'/scanner.php');
 echo " done\n";
 
-// ─── 3. Generate readme.md ──────────────────────────────────────────────────
-echo "  Generating readme.md...";
-$readme = generateReadme($config);
-file_put_contents($packageDir.'/readme.md', $readme);
+// ─── 3. Copy readme.md ──────────────────────────────────────────────────────
+echo "  Copying readme.md...";
+copy($toolkitDir.'/readme.md', $packageDir.'/readme.md');
 echo " done\n";
 
 // ─── 4. Generate release-workflow.md ──────────────────────────────────────────
@@ -151,83 +150,6 @@ function buildSeederArray(array $seeders): string
     $lines .= '    ]';
 
     return $lines;
-}
-
-function generateReadme(array $config): string
-{
-    $name = $config['name'];
-    $zip = $config['slug'].'.zip';
-    $phpVersion = str_replace('.0', '', $config['min_php_version']);
-    $slug = $config['slug'];
-
-    return <<<TXT
-{$name} - Installation Guide
-==================================
-
-Thank you for purchasing {$name}!
-
-Follow these steps to install the application on your web server.
-
-
-REQUIREMENTS
-------------
-
-  - PHP {$phpVersion} or higher
-  - MySQL 5.7+ or MariaDB 10.3+
-  - PHP Extensions: zip, pdo_mysql, mbstring, openssl, fileinfo, bcmath
-  - Apache with mod_rewrite enabled
-
-
-INSTALLATION STEPS
-------------------
-
-1. Create a MySQL database for the application using your hosting
-   control panel (e.g. cPanel, Plesk, DirectAdmin).
-
-2. Upload both "{$zip}" and "install.php" to your web
-   server's document root folder. This is typically called:
-   - public_html (cPanel)
-   - httpdocs (Plesk)
-   - htdocs (XAMPP/Apache)
-   - www or wwwroot (other hosts)
-
-3. Open your web browser and navigate to:
-   https://yourdomain.com/install.php
-
-4. Follow the step-by-step installation wizard:
-   - Accept the license agreement
-   - Verify server requirements
-   - Enter your database credentials
-   - Configure application settings
-   - Create your admin account
-   - Wait for installation to complete
-
-5. After installation, set up the cron job as shown in the
-   final step of the installer. This is required for background
-   tasks like sending emails and processing memberships.
-
-6. The installer will automatically clean up after itself.
-   If it cannot delete the files automatically, please manually
-   delete "install.php" and "{$zip}" from your server.
-
-7. Log in to your admin panel at:
-   https://yourdomain.com/admin
-
-
-TROUBLESHOOTING
----------------
-
-- If you see a blank page, check that PHP {$phpVersion}+ is installed
-  and the required extensions are enabled.
-
-- If you get a 500 error after installation, ensure that
-  mod_rewrite is enabled in your Apache configuration.
-
-- If file uploads don't work, check that the storage/ directory
-  has proper write permissions (755 or 775).
-
-- For additional help, contact support.
-TXT;
 }
 
 function generateReleaseWorkflow(array $config): string
