@@ -1408,13 +1408,36 @@ OPTIMIZER_PHP;
         $content = <<<HTML
         {$errors}
         <form method="POST" action="install.php?step=1">
-            <div class="eula-box">{$eula}</div>
-            <label class="checkbox-label">
-                <input type="checkbox" name="accept_eula" value="1" id="accept-eula">
-                <span>I have read and agree to the End User License Agreement</span>
-            </label>
-            <div class="actions">
-                <button type="submit" class="btn btn-primary" id="accept-btn" disabled>I Accept</button>
+            <!-- EULA Box -->
+            <div class="bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6 shadow-sm">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">⚖️</span>
+                        <div>
+                            <h3 class="font-semibold text-slate-900 dark:text-white text-base">End User License Agreement</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">Please read carefully before proceeding</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6 max-h-80 overflow-y-auto scrollbar-hide">
+                    <div class="prose prose-sm max-w-none text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{$eula}</div>
+                </div>
+            </div>
+
+            <!-- Checkbox -->
+            <div class="bg-gradient-to-r from-sky-50 to-cyan-50 dark:from-sky-900/20 dark:to-cyan-900/20 rounded-xl p-4 mb-6 border border-sky-200 dark:border-sky-800">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="accept_eula" value="1" id="accept-eula" class="w-5 h-5 mt-0.5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 transition-all">
+                    <div>
+                        <span class="font-medium text-slate-900 dark:text-white">I have read and agree to the End User License Agreement</span>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">By checking this box, you confirm that you understand and accept all terms</p>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" id="accept-btn" disabled>I Accept →</button>
             </div>
         </form>
         <script>
@@ -1434,28 +1457,46 @@ HTML;
 
         $items = '';
         foreach ($results as $r) {
-            $icon = $r['passed'] ? '<span class="status-pass">&#10004;</span>' : ($r['critical'] ? '<span class="status-fail">&#10008;</span>' : '<span class="status-warn">&#9888;</span>');
-            $statusClass = $r['passed'] ? 'req-passed' : ($r['critical'] ? 'req-failed' : 'req-warn');
-            $items .= "<div class=\"req-item {$statusClass}\">{$icon} <span class=\"req-name\">{$r['name']}</span><span class=\"req-detail\">{$r['detail']}</span></div>";
+            $icon = $r['passed'] ? '✓' : ($r['critical'] ? '✕' : '⚠');
+            $statusClass = $r['passed'] ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700' : ($r['critical'] ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700');
+            $iconClass = $r['passed'] ? 'text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30' : ($r['critical'] ? 'text-red-500 bg-red-100 dark:bg-red-900/30' : 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900/30');
+            $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 {$statusClass} shadow-sm hover:shadow-md transition-shadow\">
+                <div class=\"flex-shrink-0 w-10 h-10 rounded-xl {$iconClass} flex items-center justify-center\">
+                    <span class=\"text-lg font-bold\">{$icon}</span>
+                </div>
+                <div class=\"flex-1\">
+                    <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">{$r['name']}</h4>
+                    <p class=\"text-xs text-slate-600 dark:text-slate-400 mt-0.5\">{$r['detail']}</p>
+                </div>
+                <span class=\"px-3 py-1 rounded-full {$iconClass} text-xs font-semibold\">" . ($r['passed'] ? 'Passed' : ($r['critical'] ? 'Critical' : 'Warning')) . "</span>
+            </div>";
             if (! $r['passed'] && $r['critical']) {
                 $allCriticalPassed = false;
             }
         }
 
         $disabled = $allCriticalPassed ? '' : 'disabled';
-        $retestButton = $allCriticalPassed ? '' : '<a href="install.php?step=2" class="btn btn-secondary">Re-Test</a>';
-        $warning = $allCriticalPassed ? '' : '<div class="alert alert-error">Some critical requirements are not met. Please resolve them before continuing.</div>';
+        $retestButton = $allCriticalPassed ? '' : '<button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
+        $warning = $allCriticalPassed ? '' : '<div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <span class="text-red-500 text-lg">⚠️</span>
+            </div>
+            <div>
+                <h3 class="font-semibold text-red-900 dark:text-red-400">Requirements Not Met</h3>
+                <p class="text-red-700 dark:text-red-300 text-sm">Some critical requirements are not met. Please resolve them before continuing.</p>
+            </div>
+        </div>';
 
         $content = <<<HTML
         {$warning}
-        <div class="requirements-grid">{$items}</div>
-        <form method="POST" action="install.php?step=2">
-            <div class="actions">
-                <a href="install.php?step=1" class="btn btn-secondary">Back</a>
+        <div class="grid gap-3 mb-6">{$items}</div>
+        <div class="flex justify-between items-center gap-3">
+            <a href="install.php?step=1" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
+            <div class="flex gap-3">
                 {$retestButton}
-                <button type="submit" class="btn btn-primary" {$disabled}>Continue</button>
+                <button type="submit" formaction="install.php?step=2" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" {$disabled}>Continue →</button>
             </div>
-        </form>
+        </div>
 HTML;
 
         $this->renderLayout('Server Requirements', $content, 2);
@@ -1474,34 +1515,69 @@ HTML;
 
         $content = <<<HTML
         {$errors}
-        <div id="db-test-result" style="display:none;"></div>
+        <div id="db-test-result" class="hidden"></div>
         <form method="POST" action="install.php?step=3" id="db-form">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="db_host">Database Host <span class="required">*</span></label>
-                    <input type="text" name="db_host" id="db_host" value="{$host}" required>
+            <!-- Database Configuration Card -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+                <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🗄️</span>
+                        <div>
+                            <h3 class="font-semibold text-slate-900 dark:text-white">MySQL Database Connection</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">Provide your database credentials</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="db_port">Database Port</label>
-                    <input type="text" name="db_port" id="db_port" value="{$port}">
-                </div>
-                <div class="form-group">
-                    <label for="db_name">Database Name <span class="required">*</span></label>
-                    <input type="text" name="db_name" id="db_name" value="{$name}" required>
-                </div>
-                <div class="form-group">
-                    <label for="db_user">Database Username <span class="required">*</span></label>
-                    <input type="text" name="db_user" id="db_user" value="{$user}" required>
-                </div>
-                <div class="form-group full-width">
-                    <label for="db_pass">Database Password</label>
-                    <input type="password" name="db_pass" id="db_pass" value="{$pass}">
+                <div class="p-6">
+                    <div class="grid md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Host <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" name="db_host" id="db_host" value="{$host}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🌐</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Port</label>
+                            <div class="relative">
+                                <input type="text" name="db_port" id="db_port" value="{$port}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔢</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Name <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" name="db_name" id="db_name" value="{$name}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">📊</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Username <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" name="db_user" id="db_user" value="{$user}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
+                            </div>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Password</label>
+                            <div class="relative">
+                                <input type="password" name="db_pass" id="db_pass" value="{$pass}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="actions">
-                <a href="install.php?step=2" class="btn btn-secondary">Back</a>
-                <button type="button" class="btn btn-outline" id="test-db-btn">Test Connection</button>
-                <button type="submit" class="btn btn-primary">Continue</button>
+
+            <!-- Actions -->
+            <div class="flex justify-between items-center gap-3">
+                <a href="install.php?step=2" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
+                <div class="flex gap-3">
+                    <button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all flex items-center gap-2" id="test-db-btn">
+                        <span>🔗</span> Test Connection
+                    </button>
+                    <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
+                </div>
             </div>
         </form>
         <script>
@@ -1509,8 +1585,8 @@ HTML;
                 var btn = this;
                 var resultDiv = document.getElementById('db-test-result');
                 btn.disabled = true;
-                btn.textContent = 'Testing...';
-                resultDiv.style.display = 'none';
+                btn.innerHTML = '<span class="animate-spin">⏳</span> Testing...';
+                resultDiv.classList.add('hidden');
 
                 var formData = new FormData(document.getElementById('db-form'));
 
@@ -1520,18 +1596,22 @@ HTML;
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    resultDiv.style.display = 'block';
-                    resultDiv.className = data.success ? 'alert alert-success' : 'alert alert-error';
-                    resultDiv.textContent = data.message;
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.className = data.success 
+                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl p-4 mb-6 flex items-start gap-3'
+                        : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center">' +
+                        '<span class="' + (data.success ? 'text-emerald-500' : 'text-red-500') + ' text-lg">' + (data.success ? '✓' : '✕') + '</span></div>' +
+                        '<div><p class="font-semibold ' + (data.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400') + '">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="text-sm ' + (data.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') + '">' + data.message + '</p></div>';
                     btn.disabled = false;
-                    btn.textContent = 'Test Connection';
+                    btn.innerHTML = '<span>🔗</span> Test Connection';
                 })
                 .catch(function(err) {
-                    resultDiv.style.display = 'block';
-                    resultDiv.className = 'alert alert-error';
-                    resultDiv.textContent = 'An error occurred while testing the connection.';
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.className = 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><span class="text-red-500 text-lg">✕</span></div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the connection.</p></div>';
                     btn.disabled = false;
-                    btn.textContent = 'Test Connection';
+                    btn.innerHTML = '<span>🔗</span> Test Connection';
                 });
             });
         </script>
@@ -1545,7 +1625,6 @@ HTML;
         $errors = $this->renderErrors();
         $s = $_SESSION['installer']['settings'] ?? [];
 
-        // Auto-detect app URL
         $protocol = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $defaultUrl = $protocol.'://'.$host;
@@ -1557,7 +1636,6 @@ HTML;
         $essentialChecked = $sampleData === 'essential' ? ' checked' : '';
         $fullChecked = $sampleData === 'full' ? ' checked' : '';
 
-        // Build timezone options
         $timezones = DateTimeZone::listIdentifiers();
         $tzOptions = '';
         foreach ($timezones as $tz) {
@@ -1568,48 +1646,63 @@ HTML;
         $content = <<<HTML
         {$errors}
         <form method="POST" action="install.php?step=4">
-            <h3 class="section-title">Application</h3>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="app_name">Application Name <span class="required">*</span></label>
-                    <input type="text" name="app_name" id="app_name" value="{$appName}" required>
-                </div>
-                <div class="form-group">
-                    <label for="app_url">Application URL <span class="required">*</span></label>
-                    <input type="url" name="app_url" id="app_url" value="{$appUrl}" required>
-                </div>
-                <div class="form-group full-width">
-                    <label for="timezone">Timezone <span class="required">*</span></label>
-                    <select name="timezone" id="timezone" required>{$tzOptions}</select>
-                </div>
-            </div>
-
-            <h3 class="section-title">Initial Data</h3>
-            <p class="step-description" style="margin-bottom: 1rem;">Choose how much content to pre-populate your site with. You can always add your own data later.</p>
-            <div class="form-grid">
-                <div class="form-group full-width">
-                    <label class="radio-label">
-                        <input type="radio" name="sample_data" value="essential"{$essentialChecked}>
-                        <span>
-                            <strong>Essentials only</strong>
-                            <small class="form-hint" style="display:block;">Sets up core configuration, menus, and pages &mdash; a clean slate ready for your own affiliates and content.</small>
-                        </span>
-                    </label>
-                </div>
-                <div class="form-group full-width">
-                    <label class="radio-label">
-                        <input type="radio" name="sample_data" value="full"{$fullChecked}>
-                        <span>
-                            <strong>Full demonstration data</strong>
-                            <small class="form-hint" style="display:block;">Includes sample affiliates, applications, blog posts, and more &mdash; ideal for exploring all features before going live.</small>
-                        </span>
-                    </label>
+            <!-- Application Settings -->
+            <div class="mb-8">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span class="w-1 h-6 bg-gradient-to-b from-sky-500 to-cyan-500 rounded-full"></span>
+                    Application
+                </h3>
+                <div class="grid md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Application Name <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <input type="text" name="app_name" id="app_name" value="{$appName}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🏷️</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Application URL <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <input type="url" name="app_url" id="app_url" value="{$appUrl}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🌐</span>
+                        </div>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Timezone <span class="text-red-500">*</span></label>
+                        <select name="timezone" id="timezone" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white cursor-pointer">{$tzOptions}</select>
+                    </div>
                 </div>
             </div>
 
-            <div class="actions">
-                <a href="install.php?step=3" class="btn btn-secondary">Back</a>
-                <button type="submit" class="btn btn-primary">Continue</button>
+            <!-- Initial Data -->
+            <div>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                    <span class="w-1 h-6 bg-gradient-to-b from-sky-500 to-cyan-500 rounded-full"></span>
+                    Initial Data
+                </h3>
+                <p class="text-slate-600 dark:text-slate-400 text-sm mb-4">Choose how much content to pre-populate your site with. You can always add your own data later.</p>
+                <div class="space-y-3">
+                    <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 cursor-pointer hover:border-sky-300 dark:hover:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all bg-white dark:bg-slate-800">
+                        <input type="radio" name="sample_data" value="essential"{$essentialChecked} class="w-5 h-5 mt-0.5 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 transition-all">
+                        <div>
+                            <span class="font-semibold text-slate-900 dark:text-white">Essentials only</span>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Sets up core configuration, menus, and pages — a clean slate ready for your own affiliates and content.</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 cursor-pointer hover:border-sky-300 dark:hover:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all bg-white dark:bg-slate-800">
+                        <input type="radio" name="sample_data" value="full"{$fullChecked} class="w-5 h-5 mt-0.5 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 transition-all">
+                        <div>
+                            <span class="font-semibold text-slate-900 dark:text-white">Full demonstration data</span>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Includes sample affiliates, applications, blog posts, and more — ideal for exploring all features before going live.</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <a href="install.php?step=3" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
+                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
             </div>
         </form>
 HTML;
@@ -1634,84 +1727,104 @@ HTML;
         $smtpSelected = $mailMailer === 'smtp' ? ' selected' : '';
         $sendmailSelected = $mailMailer === 'sendmail' ? ' selected' : '';
         $logSelected = $mailMailer === 'log' ? ' selected' : '';
-        $smtpDisplay = $mailMailer === 'smtp' ? '' : 'display:none;';
-        $sendmailDisplay = $mailMailer === 'sendmail' ? '' : 'display:none;';
-        $fromDisplay = $mailMailer === 'log' ? 'display:none;' : '';
+        $smtpDisplay = $mailMailer === 'smtp' ? '' : 'hidden';
+        $sendmailDisplay = $mailMailer === 'sendmail' ? '' : 'hidden';
+        $fromDisplay = $mailMailer === 'log' ? 'hidden' : '';
 
         $content = <<<HTML
         {$errors}
-        <div id="mail-test-result" style="display:none;"></div>
+        <div id="mail-test-result" class="hidden"></div>
         <form method="POST" action="install.php?step=5" id="mail-form">
-            <div class="form-grid">
-                <div class="form-group full-width">
-                    <label for="mail_mailer">Mail Driver</label>
-                    <select name="mail_mailer" id="mail_mailer">
-                        <option value="smtp"{$smtpSelected}>SMTP</option>
-                        <option value="sendmail"{$sendmailSelected}>Sendmail (PHP mail)</option>
-                        <option value="log"{$logSelected}>Log (no emails sent)</option>
-                    </select>
-                    <small class="form-hint">Select "Log" if you want to configure email later.</small>
-                </div>
-            </div>
-            <div id="smtp-fields" style="{$smtpDisplay}">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="mail_host">SMTP Host</label>
-                        <input type="text" name="mail_host" id="mail_host" value="{$mailHost}" placeholder="smtp.example.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="mail_port">SMTP Port</label>
-                        <input type="text" name="mail_port" id="mail_port" value="{$mailPort}" placeholder="587">
-                    </div>
-                    <div class="form-group">
-                        <label for="mail_username">SMTP Username</label>
-                        <input type="text" name="mail_username" id="mail_username" value="{$mailUsername}">
-                    </div>
-                    <div class="form-group">
-                        <label for="mail_password">SMTP Password</label>
-                        <input type="password" name="mail_password" id="mail_password" value="{$mailPassword}">
+            <!-- Mail Configuration -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+                <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">✉️</span>
+                        <div>
+                            <h3 class="font-semibold text-slate-900 dark:text-white">Email Configuration</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">Set up how this application sends email notifications</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div id="sendmail-fields" style="{$sendmailDisplay}">
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <small class="form-hint">Uses your server's built-in sendmail/PHP mail function. No additional server configuration needed.</small>
+                <div class="p-6">
+                    <div class="mb-6">
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Mail Driver</label>
+                        <select name="mail_mailer" id="mail_mailer" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white cursor-pointer">
+                            <option value="smtp"{$smtpSelected}>SMTP</option>
+                            <option value="sendmail"{$sendmailSelected}>Sendmail (PHP mail)</option>
+                            <option value="log"{$logSelected}>Log (no emails sent)</option>
+                        </select>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">Select "Log" if you want to configure email later.</p>
+                    </div>
+
+                    <!-- SMTP Fields -->
+                    <div id="smtp-fields" class="{$smtpDisplay}">
+                        <div class="grid md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Host</label>
+                                <input type="text" name="mail_host" id="mail_host" value="{$mailHost}" placeholder="smtp.example.com" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Port</label>
+                                <input type="text" name="mail_port" id="mail_port" value="{$mailPort}" placeholder="587" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Username</label>
+                                <input type="text" name="mail_username" id="mail_username" value="{$mailUsername}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Password</label>
+                                <input type="password" name="mail_password" id="mail_password" value="{$mailPassword}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sendmail Info -->
+                    <div id="sendmail-fields" class="{$sendmailDisplay}">
+                        <div class="bg-sky-50 dark:bg-sky-900/20 rounded-xl p-4 border border-sky-200 dark:border-sky-800">
+                            <p class="text-sm text-sky-800 dark:text-sky-300">Uses your server's built-in sendmail/PHP mail function. No additional server configuration needed.</p>
+                        </div>
+                    </div>
+
+                    <!-- From Fields -->
+                    <div id="from-fields" class="{$fromDisplay} mt-6 grid md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">From Address</label>
+                            <input type="email" name="mail_from_address" id="mail_from_address" value="{$mailFromAddress}" placeholder="noreply@yourdomain.com" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">From Name</label>
+                            <input type="text" name="mail_from_name" id="mail_from_name" value="{$mailFromName}" placeholder="{$appName}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                        </div>
                     </div>
                 </div>
             </div>
-            <div id="from-fields" style="{$fromDisplay}">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="mail_from_address">From Address</label>
-                        <input type="email" name="mail_from_address" id="mail_from_address" value="{$mailFromAddress}" placeholder="noreply@yourdomain.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="mail_from_name">From Name</label>
-                        <input type="text" name="mail_from_name" id="mail_from_name" value="{$mailFromName}" placeholder="{$appName}">
-                    </div>
+
+            <!-- Actions -->
+            <div class="flex justify-between items-center gap-3">
+                <a href="install.php?step=4" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
+                <div class="flex gap-3">
+                    <button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all flex items-center gap-2" id="test-mail-btn">
+                        <span>🔗</span> Test Connection
+                    </button>
+                    <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
                 </div>
-            </div>
-            <div class="actions">
-                <a href="install.php?step=4" class="btn btn-secondary">Back</a>
-                <button type="button" class="btn btn-outline" id="test-mail-btn">Test Connection</button>
-                <button type="submit" class="btn btn-primary">Continue</button>
             </div>
         </form>
         <script>
             document.getElementById('mail_mailer').addEventListener('change', function() {
-                document.getElementById('smtp-fields').style.display = this.value === 'smtp' ? '' : 'none';
-                document.getElementById('sendmail-fields').style.display = this.value === 'sendmail' ? '' : 'none';
-                document.getElementById('from-fields').style.display = this.value === 'log' ? 'none' : '';
-                document.getElementById('mail-test-result').style.display = 'none';
+                document.getElementById('smtp-fields').classList.toggle('hidden', this.value !== 'smtp');
+                document.getElementById('sendmail-fields').classList.toggle('hidden', this.value !== 'sendmail');
+                document.getElementById('from-fields').classList.toggle('hidden', this.value === 'log');
+                document.getElementById('mail-test-result').classList.add('hidden');
             });
 
             document.getElementById('test-mail-btn').addEventListener('click', function() {
                 var btn = this;
                 var resultDiv = document.getElementById('mail-test-result');
                 btn.disabled = true;
-                btn.textContent = 'Testing...';
-                resultDiv.style.display = 'none';
+                btn.innerHTML = '<span class="animate-spin">⏳</span> Testing...';
+                resultDiv.classList.add('hidden');
 
                 var formData = new FormData(document.getElementById('mail-form'));
 
@@ -1721,18 +1834,22 @@ HTML;
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    resultDiv.style.display = 'block';
-                    resultDiv.className = data.success ? 'alert alert-success' : 'alert alert-error';
-                    resultDiv.textContent = data.message;
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.className = data.success 
+                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl p-4 mb-6 flex items-start gap-3'
+                        : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center">' +
+                        '<span class="' + (data.success ? 'text-emerald-500' : 'text-red-500') + ' text-lg">' + (data.success ? '✓' : '✕') + '</span></div>' +
+                        '<div><p class="font-semibold ' + (data.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400') + '">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="text-sm ' + (data.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') + '">' + data.message + '</p></div>';
                     btn.disabled = false;
-                    btn.textContent = 'Test Connection';
+                    btn.innerHTML = '<span>🔗</span> Test Connection';
                 })
                 .catch(function(err) {
-                    resultDiv.style.display = 'block';
-                    resultDiv.className = 'alert alert-error';
-                    resultDiv.textContent = 'An error occurred while testing the mail connection.';
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.className = 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><span class="text-red-500 text-lg">✕</span></div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the mail connection.</p></div>';
                     btn.disabled = false;
-                    btn.textContent = 'Test Connection';
+                    btn.innerHTML = '<span>🔗</span> Test Connection';
                 });
             });
         </script>
@@ -1751,30 +1868,60 @@ HTML;
 
         $content = <<<HTML
         {$errors}
-        <p class="step-description">Create your administrator account. You will use these credentials to log into the admin panel.</p>
+        <p class="text-slate-600 dark:text-slate-400 mb-6">Create your administrator account. You will use these credentials to log into the admin panel.</p>
         <form method="POST" action="install.php?step=6">
-            <div class="form-grid">
-                <div class="form-group full-width">
-                    <label for="admin_name">Name <span class="required">*</span></label>
-                    <input type="text" name="admin_name" id="admin_name" value="{$name}" required>
+            <!-- Admin Account Card -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+                <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">👤</span>
+                        <div>
+                            <h3 class="font-semibold text-slate-900 dark:text-white">Administrator Account</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">Set up your admin credentials</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group full-width">
-                    <label for="admin_email">Email Address <span class="required">*</span></label>
-                    <input type="email" name="admin_email" id="admin_email" value="{$email}" required>
-                </div>
-                <div class="form-group">
-                    <label for="admin_password">Password <span class="required">*</span></label>
-                    <input type="password" name="admin_password" id="admin_password" minlength="8" required>
-                    <small class="form-hint">Minimum 8 characters</small>
-                </div>
-                <div class="form-group">
-                    <label for="admin_password_confirm">Confirm Password <span class="required">*</span></label>
-                    <input type="password" name="admin_password_confirm" id="admin_password_confirm" minlength="8" required>
+                <div class="p-6">
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Name <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="text" name="admin_name" id="admin_name" value="{$name}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Email Address <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="email" name="admin_email" id="admin_email" value="{$email}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">📧</span>
+                            </div>
+                        </div>
+                        <div class="grid md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Password <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <input type="password" name="admin_password" id="admin_password" minlength="8" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
+                                </div>
+                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">Minimum 8 characters</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Confirm Password <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <input type="password" name="admin_password_confirm" id="admin_password_confirm" minlength="8" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="actions">
-                <a href="install.php?step=5" class="btn btn-secondary">Back</a>
-                <button type="submit" class="btn btn-primary">Continue</button>
+
+            <!-- Actions -->
+            <div class="flex justify-between items-center gap-3">
+                <a href="install.php?step=5" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
+                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
             </div>
         </form>
 HTML;
@@ -1806,24 +1953,21 @@ HTML;
         $taskList = '';
         foreach ($tasks as $key => $label) {
             $status = in_array($key, $completedTasks) ? 'done' : 'pending';
-            $taskList .= "<div class=\"task-item\" data-task=\"{$key}\" data-status=\"{$status}\">";
-            $taskList .= '<span class="task-icon"></span>';
-            $taskList .= "<span class=\"task-label\">{$label}</span>";
-            $taskList .= '<span class="task-message"></span>';
+            $taskList .= "<div class=\"task-item flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 transition-all bg-white dark:bg-slate-800\" data-task=\"{$key}\" data-status=\"{$status}\">";
+            $taskList .= '<span class="task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"></span>';
+            $taskList .= "<span class=\"task-label flex-1 text-sm font-medium text-slate-900 dark:text-white\">{$label}</span>";
+            $taskList .= '<span class="task-message text-xs text-red-600 dark:text-red-400 text-right font-medium max-w-[50%]"></span>';
             $taskList .= '</div>';
         }
 
         $tasksJson = json_encode(array_keys($tasks));
 
-        // Pre-generate the optimizer token so JS can reference it
         if (! isset($_SESSION['installer']['optimize_token'])) {
             $_SESSION['installer']['optimize_token'] = bin2hex(random_bytes(32));
         }
 
         $optimizeToken = $_SESSION['installer']['optimize_token'];
 
-        // Tasks that must run in a separate PHP process to avoid
-        // stale in-memory environment from earlier Laravel boots.
         $cleanProcessTasks = json_encode([
             'config_clear' => 'config:clear',
             'package_discover' => 'package:discover',
@@ -1838,12 +1982,50 @@ HTML;
         $appFolder = APP_FOLDER;
 
         $content = <<<HTML
-        <p class="step-description">Installing your application. Please do not close this page.</p>
-        <div class="task-list" id="task-list">{$taskList}</div>
-        <div id="install-error" class="alert alert-error" style="display:none;"></div>
-        <div class="actions" id="install-actions" style="display:none;">
-            <button type="button" class="btn btn-primary" id="retry-btn" style="display:none;" onclick="runTasks(false)">Retry</button>
-            <a href="install.php?step=8" class="btn btn-primary" id="continue-btn" style="display:none;">Continue</a>
+        <p class="text-slate-600 dark:text-slate-400 mb-6">Installing your application. Please do not close this page.</p>
+        
+        <!-- Progress Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+            <div class="bg-gradient-to-r from-sky-500 to-cyan-500 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                            <span class="text-white text-xl">⚡</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-white">Installation Progress</h3>
+                            <p class="text-sky-100 text-sm">Step 7 of 9</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold text-white" id="progress-percent">0%</div>
+                        <div class="text-sky-100 text-sm">Complete</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="h-2 bg-slate-100 dark:bg-slate-700">
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-500" style="width: 0%"></div>
+            </div>
+
+            <!-- Task List -->
+            <div class="p-6 space-y-3" id="task-list">{$taskList}</div>
+        </div>
+
+        <div id="install-error" class="hidden bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <span class="text-red-500 text-lg">✕</span>
+            </div>
+            <div>
+                <h3 class="font-semibold text-red-900 dark:text-red-400">Installation Failed</h3>
+                <p class="text-sm text-red-700 dark:text-red-300" id="error-message"></p>
+            </div>
+        </div>
+
+        <div class="actions hidden flex justify-between items-center gap-3" id="install-actions">
+            <button type="button" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all hidden" id="retry-btn">Retry</button>
+            <a href="install.php?step=8" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all hidden" id="continue-btn">Continue →</a>
         </div>
         <script>
             var tasks = {$tasksJson};
@@ -1851,81 +2033,89 @@ HTML;
             var optimizeToken = '{$optimizeToken}';
             var currentTaskIndex = 0;
 
-            // Skip already completed tasks
             document.querySelectorAll('.task-item[data-status="done"]').forEach(function(el) {
-                el.querySelector('.task-icon').innerHTML = '&#10004;';
-                el.classList.add('task-done');
+                var icon = el.querySelector('.task-icon');
+                icon.innerHTML = '✓';
+                icon.classList.add('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400');
+                el.querySelector('.task-label').classList.add('text-emerald-600', 'dark:text-emerald-400');
                 currentTaskIndex++;
             });
 
+            function updateProgress(percent) {
+                document.getElementById('progress-percent').textContent = Math.round(percent) + '%';
+                document.getElementById('progress-bar').style.width = percent + '%';
+            }
+
             function runTasks(fullReset) {
-                document.getElementById('install-error').style.display = 'none';
-                document.getElementById('retry-btn').style.display = 'none';
+                document.getElementById('install-error').classList.add('hidden');
+                document.getElementById('retry-btn').classList.add('hidden');
 
                 if (fullReset) {
-                    // Full reset: restart everything from scratch
                     currentTaskIndex = 0;
                     document.querySelectorAll('.task-item').forEach(function(el) {
-                        el.classList.remove('task-done', 'task-error', 'task-running');
-                        el.querySelector('.task-icon').innerHTML = '';
+                        var icon = el.querySelector('.task-icon');
+                        el.classList.remove('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400', 'bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400', 'bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                        icon.innerHTML = '';
+                        icon.className = 'task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500';
+                        el.querySelector('.task-label').classList.remove('text-emerald-600', 'dark:text-emerald-400', 'text-red-600', 'dark:text-red-400', 'text-sky-600', 'dark:text-sky-400');
                         el.querySelector('.task-message').textContent = '';
                     });
-
-                    fetch('install.php?step=7&reset=1', { method: 'POST' })
-                        .then(function() { runNextTask(); })
-                        .catch(function() { runNextTask(); });
+                    updateProgress(0);
+                    fetch('install.php?step=7&reset=1', { method: 'POST' }).then(function() { runNextTask(); });
                 } else {
-                    // Retry: resume from the failed task, keeping completed tasks
                     document.querySelectorAll('.task-item').forEach(function(el) {
-                        if (!el.classList.contains('task-done')) {
-                            el.classList.remove('task-error', 'task-running');
-                            el.querySelector('.task-icon').innerHTML = '';
+                        var icon = el.querySelector('.task-icon');
+                        if (!icon.innerHTML.includes('✓')) {
+                            el.classList.remove('bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400', 'bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                            icon.className = 'task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500';
+                            icon.innerHTML = '';
+                            el.querySelector('.task-label').classList.remove('text-red-600', 'dark:text-red-400', 'text-sky-600', 'dark:text-sky-400');
                             el.querySelector('.task-message').textContent = '';
                         }
                     });
-
                     runNextTask();
                 }
             }
 
             function runSeedBatch(el) {
-                el.classList.add('task-running');
-                el.querySelector('.task-icon').innerHTML = '<span class="spinner"></span>';
+                el.classList.add('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700');
+                var icon = el.querySelector('.task-icon');
+                icon.innerHTML = '<svg class="w-5 h-5 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+                icon.classList.add('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                el.querySelector('.task-label').classList.add('text-sky-600', 'dark:text-sky-400');
                 fetch('install.php?step=7&task=seed_batch', { method: 'POST' })
-                    .then(function(r) {
-                        if (!r.ok) {
-                            return r.text().then(function(text) {
-                                throw new Error('Server returned HTTP ' + r.status + ': ' + text.substring(0, 500));
-                            });
-                        }
-                        return r.text().then(function(text) {
-                            try { return JSON.parse(text); }
-                            catch (e) { throw new Error('Invalid server response: ' + text.substring(0, 500)); }
-                        });
-                    })
+                    .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        el.classList.remove('task-running');
                         if (data.success && data.seed_done === false) {
                             el.querySelector('.task-message').textContent = data.message || '';
                             runSeedBatch(el);
                         } else if (data.success) {
-                            el.classList.add('task-done');
-                            el.querySelector('.task-icon').innerHTML = '&#10004;';
+                            el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
+                            icon.innerHTML = '✓';
+                            icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                            icon.classList.add('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400');
+                            el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
+                            el.querySelector('.task-label').classList.add('text-emerald-600', 'dark:text-emerald-400');
                             el.querySelector('.task-message').textContent = '';
                             currentTaskIndex++;
+                            updateProgress((currentTaskIndex / tasks.length) * 100);
                             runNextTask();
                         } else {
                             throw new Error(data.message);
                         }
                     })
                     .catch(function(err) {
-                        el.classList.remove('task-running');
-                        el.classList.add('task-error');
-                        el.querySelector('.task-icon').innerHTML = '&#10008;';
-                        document.getElementById('install-error').style.display = 'block';
-                        document.getElementById('install-error').textContent = 'Installation failed: ' + err.message;
-                        document.getElementById('install-actions').style.display = 'flex';
-                        document.getElementById('retry-btn').style.display = '';
+                        el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
+                        icon.innerHTML = '✕';
+                        icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                        icon.classList.add('bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400');
+                        el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
+                        el.querySelector('.task-label').classList.add('text-red-600', 'dark:text-red-400');
+                        document.getElementById('install-error').classList.remove('hidden');
+                        document.getElementById('error-message').textContent = 'Installation failed: ' + err.message;
+                        document.getElementById('install-actions').classList.remove('hidden');
+                        document.getElementById('install-actions').classList.add('flex');
+                        document.getElementById('retry-btn').classList.remove('hidden');
                     });
             }
 
@@ -1935,50 +2125,55 @@ HTML;
                         throw new Error('Server returned HTTP ' + r.status + ': ' + text.substring(0, 500));
                     });
                 }
-                return r.text().then(function(text) {
-                    try {
-                        return JSON.parse(text);
-                    } catch (e) {
-                        throw new Error('Invalid server response: ' + text.substring(0, 500));
-                    }
-                });
+                return r.json();
             }
 
             function handleTaskError(el, message) {
-                el.classList.remove('task-running');
-                el.classList.add('task-error');
-                el.querySelector('.task-icon').innerHTML = '&#10008;';
+                el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
+                var icon = el.querySelector('.task-icon');
+                icon.innerHTML = '✕';
+                icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                icon.classList.add('bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400');
+                el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
+                el.querySelector('.task-label').classList.add('text-red-600', 'dark:text-red-400');
                 el.querySelector('.task-message').textContent = message || '';
-                document.getElementById('install-error').style.display = 'block';
-                document.getElementById('install-error').textContent = 'Installation failed: ' + message;
-                document.getElementById('install-actions').style.display = 'flex';
-                document.getElementById('retry-btn').style.display = '';
+                document.getElementById('install-error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = 'Installation failed: ' + message;
+                document.getElementById('install-actions').classList.remove('hidden');
+                document.getElementById('install-actions').classList.add('flex');
+                document.getElementById('retry-btn').classList.remove('hidden');
             }
 
             function handleTaskSuccess(el) {
-                el.classList.remove('task-running');
-                el.classList.add('task-done');
-                el.querySelector('.task-icon').innerHTML = '&#10004;';
+                el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
+                var icon = el.querySelector('.task-icon');
+                icon.innerHTML = '✓';
+                icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                icon.classList.add('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400');
+                el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
+                el.querySelector('.task-label').classList.add('text-emerald-600', 'dark:text-emerald-400');
                 el.querySelector('.task-message').textContent = '';
                 currentTaskIndex++;
+                updateProgress((currentTaskIndex / tasks.length) * 100);
                 runNextTask();
             }
 
             function runNextTask() {
                 if (currentTaskIndex >= tasks.length) {
-                    document.getElementById('install-actions').style.display = 'flex';
-                    document.getElementById('continue-btn').style.display = '';
+                    document.getElementById('install-actions').classList.remove('hidden');
+                    document.getElementById('install-actions').classList.add('flex');
+                    document.getElementById('continue-btn').classList.remove('hidden');
                     return;
                 }
 
                 var task = tasks[currentTaskIndex];
                 var el = document.querySelector('.task-item[data-task="' + task + '"]');
-                el.classList.add('task-running');
-                el.querySelector('.task-icon').innerHTML = '<span class="spinner"></span>';
+                el.classList.add('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700');
+                var icon = el.querySelector('.task-icon');
+                icon.innerHTML = '<svg class="w-5 h-5 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+                icon.classList.add('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
+                el.querySelector('.task-label').classList.add('text-sky-600', 'dark:text-sky-400');
 
-                // Tasks that need a clean PHP process are dispatched to the
-                // standalone optimizer endpoint after the main installer
-                // prepares the endpoint file.
                 if (cleanProcessTasks.hasOwnProperty(task)) {
                     fetch('install.php?step=7&task=' + task, { method: 'POST' })
                         .then(parseJsonResponse)
@@ -1986,10 +2181,8 @@ HTML;
                             if (!data.success) {
                                 throw new Error(data.message);
                             }
-                            // Now run the actual command in a separate PHP process
                             var command = cleanProcessTasks[task];
-                            return fetch('{$appFolder}/public/install-optimize.php?command=' + encodeURIComponent(command) + '&token=' + encodeURIComponent(optimizeToken))
-                                .then(parseJsonResponse);
+                            return fetch('{$appFolder}/public/install-optimize.php?command=' + encodeURIComponent(command) + '&token=' + encodeURIComponent(optimizeToken)).then(parseJsonResponse);
                         })
                         .then(function(data) {
                             if (data.success) {
@@ -2007,13 +2200,12 @@ HTML;
                 fetch('install.php?step=7&task=' + task, { method: 'POST' })
                     .then(parseJsonResponse)
                     .then(function(data) {
-                        el.classList.remove('task-running');
+                        el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700');
                         if (data.success && data.extract_done === false) {
-                            // Extraction in progress — update message and re-request
                             el.querySelector('.task-message').textContent = data.message || '';
+                            updateProgress(data.percent || 0);
                             runNextTask();
                         } else if (data.success && data.seed_done === false) {
-                            // Seeding in progress — call seed_batch for remaining seeders
                             el.querySelector('.task-message').textContent = data.message || '';
                             runSeedBatch(el);
                             return;
@@ -2028,12 +2220,12 @@ HTML;
                     });
             }
 
-            // Auto-start installation
             if (currentTaskIndex < tasks.length) {
                 runTasks(true);
             } else {
-                document.getElementById('install-actions').style.display = 'flex';
-                document.getElementById('continue-btn').style.display = '';
+                document.getElementById('install-actions').classList.remove('hidden');
+                document.getElementById('install-actions').classList.add('flex');
+                document.getElementById('continue-btn').classList.remove('hidden');
             }
         </script>
 HTML;
@@ -2048,47 +2240,74 @@ HTML;
         $cronCommand = "* * * * * {$phpBinary} {$appPath}/artisan schedule:run >> /dev/null 2>&1";
 
         $content = <<<HTML
-        <p class="step-description">Your application requires a scheduled task (cron job) to run background processes such as sending emails, expiring memberships, and running health checks.</p>
+        <p class="text-slate-600 dark:text-slate-400 mb-6">Your application requires a scheduled task (cron job) to run background processes such as sending emails, expiring memberships, and running health checks.</p>
 
-        <div class="cron-box">
-            <label>Add this cron job to your server:</label>
-            <div class="code-block" id="cron-command">{$cronCommand}</div>
-            <button type="button" class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('cron-command').textContent).then(function(){this.textContent='Copied!'}.bind(this))">Copy to Clipboard</button>
+        <!-- Cron Job Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
+            <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">⏰</span>
+                    <div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white">Cron Job Setup</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">Add this cron job to your server</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="bg-slate-900 dark:bg-black rounded-xl p-4 mb-4 border border-slate-700">
+                    <code class="text-emerald-400 text-sm font-mono break-all">{$cronCommand}</code>
+                </div>
+                <button type="button" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all text-sm" onclick="navigator.clipboard.writeText(document.querySelector('.bg-slate-900 code').textContent).then(function(){this.textContent='Copied!';}.bind(this))">📋 Copy to Clipboard</button>
+            </div>
         </div>
 
-        <h3 class="section-title">How to Add a Cron Job</h3>
-        <div class="help-section">
-            <details>
-                <summary>cPanel</summary>
-                <ol>
+        <!-- How to Add Instructions -->
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="w-1 h-6 bg-gradient-to-b from-sky-500 to-cyan-500 rounded-full"></span>
+            How to Add a Cron Job
+        </h3>
+        <div class="space-y-3 mb-6">
+            <details class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <summary class="px-6 py-4 font-semibold text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
+                    cPanel
+                    <span class="text-slate-400 dark:text-slate-500 text-2xl transform transition-transform">+</span>
+                </summary>
+                <ol class="px-6 py-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <li>Log in to cPanel and find "Cron Jobs" under "Advanced"</li>
-                    <li>Set the timing to "Once Per Minute" (or <code>* * * * *</code>)</li>
+                    <li>Set the timing to "Once Per Minute" (or <code class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-mono text-xs">* * * * *</code>)</li>
                     <li>Paste the command above into the "Command" field</li>
                     <li>Click "Add New Cron Job"</li>
                 </ol>
             </details>
-            <details>
-                <summary>Plesk</summary>
-                <ol>
+            <details class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <summary class="px-6 py-4 font-semibold text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
+                    Plesk
+                    <span class="text-slate-400 dark:text-slate-500 text-2xl transform transition-transform">+</span>
+                </summary>
+                <ol class="px-6 py-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <li>Go to "Scheduled Tasks" in your Plesk panel</li>
                     <li>Click "Add Task"</li>
                     <li>Set it to run every minute</li>
                     <li>Paste the command above</li>
                 </ol>
             </details>
-            <details>
-                <summary>SSH / Terminal</summary>
-                <ol>
+            <details class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <summary class="px-6 py-4 font-semibold text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
+                    SSH / Terminal
+                    <span class="text-slate-400 dark:text-slate-500 text-2xl transform transition-transform">+</span>
+                </summary>
+                <ol class="px-6 py-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <li>Connect to your server via SSH</li>
-                    <li>Run <code>crontab -e</code></li>
+                    <li>Run <code class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-mono text-xs">crontab -e</code></li>
                     <li>Add the command above as a new line</li>
                     <li>Save and exit</li>
                 </ol>
             </details>
         </div>
 
-        <div class="actions">
-            <a href="install.php?step=9" class="btn btn-primary">Continue</a>
+        <!-- Actions -->
+        <div class="flex justify-end">
+            <a href="install.php?step=9" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</a>
         </div>
 HTML;
 
@@ -2100,7 +2319,6 @@ HTML;
         $appUrl = $_SESSION['installer']['settings']['app_url'] ?? '';
         $adminEmail = htmlspecialchars($_SESSION['installer']['admin']['email'] ?? '');
 
-        // Attempt to delete installer files
         $deletionMessages = '';
         $zipPath = __DIR__.'/'.ZIP_FILENAME;
         $installPath = __DIR__.'/install.php';
@@ -2115,13 +2333,19 @@ HTML;
         }
 
         if (! $zipDeleted) {
-            $deletionMessages .= '<div class="alert alert-warning">Could not automatically delete <strong>'.ZIP_FILENAME.'</strong>. Please delete it manually for security.</div>';
+            $deletionMessages .= '<div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-4 mb-6 flex items-start gap-3">
+                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                    <span class="text-yellow-500 text-lg">⚠️</span>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-yellow-900 dark:text-yellow-400">Manual Cleanup Required</h3>
+                    <p class="text-sm text-yellow-700 dark:text-yellow-300">Could not automatically delete <strong>'.ZIP_FILENAME.'</strong>. Please delete it manually for security.</p>
+                </div>
+            </div>';
         }
 
-        // Clean up the optimizer endpoint if it still exists
         $this->cleanupOptimizerEndpoint();
 
-        // We can't delete ourselves while executing, so we'll create a self-destruct mechanism
         $selfDeleteScript = __DIR__.'/_cleanup.php';
         $loginUrl = rtrim($appUrl, '/').'/login';
         file_put_contents($selfDeleteScript, '<?php @unlink(__DIR__ . "/install.php"); @unlink(__DIR__ . "/'.APP_FOLDER.'/public/install-optimize.php"); @unlink(__FILE__); header("Location: '.$loginUrl.'"); exit;');
@@ -2132,28 +2356,71 @@ HTML;
         $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
 
         $content = <<<HTML
-        <div class="success-icon">&#10004;</div>
-        <h2 class="success-title">Installation Complete!</h2>
-        <p class="success-message">Your {$appName} application has been successfully installed.</p>
+        <!-- Success Icon -->
+        <div class="flex justify-center mb-6">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce">
+                <span class="text-4xl">✓</span>
+            </div>
+        </div>
+
+        <!-- Success Message -->
+        <div class="text-center mb-8">
+            <h2 class="text-2xl md:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-2">Installation Complete!</h2>
+            <p class="text-slate-600 dark:text-slate-400">Your {$appName} application has been successfully installed.</p>
+        </div>
 
         {$deletionMessages}
 
-        <div class="info-box">
-            <p><strong>Admin Login:</strong> <a href="{$cleanupUrl}">{$appUrl}/login</a></p>
-            <p><strong>Email:</strong> {$adminEmail}</p>
-            <p><strong>Password:</strong> (the password you entered during setup)</p>
+        <!-- Admin Credentials -->
+        <div class="bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-900/20 dark:to-sky-900/20 rounded-2xl p-6 mb-6 border-2 border-blue-200 dark:border-blue-800">
+            <h3 class="text-lg font-bold text-blue-900 dark:text-blue-400 mb-4 flex items-center gap-2">
+                <span class="w-1 h-6 bg-gradient-to-b from-blue-500 to-sky-500 rounded-full"></span>
+                Admin Login Details
+            </h3>
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <span class="text-blue-500 text-xl">🔗</span>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-blue-900 dark:text-blue-400">Admin Login</p>
+                        <a href="{$cleanupUrl}" class="text-blue-600 dark:text-blue-300 font-medium hover:underline">{$appUrl}/login</a>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-blue-500 text-xl">📧</span>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-blue-900 dark:text-blue-400">Email</p>
+                        <p class="text-slate-700 dark:text-slate-300">{$adminEmail}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-blue-500 text-xl">🔒</span>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-blue-900 dark:text-blue-400">Password</p>
+                        <p class="text-slate-700 dark:text-slate-300">(the password you entered during setup)</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="alert alert-warning">
-            <strong>Important:</strong> For security, the installer files will be deleted when you proceed. If auto-deletion fails, please manually delete <code>install.php</code> and <code>{$zipPath}</code> from your server.
+        <!-- Security Warning -->
+        <div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                <span class="text-yellow-500 text-lg">🔒</span>
+            </div>
+            <div>
+                <h3 class="font-semibold text-yellow-900 dark:text-yellow-400">Important</h3>
+                <p class="text-sm text-yellow-700 dark:text-yellow-300">For security, the installer files will be deleted when you proceed. If auto-deletion fails, please manually delete <code class="px-2 py-1 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-300 font-mono text-xs">install.php</code> and <code class="px-2 py-1 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-300 font-mono text-xs">{$zipPath}</code> from your server.</p>
+            </div>
         </div>
 
-        <div class="actions">
-            <a href="{$cleanupUrl}" class="btn btn-primary">Go to Application &rarr;</a>
+        <!-- Actions -->
+        <div class="flex justify-end">
+            <a href="{$cleanupUrl}" class="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transform hover:-translate-y-0.5 transition-all flex items-center gap-2">
+                <span>🚀</span> Go to Application →
+            </a>
         </div>
 HTML;
 
-        // Destroy session
         session_destroy();
 
         $this->renderLayout('Installation Complete', $content, 9);
@@ -2162,10 +2429,16 @@ HTML;
     private function renderAlreadyInstalled(): void
     {
         $content = <<<'HTML'
-        <div class="alert alert-warning">
-            <strong>Already Installed</strong>
-            <p>This application appears to already be installed. For security reasons, the installer cannot be run again.</p>
-            <p>Please delete <code>install.php</code> from your server immediately.</p>
+        <!-- Warning Alert -->
+        <div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-6 flex items-start gap-4">
+            <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                <span class="text-yellow-500 text-2xl">⚠️</span>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-lg font-bold text-yellow-900 dark:text-yellow-400 mb-2">Already Installed</h3>
+                <p class="text-yellow-800 dark:text-yellow-300 mb-2">This application appears to already be installed. For security reasons, the installer cannot be run again.</p>
+                <p class="text-sm text-yellow-700 dark:text-yellow-400">Please delete <code class="px-2 py-1 rounded bg-yellow-200 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-300 font-mono">install.php</code> from your server immediately.</p>
+            </div>
         </div>
 HTML;
 
@@ -2182,9 +2455,9 @@ HTML;
             return '';
         }
 
-        $html = '<div class="alert alert-error"><ul>';
+        $html = '<div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6"><ul class="space-y-2">';
         foreach ($this->errors as $error) {
-            $html .= '<li>'.htmlspecialchars($error).'</li>';
+            $html .= '<li class="flex items-start gap-2 text-red-800 dark:text-red-300"><span class="text-red-500 mt-0.5">•</span>'.htmlspecialchars($error).'</li>';
         }
         $html .= '</ul></div>';
 
@@ -2255,1014 +2528,49 @@ HTML;
 
         echo <<<HTML
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Application Installer - {$title}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    },
+                    animation: {
+                        'spin': 'spin 1s linear infinite',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-slow': 'bounce 2s infinite',
+                    },
+                }
+            }
+        }
+    </script>
     <style>
-        /* CSS Custom Properties for Theming */
-        :root {
-            /* Light Theme Colors */
-            --bg-primary: #f8fafc;
-            --bg-secondary: #ffffff;
-            --bg-tertiary: #f1f5f9;
-            --bg-elevated: #ffffff;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --text-tertiary: #94a3b8;
-            --text-muted: #64748b;
-            --border-primary: #e2e8f0;
-            --border-secondary: #cbd5e1;
-            --border-focus: #0ea5e9;
-            
-            /* Brand Colors */
-            --primary: #0ea5e9;
-            --primary-hover: #0284c7;
-            --primary-light: #e0f2fe;
-            --primary-glow: rgba(14, 165, 233, 0.15);
-            
-            /* Status Colors */
-            --success: #10b981;
-            --success-bg: #ecfdf5;
-            --success-border: #a7f3d0;
-            --success-glow: rgba(16, 185, 129, 0.15);
-            
-            --error: #ef4444;
-            --error-bg: #fef2f2;
-            --error-border: #fecaca;
-            --error-glow: rgba(239, 68, 68, 0.15);
-            
-            --warning: #f59e0b;
-            --warning-bg: #fffbeb;
-            --warning-border: #fde68a;
-            --warning-glow: rgba(245, 158, 11, 0.15);
-            
-            --info: #3b82f6;
-            --info-bg: #eff6ff;
-            --info-border: #bfdbfe;
-            
-            /* Shadows */
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            --shadow-glow: 0 0 20px rgba(14, 165, 233, 0.3);
-            
-            /* Gradients */
-            --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-            --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            --gradient-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-            
-            /* Code Block */
-            --code-bg: #1e293b;
-            --code-text: #e2e8f0;
-        }
-
-        /* Dark Theme */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg-primary: #0f172a;
-                --bg-secondary: #1e293b;
-                --bg-tertiary: #334155;
-                --bg-elevated: #1e293b;
-                --text-primary: #f1f5f9;
-                --text-secondary: #cbd5e1;
-                --text-tertiary: #94a3b8;
-                --text-muted: #64748b;
-                --border-primary: #334155;
-                --border-secondary: #475569;
-                --border-focus: #38bdf8;
-                
-                --primary: #38bdf8;
-                --primary-hover: #0ea5e9;
-                --primary-light: rgba(56, 189, 248, 0.15);
-                --primary-glow: rgba(56, 189, 248, 0.2);
-                
-                --success: #34d399;
-                --success-bg: rgba(52, 211, 153, 0.1);
-                --success-border: rgba(52, 211, 153, 0.3);
-                --success-glow: rgba(52, 211, 153, 0.2);
-                
-                --error: #f87171;
-                --error-bg: rgba(248, 113, 113, 0.1);
-                --error-border: rgba(248, 113, 113, 0.3);
-                --error-glow: rgba(248, 113, 113, 0.2);
-                
-                --warning: #fbbf24;
-                --warning-bg: rgba(251, 191, 36, 0.1);
-                --warning-border: rgba(251, 191, 36, 0.3);
-                --warning-glow: rgba(251, 191, 36, 0.2);
-                
-                --info: #60a5fa;
-                --info-bg: rgba(96, 165, 250, 0.1);
-                --info-border: rgba(96, 165, 250, 0.3);
-                
-                --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-                --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
-                --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-                --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-                
-                --gradient-card: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-            }
-        }
-
-        /* Base Styles */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            min-height: 100vh;
-            padding: 2rem 1rem;
-            transition: background 0.3s ease, color 0.3s ease;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .header {
-            display: none;
-        }
-
-        .install-timer {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-            margin-bottom: 1.5rem;
-            padding: 0.875rem 1.25rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-primary);
-            border-radius: 0.75rem;
-            font-size: 0.8125rem;
-            color: var(--text-secondary);
-        }
-
-        .install-timer .timer-item {
-            display: flex;
-            align-items: center;
-            gap: 0.375rem;
-        }
-
-        .install-timer .timer-label {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .install-timer .timer-value {
-            font-variant-numeric: tabular-nums;
-        }
-
-        .header h1 {
-            font-size: 2rem;
-            font-weight: 800;
-            background: var(--gradient-primary);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.025em;
-        }
-
-        .header .subtitle {
-            font-size: 0.875rem;
-            color: var(--text-tertiary);
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        /* Step Indicator — now lives inside card-body */
-        .steps {
-            display: none;
-        }
-
-        .card-body-header {
-            margin-bottom: 1.5rem;
-            padding-bottom: 1.25rem;
-            border-bottom: 1px solid var(--border-primary);
-        }
-
-        .card-body-header h1 {
-            font-size: 1.375rem;
-            font-weight: 800;
-            background: var(--gradient-primary);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.875rem;
-            letter-spacing: -0.02em;
-        }
-
-        .card-body-header .steps {
-            display: flex;
-            justify-content: flex-start;
-            gap: 0.375rem;
-            margin-bottom: 0;
-            flex-wrap: wrap;
-        }
-
-        .step-dot {
-            display: flex;
-            align-items: center;
-            gap: 0.375rem;
-            font-size: 0.75rem;
-            color: var(--text-tertiary);
-            padding: 0.5rem 1rem;
-            border-radius: 9999px;
-            background: var(--bg-tertiary);
-            font-weight: 600;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid var(--border-primary);
-        }
-
-        .step-dot.active {
-            background: var(--gradient-primary);
-            color: #fff;
-            font-weight: 700;
-            box-shadow: var(--shadow-glow);
-            border-color: transparent;
-            transform: scale(1.05);
-        }
-
-        .step-dot.completed {
-            background: var(--success-bg);
-            color: var(--success);
-            border-color: var(--success-border);
-        }
-
-        /* Sub-step Indicator */
-        .sub-steps {
-            display: flex;
-            justify-content: center;
-            gap: 0.375rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .sub-step-dot {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.6875rem;
-            color: var(--text-tertiary);
-            padding: 0.375rem 0.75rem;
-            border-radius: 9999px;
-            background: var(--bg-tertiary);
-            font-weight: 500;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid var(--border-primary);
-        }
-
-        .sub-step-dot.active {
-            background: var(--primary);
-            color: #fff;
-            font-weight: 600;
-            border-color: transparent;
-        }
-
-        .sub-step-dot.completed {
-            background: var(--success-bg);
-            color: var(--success);
-            border-color: var(--success-border);
-        }
-
-        /* Card */
-        /* Two-column card layout */
-        .card {
-            background: var(--gradient-card);
-            border-radius: 1.25rem;
-            box-shadow: var(--shadow-lg);
-            border: 1px solid var(--border-primary);
-            transition: all 0.3s ease;
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            overflow: hidden;
-        }
-
-        .card:hover {
-            box-shadow: var(--shadow-xl);
-        }
-
-        .card-sidebar {
-            background: var(--gradient-primary);
-            padding: 3rem 2.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-            border-radius: 1.25rem 0 0 1.25rem;
-        }
-
-        .card-sidebar h2 {
-            font-size: 1.625rem;
-            font-weight: 700;
-            color: #fff;
-            margin: 0;
-            line-height: 1.3;
-        }
-
-        .card-sidebar .sidebar-desc {
-            font-size: 0.9375rem;
-            color: rgba(255, 255, 255, 0.85);
-            line-height: 1.7;
-        }
-
-        .card-sidebar .sidebar-icon {
-            font-size: 3.25rem;
-            line-height: 1;
-        }
-
-        .card-sidebar .sidebar-step {
-            font-size: 0.8125rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(255, 255, 255, 0.65);
-            margin-top: auto;
-        }
-
-        .card-body {
-            padding: 2.5rem;
-            overflow: hidden;
-        }
-
-        /* Forms */
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.25rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .form-group.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .form-group label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: var(--text-secondary);
-            letter-spacing: 0.01em;
-        }
-
-        .form-group input,
-        .form-group select {
-            padding: 0.75rem 1rem;
-            border: 1.5px solid var(--border-primary);
-            border-radius: 0.75rem;
-            font-size: 0.875rem;
-            color: var(--text-primary);
-            background: var(--bg-secondary);
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--border-focus);
-            box-shadow: 0 0 0 4px var(--primary-glow);
-            transform: translateY(-1px);
-        }
-
-        .form-group input::placeholder {
-            color: var(--text-tertiary);
-        }
-
-        .form-hint {
-            font-size: 0.75rem;
-            color: var(--text-tertiary);
-            margin-top: 0.375rem;
-            line-height: 1.4;
-        }
-
-        .required { color: var(--error); font-weight: 700; }
-
-        .section-title {
-            font-size: 1.125rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin: 2rem 0 1rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid var(--border-primary);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .section-title::before {
-            content: '';
-            width: 4px;
-            height: 1.5rem;
-            background: var(--gradient-primary);
-            border-radius: 2px;
-        }
-
-        .section-title:first-child {
-            margin-top: 0;
-        }
-
-        /* Buttons */
-        .actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.875rem;
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border-primary);
-        }
-
-        .btn {
-            padding: 0.75rem 1.75rem;
-            border-radius: 0.75rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-            border: 1.5px solid transparent;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            letter-spacing: 0.01em;
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        .btn-primary {
-            background: var(--gradient-primary);
-            color: #fff;
-            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-            border-color: var(--border-primary);
-        }
-
-        .btn-secondary:hover {
-            background: var(--bg-tertiary);
-            border-color: var(--border-secondary);
-            transform: translateY(-1px);
-        }
-
-        .btn-outline {
-            background: transparent;
-            color: var(--primary);
-            border-color: var(--primary);
-        }
-
-        .btn-outline:hover {
-            background: var(--primary-light);
-            box-shadow: 0 0 0 4px var(--primary-glow);
-        }
-
-        .btn-sm {
-            padding: 0.375rem 1rem;
-            font-size: 0.8125rem;
-        }
-
-        /* Alerts */
-        .alert {
-            padding: 1rem 1.25rem;
-            border-radius: 0.75rem;
-            margin-bottom: 1rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            border: 1.5px solid;
-        }
-
-        .alert ul {
-            margin: 0;
-            padding-left: 1.25rem;
-        }
-
-        .alert-error {
-            background: var(--error-bg);
-            color: var(--error);
-            border-color: var(--error-border);
-        }
-
-        .alert-success {
-            background: var(--success-bg);
-            color: var(--success);
-            border-color: var(--success-border);
-        }
-
-        .alert-warning {
-            background: var(--warning-bg);
-            color: var(--warning);
-            border-color: var(--warning-border);
-        }
-
-        /* EULA */
-        .eula-box {
-            background: var(--bg-tertiary);
-            border: 1.5px solid var(--border-primary);
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            max-height: 400px;
-            overflow-y: auto;
-            font-size: 0.8125rem;
-            line-height: 1.8;
-            white-space: pre-wrap;
-            margin-bottom: 1rem;
-            color: var(--text-secondary);
-        }
-
-        .eula-box::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .eula-box::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-            border-radius: 4px;
-        }
-
-        .eula-box::-webkit-scrollbar-thumb {
-            background: var(--border-secondary);
-            border-radius: 4px;
-        }
-
-        .checkbox-label {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
-            font-size: 0.875rem;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .checkbox-label input {
-            margin-top: 0.25rem;
-            width: 1.125rem;
-            height: 1.125rem;
-            accent-color: var(--primary);
-        }
-
-        .radio-label {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
-            font-size: 0.875rem;
-            cursor: pointer;
-            padding: 1rem 1.25rem;
-            border: 1.5px solid var(--border-primary);
-            border-radius: 0.75rem;
-            transition: all 0.2s ease;
-            background: var(--bg-secondary);
-        }
-
-        .radio-label:hover {
-            border-color: var(--primary);
-            background: var(--primary-light);
-            transform: translateY(-1px);
-        }
-
-        .radio-label input[type="radio"] {
-            margin-top: 0.25rem;
-            width: 1.125rem;
-            height: 1.125rem;
-            accent-color: var(--primary);
-        }
-
-        /* Requirements Grid */
-        .requirements-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-            font-size: 0.8125rem;
-        }
-
-        .req-item {
-            padding: 0.75rem 0.875rem;
-            border-radius: 0.75rem;
-            border: 1.5px solid var(--border-primary);
-            background: var(--bg-secondary);
-            display: flex;
-            flex-wrap: wrap;
-            align-items: baseline;
-            gap: 0.375rem;
-            transition: all 0.2s ease;
-        }
-
-        .req-item:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .req-item.req-failed {
-            border-color: var(--error-border);
-            background: var(--error-bg);
-        }
-
-        .req-item.req-warn {
-            border-color: var(--warning-border);
-            background: var(--warning-bg);
-        }
-
-        .req-name {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .req-detail {
-            width: 100%;
-            color: var(--text-tertiary);
-            font-size: 0.75rem;
-            margin-top: 0.25rem;
-        }
-
-        @media (max-width: 900px) {
-            .requirements-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 500px) {
-            .requirements-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .status-pass { color: var(--success); font-weight: 700; }
-        .status-fail { color: var(--error); font-weight: 700; }
-        .status-warn { color: var(--warning); font-weight: 700; }
-
-        /* Install Tasks */
-        .task-list {
-            margin-bottom: 1rem;
-        }
-
-        .task-item {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid var(--border-primary);
-            border-radius: 0.75rem;
-            transition: all 0.2s ease;
-            background: var(--bg-secondary);
-        }
-
-        .task-item:hover {
-            background: var(--bg-tertiary);
-        }
-
-        .task-icon {
-            width: 1.75rem;
-            height: 1.75rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.875rem;
-            color: var(--text-tertiary);
-            background: var(--bg-tertiary);
-            border-radius: 0.5rem;
-        }
-
-        .task-done .task-icon { 
-            color: var(--success); 
-            background: var(--success-bg);
-        }
-        .task-error .task-icon { 
-            color: var(--error); 
-            background: var(--error-bg);
-        }
-        .task-running .task-icon {
-            background: var(--primary-light);
-        }
-
-        .task-label {
-            font-size: 0.875rem;
-            flex: 1;
-            font-weight: 500;
-        }
-
-        .task-done .task-label { color: var(--success); }
-        .task-error .task-label { color: var(--error); }
-
-        .task-message {
-            font-size: 0.75rem;
-            color: var(--error);
-            max-width: 50%;
-            text-align: right;
-            font-weight: 500;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid var(--border-primary);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-        }
-
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-
-        /* Cron */
-        .cron-box {
-            background: var(--bg-tertiary);
-            border: 1.5px solid var(--border-primary);
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-25%); }
         }
-
-        .cron-box label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            display: block;
-            margin-bottom: 0.75rem;
-            color: var(--text-secondary);
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
         }
-
-        .code-block {
-            background: var(--code-bg);
-            color: var(--code-text);
-            padding: 1rem 1.5rem;
-            border-radius: 0.75rem;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            font-size: 0.8125rem;
-            overflow-x: auto;
-            margin-bottom: 0.875rem;
-            word-break: break-all;
-            box-shadow: var(--shadow-md);
-        }
-
-        .help-section details {
-            border: 1.5px solid var(--border-primary);
-            border-radius: 0.75rem;
-            margin-bottom: 0.75rem;
-            background: var(--bg-secondary);
-            overflow: hidden;
-        }
-
-        .help-section summary {
-            padding: 1rem 1.25rem;
-            font-weight: 600;
-            font-size: 0.875rem;
-            cursor: pointer;
-            background: var(--bg-tertiary);
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .help-section summary:hover {
-            background: var(--border-primary);
-        }
-
-        .help-section summary::after {
-            content: '+';
-            font-size: 1.25rem;
-            font-weight: 300;
-        }
-
-        .help-section details[open] summary::after {
-            content: '−';
-        }
-
-        .help-section ol {
-            padding: 1.25rem 1.25rem 1.25rem 2.5rem;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .help-section ol li {
-            margin-bottom: 0.625rem;
-            line-height: 1.6;
-        }
-
-        .help-section code {
-            background: var(--bg-tertiary);
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.375rem;
-            font-size: 0.8125rem;
-            font-weight: 600;
-            color: var(--primary);
-        }
-
-        /* Complete */
-        .success-icon {
-            width: 5rem;
-            height: 5rem;
-            background: var(--gradient-success);
-            color: #fff;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            margin: 0 auto 2rem;
-            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
-            animation: successPop 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        @keyframes successPop {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
-        .success-title {
-            text-align: center;
-            margin-bottom: 0.5rem;
-            font-size: 1.5rem;
-            font-weight: 700;
-        }
-
-        .success-message {
-            text-align: center;
-            color: var(--text-tertiary);
-            margin-bottom: 2rem;
-            font-size: 1rem;
-        }
-
-        .info-box {
-            background: var(--info-bg);
-            border: 1.5px solid var(--info-border);
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-            font-size: 0.875rem;
-        }
-
-        .info-box p {
-            margin-bottom: 0.375rem;
-            color: var(--text-secondary);
-        }
-
-        .info-box a {
-            color: var(--info);
-            font-weight: 600;
-        }
-
-        .step-description {
-            color: var(--text-tertiary);
-            font-size: 0.9375rem;
-            margin-bottom: 1.5rem;
-            line-height: 1.7;
-        }
-
-        .footer {
-            text-align: center;
-            font-size: 0.75rem;
-            color: var(--text-tertiary);
-            margin-top: 2rem;
-            font-weight: 500;
-        }
-
-        /* Responsive */
-        @media (max-width: 900px) {
-            .container {
-                max-width: 100%;
-            }
-
-            .card {
-                grid-template-columns: 260px 1fr;
-            }
-
-            .card-sidebar {
-                padding: 2rem 1.75rem;
-            }
-
-            .card-body {
-                padding: 2rem;
-            }
-
-            .card-body-header h1 {
-                font-size: 1.125rem;
-            }
-        }
-
-        @media (max-width: 640px) {
-            body {
-                padding: 1rem 0.5rem;
-            }
-
-            .card {
-                grid-template-columns: 1fr;
-                border-radius: 1rem;
-            }
-
-            .card-sidebar {
-                border-radius: 1rem 1rem 0 0;
-                flex-direction: row;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 0.75rem;
-                padding: 1.25rem 1.5rem;
-            }
-
-            .card-sidebar .sidebar-icon {
-                font-size: 1.75rem;
-            }
-
-            .card-sidebar h2 {
-                font-size: 1.125rem;
-            }
-
-            .card-sidebar .sidebar-desc,
-            .card-sidebar .sidebar-step {
-                display: none;
-            }
-
-            .card-body-header h1 {
-                font-size: 1rem;
-            }
-
-            .card-body {
-                padding: 1.5rem;
-            }
-
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .form-group.full-width {
-                grid-column: auto;
-            }
-
-            .card-body-header .steps {
-                gap: 0.25rem;
-            }
-
-            .step-dot {
-                font-size: 0.6875rem;
-                padding: 0.375rem 0.625rem;
-            }
-
-            .sub-steps {
-                gap: 0.25rem;
-            }
-
-            .sub-step-dot {
-                font-size: 0.625rem;
-                padding: 0.25rem 0.5rem;
-            }
-
-            .task-message {
-                max-width: 40%;
-            }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Installation Wizard</h1>
-        </div>
-        {$this->renderInstallTimer($currentStep)}
-        <div class="card">
-            <div class="card-sidebar">
-                <div class="sidebar-icon">{$sidebarIcon}</div>
-                <h2>{$title}</h2>
-                <p class="sidebar-desc">{$sidebarDesc}</p>
-                <p class="sidebar-step">{$sidebarLabel}</p>
-            </div>
-            <div class="card-body">
-                <div class="card-body-header">
-                    <h1>Installation Wizard</h1>
-                    {$stepIndicator}
-                </div>
-                {$subStepIndicator}
-                {$content}
-            </div>
-        </div>
-        <div class="footer">Installer v{$version}</div>
-    </div>
-</body>
-</html>
+<body class="min-h-screen bg-gradient-to-br from-slate-100 to-sky-50 dark:from-slate-900 dark:to-slate-800 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
+
+
 HTML;
     }
 
@@ -3273,18 +2581,18 @@ HTML;
         }
 
         return <<<'HTML'
-        <div class="install-timer" id="install-timer">
-            <div class="timer-item">
-                <span class="timer-label">Started:</span>
-                <span class="timer-value" id="timer-start">--:--:--</span>
+        <div class="flex justify-center flex-wrap gap-4 md:gap-8 mb-6 p-3 md:p-4 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-sm" id="install-timer">
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-slate-700 dark:text-slate-300">Started:</span>
+                <span class="font-mono text-slate-900 dark:text-white" id="timer-start">--:--:--</span>
             </div>
-            <div class="timer-item">
-                <span class="timer-label">Elapsed:</span>
-                <span class="timer-value" id="timer-elapsed">0s</span>
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-slate-700 dark:text-slate-300">Elapsed:</span>
+                <span class="font-mono text-slate-900 dark:text-white" id="timer-elapsed">0s</span>
             </div>
-            <div class="timer-item">
-                <span class="timer-label">Remaining:</span>
-                <span class="timer-value" id="timer-remaining">Calculating...</span>
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-slate-700 dark:text-slate-300">Remaining:</span>
+                <span class="font-mono text-slate-900 dark:text-white" id="timer-remaining">Calculating...</span>
             </div>
         </div>
         <script>
@@ -3347,32 +2655,37 @@ HTML;
             return '';
         }
 
-        $html = '<div class="steps">';
+        $html = '<div class="flex justify-center flex-wrap gap-2 mb-6">';
         $visualNum = 0;
         foreach ($this->stepNames as $num => $name) {
             $visualNum++;
             $isSettingsGroup = ($num === 3);
 
             if ($isSettingsGroup) {
-                // The "Settings" dot is active for internal steps 3-6, completed if past step 6
                 if ($currentStep > 6) {
-                    $class = 'completed';
+                    $class = 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20';
+                    $icon = '✓';
                 } elseif (in_array($currentStep, $this->settingsSubSteps)) {
-                    $class = 'active';
+                    $class = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/20';
+                    $icon = $visualNum;
                 } else {
-                    $class = '';
+                    $class = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600';
+                    $icon = $visualNum;
                 }
             } else {
                 if ($num < $currentStep) {
-                    $class = 'completed';
+                    $class = 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20';
+                    $icon = '✓';
                 } elseif ($num === $currentStep) {
-                    $class = 'active';
+                    $class = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/20';
+                    $icon = $visualNum;
                 } else {
-                    $class = '';
+                    $class = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600';
+                    $icon = $visualNum;
                 }
             }
 
-            $html .= "<span class=\"step-dot {$class}\">{$visualNum}. {$name}</span>";
+            $html .= "<div class=\"flex items-center gap-2 px-3 py-1.5 rounded-full {$class} text-sm font-semibold\">{$icon}. {$name}</div>";
         }
         $html .= '</div>';
 
@@ -3385,18 +2698,21 @@ HTML;
             return '';
         }
 
-        $html = '<div class="sub-steps">';
+        $html = '<div class="flex justify-center flex-wrap gap-2 mb-6">';
         foreach ($this->settingsSubSteps as $index => $step) {
             if ($step < $currentStep) {
-                $class = 'completed';
+                $class = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700';
+                $icon = '✓';
             } elseif ($step === $currentStep) {
-                $class = 'active';
+                $class = 'bg-sky-500 text-white shadow-lg shadow-sky-500/20';
+                $icon = $index + 1;
             } else {
-                $class = '';
+                $class = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600';
+                $icon = $index + 1;
             }
             $name = $this->settingsSubStepNames[$step];
             $num = $index + 1;
-            $html .= "<span class=\"sub-step-dot {$class}\">{$num}. {$name}</span>";
+            $html .= "<div class=\"flex items-center gap-1.5 px-3 py-1.5 rounded-full {$class} text-xs font-semibold\">{$icon}. {$name}</div>";
         }
         $html .= '</div>';
 
