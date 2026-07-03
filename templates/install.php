@@ -2569,8 +2569,27 @@ HTML;
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-100 to-sky-50 dark:from-slate-900 dark:to-slate-800 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
+    <div class="max-w-4xl mx-auto p-6 md:p-8">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 mb-4 shadow-lg shadow-sky-500/30">
+                <span class="text-3xl">{$sidebarIcon}</span>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-2">{$title}</h1>
+            <p class="text-slate-500 dark:text-slate-400">{$sidebarDesc}</p>
+            <p class="text-xs font-semibold text-sky-500 dark:text-sky-400 uppercase tracking-wide mt-2">{$sidebarLabel}</p>
+        </div>
 
+        {$stepIndicator}
+        {$subStepIndicator}
 
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 md:p-8">
+            {$content}
+        </div>
+
+        <div class="text-center mt-6 text-xs text-slate-400 dark:text-slate-500">Application Installer v{$version}</div>
+    </div>
+</body>
+</html>
 HTML;
     }
 
