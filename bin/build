@@ -107,13 +107,7 @@ echo "  Copying readme.html...";
 copy($toolkitDir.'/readme.html', $packageDir.'/readme.html');
 echo " done\n";
 
-// ─── 4. Generate release-workflow.md ──────────────────────────────────────────
-echo "  Generating release-workflow.md...";
-$workflow = generateReleaseWorkflow($config);
-file_put_contents($packageDir.'/release-workflow.md', $workflow);
-echo " done\n";
-
-// ─── 5. Generate packages/.gitignore ──────────────────────────────────────────
+// ─── 4. Generate packages/.gitignore ──────────────────────────────────────────
 echo "  Generating packages/.gitignore...";
 file_put_contents($packagesDir.'/.gitignore', "*.zip\n*.update\n");
 echo " done\n";
@@ -138,108 +132,4 @@ function buildSeederArray(array $seeders): string
     $lines .= '    ]';
 
     return $lines;
-}
-
-function generateReleaseWorkflow(array $config): string
-{
-    $name = $config['name'];
-    $slug = $config['slug'];
-    $phpVersion = str_replace('.0', '', $config['min_php_version']);
-
-    return <<<MD
-# Release Workflow
-
-This document describes how to version and release {$name} distributable packages.
-
-## Semantic Versioning (SemVer)
-
-This project follows [Semantic Versioning](https://semver.org). Version numbers use the format **MAJOR.MINOR.PATCH**:
-
-| Component | When to bump | Example |
-|-----------|-------------|---------|
-| **MAJOR** | Breaking changes that require customers to take action (e.g., new PHP version requirement, database schema changes that aren't auto-migrated, removed features) | 1.0.0 → **2.0.0** |
-| **MINOR** | New features that are backwards compatible (e.g., new admin page, new feature) | 1.2.0 → **1.3.0** |
-| **PATCH** | Bug fixes and small improvements that don't add features | 1.2.0 → **1.2.1** |
-
-## Where the Version Lives
-
-The single source of truth is in `config/app.php`:
-
-```php
-'version' => '1.0.0',
-```
-
-This is accessible anywhere in the application via `config('app.version')`.
-
-> **Note:** The `INSTALLER_VERSION` in `package/install.php` is separate — it tracks the web installer's own version, not the application version.
-
-## Release Checklist
-
-Follow these steps for every release:
-
-### 1. Bump the Version
-
-Edit `config/app.php` and update the `'version'` value:
-
-```php
-'version' => '1.1.0',  // was '1.0.0'
-```
-
-### 2. Commit the Version Bump
-
-```bash
-git add config/app.php
-git commit -m "chore: bump version to 1.1.0"
-```
-
-### 3. Build the Package
-
-```bash
-php artisan package:build
-```
-
-This produces `package/packages/{$slug}-v1.1.0-full.zip`.
-
-### 4. Create a Git Tag
-
-A Git tag is a permanent bookmark pointing to a specific commit. It marks exactly which code shipped in a version.
-
-```bash
-git tag v1.1.0
-```
-
-### 5. Push to GitHub
-
-```bash
-git push origin main --tags
-```
-
-## Useful Git Tag Commands
-
-```bash
-# List all tags
-git tag
-
-# List tags matching a pattern
-git tag -l "v1.*"
-
-# Show details about a specific tag
-git show v1.0.0
-
-# Delete a local tag (if you made a mistake)
-git tag -d v1.0.0
-
-# Delete a remote tag (if you pushed it by mistake)
-git push origin --delete v1.0.0
-
-# Check out the code at a specific version
-git checkout v1.0.0
-```
-
-## Quick Reference
-
-```
-Version bump → Commit → Build → Tag → Push
-```
-MD;
 }
