@@ -534,13 +534,19 @@ class Installer
 
         // Optional PHP extensions (non-critical — fallbacks exist)
         $optionalExtensionFallbacks = [
-            'imagick' => 'Image processing will fall back to the GD extension instead.',
-            'gmp' => 'Cryptographic math will fall back to a slower native PHP implementation instead.',
+            'imagick' => [
+                'fallback' => 'Image processing will fall back to the GD extension instead.',
+                'benefit' => 'If installed: higher-quality image resizing/cropping, broader format support (e.g. TIFF, PSD), and better performance on large images.',
+            ],
+            'gmp' => [
+                'fallback' => 'Cryptographic math will fall back to a slower native PHP implementation instead.',
+                'benefit' => 'If installed: faster, more efficient arbitrary-precision math for cryptographic operations.',
+            ],
         ];
-        foreach ($optionalExtensionFallbacks as $ext => $fallbackMessage) {
+        foreach ($optionalExtensionFallbacks as $ext => $info) {
             $results[] = [
                 'name' => "PHP Extension: {$ext} (optional)",
-                'detail' => extension_loaded($ext) ? 'Loaded' : "Not loaded — {$fallbackMessage}",
+                'detail' => extension_loaded($ext) ? 'Loaded' : "Not loaded — {$info['fallback']} {$info['benefit']}",
                 'passed' => extension_loaded($ext),
                 'critical' => false,
             ];
@@ -558,7 +564,9 @@ class Installer
         $modRewrite = $this->checkModRewrite();
         $results[] = [
             'name' => 'Apache mod_rewrite',
-            'detail' => $modRewrite['detail'],
+            'detail' => $modRewrite['passed']
+                ? $modRewrite['detail']
+                : $modRewrite['detail'].' If enabled: clean, SEO-friendly URLs without index.php in the path.',
             'passed' => $modRewrite['passed'],
             'critical' => false, // warning only
         ];
@@ -579,7 +587,7 @@ class Installer
             'name' => 'Core Process Functions',
             'detail' => empty($blockedFunctions)
                 ? 'exec, shell_exec, proc_open, proc_close are available'
-                : 'Disabled via disable_functions: '.implode(', ', $blockedFunctions),
+                : 'Disabled via disable_functions: '.implode(', ', $blockedFunctions).' If enabled: scheduled tasks (Laravel Scheduler) and background processes (Symfony Process) can run correctly.',
             'passed' => empty($blockedFunctions),
             'critical' => false,
         ];
