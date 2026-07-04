@@ -113,19 +113,7 @@ $workflow = generateReleaseWorkflow($config);
 file_put_contents($packageDir.'/release-workflow.md', $workflow);
 echo " done\n";
 
-// ─── 5. Generate CHANGES.md (if not exists) ──────────────────────────────────
-if (! file_exists($packageDir.'/CHANGES.md')) {
-    echo "  Creating initial CHANGES.md...";
-    $changes = "# {$config['name']} - Changelog\n\n";
-    $changes .= "## 1.0.0 - Initial Release\n\n";
-    $changes .= "- Initial release\n";
-    file_put_contents($packageDir.'/CHANGES.md', $changes);
-    echo " done\n";
-} else {
-    echo "  CHANGES.md already exists, skipping\n";
-}
-
-// ─── 6. Generate packages/.gitignore ──────────────────────────────────────────
+// ─── 5. Generate packages/.gitignore ──────────────────────────────────────────
 echo "  Generating packages/.gitignore...";
 file_put_contents($packagesDir.'/.gitignore', "*.zip\n*.update\n");
 echo " done\n";
@@ -197,26 +185,14 @@ Edit `config/app.php` and update the `'version'` value:
 'version' => '1.1.0',  // was '1.0.0'
 ```
 
-### 2. Update the Changelog
-
-Add a new section at the top of `package/CHANGES.md`:
-
-```markdown
-## 1.1.0 Short Description
-
-- Added feature X
-- Improved Y
-- Fixed bug Z
-```
-
-### 3. Commit the Version Bump
+### 2. Commit the Version Bump
 
 ```bash
-git add config/app.php package/CHANGES.md
+git add config/app.php
 git commit -m "chore: bump version to 1.1.0"
 ```
 
-### 4. Build the Package
+### 3. Build the Package
 
 ```bash
 php artisan package:build
@@ -224,7 +200,7 @@ php artisan package:build
 
 This produces `package/packages/{$slug}-v1.1.0-full.zip`.
 
-### 5. Create a Git Tag
+### 4. Create a Git Tag
 
 A Git tag is a permanent bookmark pointing to a specific commit. It marks exactly which code shipped in a version.
 
@@ -232,7 +208,7 @@ A Git tag is a permanent bookmark pointing to a specific commit. It marks exactl
 git tag v1.1.0
 ```
 
-### 6. Push to GitHub
+### 5. Push to GitHub
 
 ```bash
 git push origin main --tags
@@ -263,7 +239,7 @@ git checkout v1.0.0
 ## Quick Reference
 
 ```
-Version bump → Changelog → Commit → Build → Tag → Push
+Version bump → Commit → Build → Tag → Push
 ```
 MD;
 }
