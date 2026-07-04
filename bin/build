@@ -102,9 +102,9 @@ echo "  Copying scanner.php...";
 copy($toolkitDir.'/templates/scanner.php', $packageDir.'/scanner.php');
 echo " done\n";
 
-// ─── 3. Copy readme.md ──────────────────────────────────────────────────────
-echo "  Copying readme.md...";
-copy($toolkitDir.'/readme.md', $packageDir.'/readme.md');
+// ─── 3. Copy readme.html ─────────────────────────────────────────────────────
+echo "  Copying readme.html...";
+copy($toolkitDir.'/readme.html', $packageDir.'/readme.html');
 echo " done\n";
 
 // ─── 4. Generate release-workflow.md ──────────────────────────────────────────
