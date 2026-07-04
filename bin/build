@@ -97,17 +97,12 @@ $template = preg_replace(
 file_put_contents($packageDir.'/install.php', $template);
 echo " done\n";
 
-// ─── 2. Copy scanner.php ──────────────────────────────────────────────────────
-echo "  Copying scanner.php...";
-copy($toolkitDir.'/templates/scanner.php', $packageDir.'/scanner.php');
-echo " done\n";
-
-// ─── 3. Copy readme.html ─────────────────────────────────────────────────────
+// ─── 2. Copy readme.html ─────────────────────────────────────────────────────
 echo "  Copying readme.html...";
 copy($toolkitDir.'/readme.html', $packageDir.'/readme.html');
 echo " done\n";
 
-// ─── 4. Generate packages/.gitignore ──────────────────────────────────────────
+// ─── 3. Generate packages/.gitignore ──────────────────────────────────────────
 echo "  Generating packages/.gitignore...";
 file_put_contents($packagesDir.'/.gitignore', "*.zip\n*.update\n");
 echo " done\n";
@@ -115,9 +110,8 @@ echo " done\n";
 echo "\n\033[32m✔ Package built successfully for {$config['name']}\033[0m\n";
 echo "  Files generated in: {$packageDir}\n\n";
 echo "Next steps:\n";
-echo "  1. Run 'php {$packageDir}/scanner.php' to verify dependencies\n";
-echo "  2. Run 'php artisan package:build' to create the distributable zip\n";
-echo "  3. Copy install.php + the zip to your distribution channel\n";
+echo "  1. Run 'php artisan package:build' to create the distributable zip\n";
+echo "  2. Copy install.php + the zip to your distribution channel\n";
 
 function buildSeederArray(array $seeders): string
 {
