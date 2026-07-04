@@ -533,11 +533,14 @@ class Installer
         }
 
         // Optional PHP extensions (non-critical — fallbacks exist)
-        $optionalExtensions = ['imagick', 'gmp'];
-        foreach ($optionalExtensions as $ext) {
+        $optionalExtensionFallbacks = [
+            'imagick' => 'Image processing will fall back to the GD extension instead.',
+            'gmp' => 'Cryptographic math will fall back to a slower native PHP implementation instead.',
+        ];
+        foreach ($optionalExtensionFallbacks as $ext => $fallbackMessage) {
             $results[] = [
                 'name' => "PHP Extension: {$ext} (optional)",
-                'detail' => extension_loaded($ext) ? 'Loaded' : 'Not loaded — fallback available',
+                'detail' => extension_loaded($ext) ? 'Loaded' : "Not loaded — {$fallbackMessage}",
                 'passed' => extension_loaded($ext),
                 'critical' => false,
             ];
@@ -1454,12 +1457,34 @@ HTML;
     {
         $results = $this->checkRequirements();
         $allCriticalPassed = true;
+        foreach ($results as $r) {
+            if (! $r['passed'] && $r['critical']) {
+                $allCriticalPassed = false;
+            }
+        }
+
+        // Only surface individual detail cards for checks that need attention.
+        // Passing checks are collapsed into a single summary banner to save space.
+        $passed = array_filter($results, fn ($r) => $r['passed']);
+        $notPassed = array_filter($results, fn ($r) => ! $r['passed']);
 
         $items = '';
-        foreach ($results as $r) {
-            $icon = $r['passed'] ? '✓' : ($r['critical'] ? '✕' : '⚠');
-            $statusClass = $r['passed'] ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700' : ($r['critical'] ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700');
-            $iconClass = $r['passed'] ? 'text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30' : ($r['critical'] ? 'text-red-500 bg-red-100 dark:bg-red-900/30' : 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900/30');
+        if (! empty($passed)) {
+            $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700 shadow-sm\">
+                <div class=\"flex-shrink-0 w-10 h-10 rounded-xl text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center\">
+                    <span class=\"text-lg font-bold\">✓</span>
+                </div>
+                <div class=\"flex-1\">
+                    <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">".count($passed)." requirement".(count($passed) === 1 ? '' : 's')." met</h4>
+                    <p class=\"text-xs text-slate-600 dark:text-slate-400 mt-0.5\">".implode(', ', array_map(fn ($r) => $r['name'], $passed))."</p>
+                </div>
+                <span class=\"px-3 py-1 rounded-full text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 text-xs font-semibold\">Passed</span>
+            </div>";
+        }
+        foreach ($notPassed as $r) {
+            $icon = $r['critical'] ? '✕' : '⚠';
+            $statusClass = $r['critical'] ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
+            $iconClass = $r['critical'] ? 'text-red-500 bg-red-100 dark:bg-red-900/30' : 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900/30';
             $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 {$statusClass} shadow-sm hover:shadow-md transition-shadow\">
                 <div class=\"flex-shrink-0 w-10 h-10 rounded-xl {$iconClass} flex items-center justify-center\">
                     <span class=\"text-lg font-bold\">{$icon}</span>
@@ -1468,11 +1493,8 @@ HTML;
                     <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">{$r['name']}</h4>
                     <p class=\"text-xs text-slate-600 dark:text-slate-400 mt-0.5\">{$r['detail']}</p>
                 </div>
-                <span class=\"px-3 py-1 rounded-full {$iconClass} text-xs font-semibold\">" . ($r['passed'] ? 'Passed' : ($r['critical'] ? 'Critical' : 'Warning')) . "</span>
+                <span class=\"px-3 py-1 rounded-full {$iconClass} text-xs font-semibold\">" . ($r['critical'] ? 'Critical' : 'Warning') . "</span>
             </div>";
-            if (! $r['passed'] && $r['critical']) {
-                $allCriticalPassed = false;
-            }
         }
 
         $disabled = $allCriticalPassed ? '' : 'disabled';
@@ -1489,14 +1511,16 @@ HTML;
 
         $content = <<<HTML
         {$warning}
+        <form method="POST" action="install.php?step=2">
         <div class="grid gap-3 mb-6">{$items}</div>
         <div class="flex justify-between items-center gap-3">
             <a href="install.php?step=1" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
             <div class="flex gap-3">
                 {$retestButton}
-                <button type="submit" formaction="install.php?step=2" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" {$disabled}>Continue →</button>
+                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" {$disabled}>Continue →</button>
             </div>
         </div>
+        </form>
 HTML;
 
         $this->renderLayout('Server Requirements', $content, 2);
