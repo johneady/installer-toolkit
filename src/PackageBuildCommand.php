@@ -180,7 +180,7 @@ abstract class PackageBuildCommand extends Command
         $buildScript = $toolkitOption.'/bin/build';
 
         if (! file_exists($buildScript)) {
-            throw new \RuntimeException("Installer toolkit not found at: {$toolkitDir}");
+            throw new \RuntimeException("Installer toolkit not found at: {$toolkitOption}");
         }
 
         $this->info('Running installer toolkit...');
