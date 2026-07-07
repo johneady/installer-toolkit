@@ -14,10 +14,14 @@
 // Configuration Constants - DO NOT TOUCH ANY CODE BELOW
 // ============================================================================
 
+// The values below are placeholders. bin/build replaces this entire block
+// with real values from the consuming app's package/package-config.php
+// (zip filename, app folder, min_php_version) every time it generates that
+// app's install.php — editing them here has no effect on any deployed app.
 // [[INSTALLER_CONFIG]]
-define('ZIP_FILENAME', 'app.zip');
-define('APP_FOLDER', 'app');
-define('MIN_PHP_VERSION', '8.3.0');
+define('ZIP_FILENAME', 'Generated at build time');
+define('APP_FOLDER', 'Generated at build time');
+define('MIN_PHP_VERSION', 'Generated at build time');
 // [[/INSTALLER_CONFIG]]
 
 define('EULA_TEXT', <<<'EULA'
@@ -471,13 +475,17 @@ class Installer
 
     private function handleAdminPost(): void
     {
-        $name = trim($_POST['admin_name'] ?? '');
+        $firstName = trim($_POST['admin_first_name'] ?? '');
+        $lastName = trim($_POST['admin_last_name'] ?? '');
         $email = trim($_POST['admin_email'] ?? '');
         $password = $_POST['admin_password'] ?? '';
         $passwordConfirm = $_POST['admin_password_confirm'] ?? '';
 
-        if ($name === '') {
-            $this->errors[] = 'Name is required.';
+        if ($firstName === '') {
+            $this->errors[] = 'First name is required.';
+        }
+        if ($lastName === '') {
+            $this->errors[] = 'Last name is required.';
         }
         if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->errors[] = 'A valid email address is required.';
@@ -496,7 +504,8 @@ class Installer
         }
 
         $_SESSION['installer']['admin'] = [
-            'name' => $name,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'email' => $email,
             'password' => $password,
         ];
@@ -990,7 +999,8 @@ MAIL_FROM_ADDRESS="{$mail['mail_from_address']}"
 MAIL_FROM_NAME="{$this->escapeEnvValue($mail['mail_from_name'])}"
 
 FIRST_USER_EMAIL={$admin['email']}
-FIRST_USER_NAME="{$this->escapeEnvValue($admin['name'])}"
+FIRST_USER_FIRST_NAME="{$this->escapeEnvValue($admin['first_name'])}"
+FIRST_USER_LAST_NAME="{$this->escapeEnvValue($admin['last_name'])}"
 FIRST_USER_PASSWORD="{$this->escapeEnvValue($admin['password'])}"
 
 HEALTH_MAIL_TO_ADDRESS={$admin['email']}
@@ -1895,7 +1905,8 @@ HTML;
         $errors = $this->renderErrors();
         $admin = $_SESSION['installer']['admin'] ?? [];
 
-        $name = htmlspecialchars($admin['name'] ?? '');
+        $firstName = htmlspecialchars($admin['first_name'] ?? '');
+        $lastName = htmlspecialchars($admin['last_name'] ?? '');
         $email = htmlspecialchars($admin['email'] ?? '');
 
         $content = <<<HTML
@@ -1915,11 +1926,20 @@ HTML;
                 </div>
                 <div class="p-6">
                     <div class="space-y-5">
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Name <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <input type="text" name="admin_name" id="admin_name" value="{$name}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
+                        <div class="grid md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">First Name <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <input type="text" name="admin_first_name" id="admin_first_name" value="{$firstName}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Last Name <span class="text-red-500">*</span></label>
+                                <div class="relative">
+                                    <input type="text" name="admin_last_name" id="admin_last_name" value="{$lastName}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
+                                </div>
                             </div>
                         </div>
                         <div>

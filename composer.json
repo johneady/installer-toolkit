@@ -1,0 +1,36 @@
+{
+    "name": "johneady/installer-toolkit",
+    "type": "library",
+    "description": "Shared installer wizard and package:build command for Laravel apps distributed as self-installing zips.",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "illuminate/console": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "symfony/process": "^6.0|^7.0",
+        "ext-zip": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "InstallerToolkit\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "InstallerToolkit\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "require-dev": {
+        "pestphp/pest": "^4.1",
+        "orchestra/testbench": "^10.0"
+    },
+    "scripts": {
+        "test": "pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}
