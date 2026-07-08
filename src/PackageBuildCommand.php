@@ -4,11 +4,14 @@ namespace InstallerToolkit;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use InstallerToolkit\Concerns\LoadsPackageConfig;
 use Symfony\Component\Process\Process;
 use ZipArchive;
 
 abstract class PackageBuildCommand extends Command
 {
+    use LoadsPackageConfig;
+
     protected $signature = 'package:build {--output=package : Output directory for the distributable files} {--toolkit=~/php/installer-toolkit : Path to the installer-toolkit directory}';
 
     protected $description = 'Build the distributable package (zip + installer + readme)';
@@ -65,24 +68,12 @@ abstract class PackageBuildCommand extends Command
 
     public function handle(): int
     {
-        $configPath = base_path('package/package-config.php');
-        if (! file_exists($configPath)) {
-            $this->error('No package-config.php found in package directory.');
+        if ($configError = $this->loadPackageConfig()) {
+            $this->error($configError);
 
             return self::FAILURE;
         }
 
-        $this->config = require $configPath;
-
-        foreach (['name', 'slug', 'min_php_version'] as $requiredKey) {
-            if (empty($this->config[$requiredKey])) {
-                $this->error("package-config.php is missing required key: '{$requiredKey}'.");
-
-                return self::FAILURE;
-            }
-        }
-
-        $this->slug = $this->config['slug'];
         $version = config('app.version');
 
         if (! preg_match('/^\d+\.\d+\.\d+$/', $version)) {
