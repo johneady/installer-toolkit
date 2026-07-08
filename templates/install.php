@@ -1052,6 +1052,19 @@ ENV;
     private function runArtisanCommand(string $command, array $params = []): string
     {
         $kernel = $this->bootstrapLaravel();
+
+        // Force the app to boot (registering + booting all service providers)
+        // now, rather than lazily on Kernel::call(). Consuming apps commonly
+        // guard destructive Artisan commands with
+        // DB::prohibitDestructiveCommands(app()->isProduction()) from their
+        // own AppServiceProvider::boot(). .env is deliberately written with
+        // APP_ENV=production for a real deployment, so that guard becomes
+        // active as soon as providers boot. The installer legitimately needs
+        // to run migrate:fresh once here, before any real data exists, so
+        // lift the prohibition after boot but before the command runs.
+        $kernel->bootstrap();
+        Illuminate\Support\Facades\DB::prohibitDestructiveCommands(false);
+
         $output = new Symfony\Component\Console\Output\BufferedOutput;
 
         // Capture any stray output (e.g. from Laravel's exception handler
