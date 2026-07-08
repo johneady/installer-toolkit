@@ -506,8 +506,10 @@ PHP;
             // Install tasks run real Artisan commands (migrate:fresh, db:seed,
             // etc.) server-side and can take much longer than the wizard's
             // other, near-instant steps — use a generous per-request timeout
-            // here rather than raising it for the whole client.
-            $response = $client->timeout(120)->post("/install.php?step=7&task={$task}");
+            // here rather than raising it for the whole client. Apps with a
+            // large migration count (200+) can take several minutes for
+            // migrate:fresh alone.
+            $response = $client->timeout(300)->post("/install.php?step=7&task={$task}");
             $json = $response->json();
 
             if ($json === null) {
