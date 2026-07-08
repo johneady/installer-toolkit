@@ -59,7 +59,7 @@ if (! is_dir($packagesDir)) {
 
 // ─── 1. Generate install.php ──────────────────────────────────────────────────
 echo "  Generating install.php...";
-$template = file_get_contents($toolkitDir.'/templates/install.php');
+$template = buildInstallerTemplate($toolkitDir.'/templates/install');
 
 $installerVersion = trim(file_get_contents($toolkitDir.'/VERSION'));
 
@@ -126,4 +126,73 @@ function buildSeederArray(array $seeders): string
     $lines .= '    ]';
 
     return $lines;
+}
+
+/**
+ * Assemble the single-file install.php from its source pieces under
+ * templates/install/. The shipped installer must remain one standalone
+ * file (customers upload it with no autoloader available), so the
+ * traits are inlined here in dependency order: definitions before the
+ * class that uses them.
+ *
+ * Trait files are discovered from templates/install/Concerns/ rather
+ * than hardcoded, so adding/removing a trait file is the only edit
+ * needed — the `use` statements in class.php's [[INSTALLER_TRAITS]]
+ * block are generated from the same directory listing.
+ */
+function buildInstallerTemplate(string $installDir): string
+{
+    $parts = [rtrim(file_get_contents("$installDir/header.php"), "\n")];
+
+    $traitFiles = glob("$installDir/Concerns/*.php");
+    sort($traitFiles);
+
+    if (empty($traitFiles)) {
+        throw new \RuntimeException("No trait files found in {$installDir}/Concerns/");
+    }
+
+    $traitNames = array_map(fn ($file) => basename($file, '.php'), $traitFiles);
+
+    foreach ($traitFiles as $file) {
+        $parts[] = rtrim(stripPhpOpenTag(file_get_contents($file), $file), "\n");
+    }
+
+    $useStatements = implode("\n", array_map(fn ($name) => "    use {$name};", $traitNames));
+
+    $classTemplate = stripPhpOpenTag(file_get_contents("$installDir/class.php"), "$installDir/class.php");
+    $classTemplate = preg_replace(
+        '/\/\/ \[\[INSTALLER_TRAITS\]\].*?\/\/ \[\[\/INSTALLER_TRAITS\]\]/s',
+        $useStatements,
+        $classTemplate,
+        1,
+        $traitsReplaced
+    );
+
+    if ($traitsReplaced !== 1) {
+        throw new \RuntimeException("Failed to substitute [[INSTALLER_TRAITS]] marker in {$installDir}/class.php");
+    }
+
+    $parts[] = rtrim($classTemplate, "\n");
+
+    $parts[] = rtrim(file_get_contents("$installDir/bootstrap.php"), "\n");
+
+    return implode("\n\n", $parts)."\n";
+}
+
+/**
+ * Strip a file's leading `<?php` open tag using the tokenizer (rather
+ * than a regex assuming a fixed blank-line convention), so trait files
+ * can be concatenated into one script. Throws if the file doesn't open
+ * with a plain `<?php` tag, so a malformed trait file fails the build
+ * loudly instead of silently corrupting the generated installer.
+ */
+function stripPhpOpenTag(string $content, string $path): string
+{
+    $tokens = token_get_all($content);
+
+    if (empty($tokens) || ! is_array($tokens[0]) || $tokens[0][0] !== T_OPEN_TAG) {
+        throw new \RuntimeException("Expected {$path} to start with a <?php tag.");
+    }
+
+    return substr($content, strlen($tokens[0][1]));
 }

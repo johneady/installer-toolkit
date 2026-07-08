@@ -31,7 +31,7 @@ abstract class PackageTestCommand extends Command
 
     /**
      * The exact task sequence install.php's step-7 JS drives, in order.
-     * Must be kept in sync with templates/install.php's $tasks array.
+     * Must be kept in sync with templates/install/Concerns/RendersSteps.php's $tasks array.
      */
     protected const TASK_SEQUENCE = [
         'extract',
@@ -53,7 +53,7 @@ abstract class PackageTestCommand extends Command
     /**
      * Tasks that run via the standalone install-optimize.php endpoint,
      * mapped to the Artisan command name it invokes. Must be kept in sync
-     * with templates/install.php's $cleanProcessTasks array.
+     * with templates/install/Concerns/RendersSteps.php's $cleanProcessTasks array.
      */
     protected const CLEAN_PROCESS_TASKS = [
         'config_clear' => 'config:clear',
