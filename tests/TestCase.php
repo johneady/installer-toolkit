@@ -3,6 +3,7 @@
 namespace InstallerToolkit\Tests;
 
 use InstallerToolkit\Tests\Fixtures\FakePackageBuildCommand;
+use InstallerToolkit\Tests\Fixtures\FakePackageSandboxCommand;
 use InstallerToolkit\Tests\Fixtures\FakePackageTestCommand;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 
@@ -18,5 +19,6 @@ abstract class TestCase extends BaseTestCase
         $kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
         $kernel->registerCommand(new FakePackageBuildCommand);
         $kernel->registerCommand(new FakePackageTestCommand);
+        $kernel->registerCommand(new FakePackageSandboxCommand);
     }
 }
