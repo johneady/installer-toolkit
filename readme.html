@@ -4,124 +4,278 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Installation Guide</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-                    },
-                }
+    <style>
+        :root {
+            --h-bg: #faf6f1;
+            --h-surface: #ffffff;
+            --h-surface-2: #fffdfb;
+            --h-border: #e8ddd0;
+            --h-border-soft: #f0e6d9;
+            --h-ink: #2b2420;
+            --h-mute: #8a7b6c;
+            --h-accent: #c4602f;
+            --h-accent-hover: #ad5228;
+            --h-accent-soft: #f3e2d3;
+            --h-accent-soft-border: #e6c9ab;
+            --h-good: #3f7a5c;
+            --h-good-soft: #e1efe6;
+            --h-good-soft-border: #bfdccb;
+            --h-bad: #b8493b;
+            --h-bad-soft: #f8e6e2;
+            --h-bad-soft-border: #eabdb2;
+            --h-shadow-ink: 43, 36, 32;
+        }
+        :root[data-theme="dark"] {
+            --h-bg: #1c1815;
+            --h-surface: #262019;
+            --h-surface-2: #211c17;
+            --h-border: #3c332a;
+            --h-border-soft: #332b23;
+            --h-ink: #f3ece3;
+            --h-mute: #a1917e;
+            --h-accent: #e08a5f;
+            --h-accent-hover: #e79d78;
+            --h-accent-soft: rgba(196, 96, 47, 0.18);
+            --h-accent-soft-border: rgba(196, 96, 47, 0.4);
+            --h-good: #6fbb92;
+            --h-good-soft: rgba(63, 122, 92, 0.18);
+            --h-good-soft-border: rgba(63, 122, 92, 0.4);
+            --h-bad: #e08072;
+            --h-bad-soft: rgba(184, 73, 59, 0.18);
+            --h-bad-soft-border: rgba(184, 73, 59, 0.4);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --h-bg: #1c1815;
+                --h-surface: #262019;
+                --h-surface-2: #211c17;
+                --h-border: #3c332a;
+                --h-border-soft: #332b23;
+                --h-ink: #f3ece3;
+                --h-mute: #a1917e;
+                --h-accent: #e08a5f;
+                --h-accent-hover: #e79d78;
+                --h-accent-soft: rgba(196, 96, 47, 0.18);
+                --h-accent-soft-border: rgba(196, 96, 47, 0.4);
+                --h-good: #6fbb92;
+                --h-good-soft: rgba(63, 122, 92, 0.18);
+                --h-good-soft-border: rgba(63, 122, 92, 0.4);
+                --h-bad: #e08072;
+                --h-bad-soft: rgba(184, 73, 59, 0.18);
+                --h-bad-soft-border: rgba(184, 73, 59, 0.4);
             }
         }
-    </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--h-bg);
+            color: var(--h-ink);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color .2s ease, color .2s ease;
+        }
+
+        .h-shell { max-width: 760px; margin: 0 auto; padding: 40px 24px 64px; }
+
+        .h-topbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+        .h-theme-btn {
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--h-surface); border: 1px solid var(--h-border);
+            color: var(--h-mute); cursor: pointer; font-size: 15px;
+        }
+        .h-theme-btn:hover { border-color: var(--h-accent-soft-border); }
+
+        .h-head { text-align: center; margin-bottom: 32px; }
+        .h-head-icon {
+            width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 16px;
+            background: var(--h-accent-soft); border: 1px solid var(--h-accent-soft-border);
+            display: flex; align-items: center; justify-content: center; font-size: 22px;
+        }
+        .h-head h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; text-wrap: balance; }
+        .h-head p { color: var(--h-mute); font-size: .9rem; line-height: 1.6; max-width: 520px; margin: 0 auto; }
+
+        .h-card {
+            background: var(--h-surface); border: 1px solid var(--h-border); border-radius: 22px;
+            padding: 32px; box-shadow: 0 1px 2px rgba(var(--h-shadow-ink), .04);
+        }
+
+        section + section { margin-top: 40px; }
+
+        .h-section-title {
+            display: flex; align-items: center; gap: 10px; font-size: 1.1rem; font-weight: 700;
+            margin: 0 0 16px;
+        }
+        .h-section-title .bump { width: 5px; height: 22px; border-radius: 3px; background: var(--h-accent); flex-shrink: 0; }
+
+        .h-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .h-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border-radius: 999px; font-size: .82rem;
+            background: var(--h-good-soft); border: 1px solid var(--h-good-soft-border); color: var(--h-ink);
+        }
+        .h-chip .mark { color: var(--h-good); font-weight: 800; }
+
+        .h-step-card {
+            background: var(--h-surface-2); border: 1px solid var(--h-border-soft); border-radius: 16px;
+            padding: 20px 22px; margin-bottom: 12px;
+        }
+        .h-step-card:last-child { margin-bottom: 0; }
+        .h-step-card h3 { font-size: .96rem; font-weight: 700; margin: 0 0 8px; }
+        .h-step-card p { font-size: .85rem; color: var(--h-mute); line-height: 1.6; margin: 0 0 10px; }
+        .h-step-card p:last-child { margin-bottom: 0; }
+
+        code {
+            background: var(--h-border-soft); padding: 2px 7px; border-radius: 6px;
+            font-size: .85em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .h-codeline {
+            background: var(--h-ink); color: #f0b892; border-radius: 12px; padding: 14px 16px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .85rem;
+            overflow-x: auto; margin: 10px 0;
+        }
+
+        .h-table-wrap { border: 1px solid var(--h-border-soft); border-radius: 12px; overflow: hidden; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        thead tr { background: var(--h-border-soft); }
+        th { text-align: left; font-weight: 700; padding: 10px 14px; color: var(--h-ink); }
+        td { padding: 10px 14px; border-top: 1px solid var(--h-border-soft); color: var(--h-ink); }
+        td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .8rem; color: var(--h-mute); }
+
+        .h-alert {
+            display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; border-radius: 16px; margin-bottom: 10px;
+        }
+        .h-alert:last-child { margin-bottom: 0; }
+        .h-alert-bad { background: var(--h-bad-soft); border: 1px solid var(--h-bad-soft-border); }
+        .h-alert .t { font-weight: 700; font-size: .87rem; margin: 0 0 2px; color: var(--h-bad); }
+        .h-alert .d { font-size: .82rem; margin: 0; line-height: 1.5; color: var(--h-ink); }
+
+        .h-footer { text-align: center; margin-top: 24px; font-size: .72rem; color: var(--h-mute); }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-100 to-sky-50 dark:from-slate-900 dark:to-slate-800 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
-    <div class="max-w-4xl mx-auto p-6 md:p-8">
-        <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 mb-4 shadow-lg shadow-sky-500/30">
-                <span class="text-3xl">📘</span>
-            </div>
-            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-2">Installation Guide</h1>
-            <p class="text-slate-500 dark:text-slate-400">Thank you for your purchase! This guide will walk you through installing the application on your web server.</p>
+<body>
+    <div class="h-shell">
+        <div class="h-topbar">
+            <button type="button" id="theme-toggle" aria-label="Toggle dark mode" class="h-theme-btn">
+                <span id="theme-toggle-icon">🌙</span>
+            </button>
+        </div>
+        <div class="h-head">
+            <div class="h-head-icon">📘</div>
+            <h1>Installation Guide</h1>
+            <p>Thank you for your purchase! This guide will walk you through installing the application on your web server.</p>
         </div>
 
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 md:p-8 space-y-10">
+        <div class="h-card">
 
             <!-- Requirements -->
             <section>
-                <div class="flex items-center gap-3 mb-4">
-                    <span class="text-2xl">🔍</span>
-                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Requirements</h2>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-slate-700 dark:text-slate-300"><span class="text-emerald-500 font-bold">✓</span> PHP 8.3+</span>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-slate-700 dark:text-slate-300"><span class="text-emerald-500 font-bold">✓</span> MySQL 5.7+ / MariaDB 10.3+</span>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-slate-700 dark:text-slate-300"><span class="text-emerald-500 font-bold">✓</span> Apache + mod_rewrite</span>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-slate-700 dark:text-slate-300"><span class="text-emerald-500 font-bold">✓</span> Extensions: zip, pdo_mysql, mbstring, openssl, fileinfo, bcmath</span>
+                <h2 class="h-section-title"><span class="bump"></span>Requirements</h2>
+                <div class="h-chips">
+                    <span class="h-chip"><span class="mark">✓</span> PHP 8.3+</span>
+                    <span class="h-chip"><span class="mark">✓</span> MySQL 5.7+ / MariaDB 10.3+</span>
+                    <span class="h-chip"><span class="mark">✓</span> Apache + mod_rewrite</span>
+                    <span class="h-chip"><span class="mark">✓</span> Extensions: zip, pdo_mysql, mbstring, openssl, fileinfo, bcmath</span>
                 </div>
             </section>
 
             <!-- Installation Steps -->
             <section>
-                <div class="flex items-center gap-3 mb-4">
-                    <span class="text-2xl">🚀</span>
-                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Installation Steps</h2>
+                <h2 class="h-section-title"><span class="bump"></span>Installation Steps</h2>
+
+                <div class="h-step-card">
+                    <h3>1. Create a Database</h3>
+                    <p>Create a MySQL database using your hosting control panel (e.g. cPanel, Plesk, DirectAdmin). Note down the database name, username, and password — you'll need them in step 4.</p>
                 </div>
 
-                <div class="space-y-4">
-                    <div class="bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-                        <h3 class="font-semibold text-slate-900 dark:text-white mb-1">1. Create a Database</h3>
-                        <p class="text-sm text-slate-600 dark:text-slate-400">Create a MySQL database using your hosting control panel (e.g. cPanel, Plesk, DirectAdmin). Note down the database name, username, and password — you'll need them in step 4.</p>
+                <div class="h-step-card">
+                    <h3>2. Upload the Files</h3>
+                    <p>Upload both the <code>.zip</code> file and <code>install.php</code> to your web server's <strong>document root</strong> folder:</p>
+                    <div class="h-table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>Host</th><th>Document Root</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>cPanel</td><td class="mono">public_html</td></tr>
+                                <tr><td>Plesk</td><td class="mono">httpdocs</td></tr>
+                                <tr><td>XAMPP / Apache</td><td class="mono">htdocs</td></tr>
+                                <tr><td>Other</td><td class="mono">www or wwwroot</td></tr>
+                            </tbody>
+                        </table>
                     </div>
+                </div>
 
-                    <div class="bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">2. Upload the Files</h3>
-                        <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">Upload both the <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs">.zip</code> file and <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs">install.php</code> to your web server's <strong>document root</strong> folder:</p>
-                        <div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                        <th class="text-left font-semibold px-4 py-2">Host</th>
-                                        <th class="text-left font-semibold px-4 py-2">Document Root</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
-                                    <tr><td class="px-4 py-2 text-slate-700 dark:text-slate-300">cPanel</td><td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-400">public_html</td></tr>
-                                    <tr><td class="px-4 py-2 text-slate-700 dark:text-slate-300">Plesk</td><td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-400">httpdocs</td></tr>
-                                    <tr><td class="px-4 py-2 text-slate-700 dark:text-slate-300">XAMPP / Apache</td><td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-400">htdocs</td></tr>
-                                    <tr><td class="px-4 py-2 text-slate-700 dark:text-slate-300">Other</td><td class="px-4 py-2 font-mono text-xs text-slate-600 dark:text-slate-400">www or wwwroot</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div class="h-step-card">
+                    <h3>3. Launch the Installer &amp; Follow the Wizard</h3>
+                    <p>Open your web browser and navigate to:</p>
+                    <div class="h-codeline">https://yourdomain.com/install.php</div>
+                    <p>The installer walks you through license, requirements, database, app settings, email, and admin account creation. It will attempt to delete itself automatically when finished — if it cannot, manually remove <code>install.php</code> and the <code>.zip</code> file from your server.</p>
+                </div>
 
-                    <div class="bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">3. Launch the Installer & Follow the Wizard</h3>
-                        <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Open your web browser and navigate to:</p>
-                        <div class="bg-slate-900 dark:bg-black/40 rounded-lg px-4 py-3 font-mono text-sm text-sky-300 overflow-x-auto mb-3">https://yourdomain.com/install.php</div>
-                        <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">The installer walks you through license, requirements, database, app settings, email, and admin account creation. It will attempt to delete itself automatically when finished — if it cannot, manually remove <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs">install.php</code> and the <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs">.zip</code> file from your server.</p>
-                    </div>
-
-                    <div class="bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
-                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">4. Log In</h3>
-                        <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Visit your admin panel at:</p>
-                        <div class="bg-slate-900 dark:bg-black/40 rounded-lg px-4 py-3 font-mono text-sm text-sky-300 overflow-x-auto">https://yourdomain.com/admin</div>
-                    </div>
+                <div class="h-step-card">
+                    <h3>4. Log In</h3>
+                    <p>Visit your admin panel at:</p>
+                    <div class="h-codeline">https://yourdomain.com/admin</div>
                 </div>
             </section>
 
             <!-- Troubleshooting -->
             <section>
-                <div class="flex items-center gap-3 mb-4">
-                    <span class="text-2xl">🛠️</span>
-                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Troubleshooting</h2>
-                </div>
-                <div class="grid gap-3">
-                    <div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl p-4">
-                        <h4 class="font-semibold text-red-900 dark:text-red-300 text-sm mb-1">Blank page</h4>
-                        <p class="text-sm text-red-800 dark:text-red-400">Ensure PHP 8.3+ is installed and all required extensions are enabled</p>
-                    </div>
-                    <div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl p-4">
-                        <h4 class="font-semibold text-red-900 dark:text-red-300 text-sm mb-1">500 error after install</h4>
-                        <p class="text-sm text-red-800 dark:text-red-400">Verify that mod_rewrite is enabled in your Apache configuration</p>
-                    </div>
-                    <div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl p-4">
-                        <h4 class="font-semibold text-red-900 dark:text-red-300 text-sm mb-1">File uploads not working</h4>
-                        <p class="text-sm text-red-800 dark:text-red-400">Set the storage/ directory permissions to 755 or 775</p>
+                <h2 class="h-section-title"><span class="bump"></span>Troubleshooting</h2>
+                <div class="h-alert h-alert-bad">
+                    <div>
+                        <p class="t">Blank page</p>
+                        <p class="d">Ensure PHP 8.3+ is installed and all required extensions are enabled</p>
                     </div>
                 </div>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-4">Need more help? Contact support.</p>
+                <div class="h-alert h-alert-bad">
+                    <div>
+                        <p class="t">500 error after install</p>
+                        <p class="d">Verify that mod_rewrite is enabled in your Apache configuration</p>
+                    </div>
+                </div>
+                <div class="h-alert h-alert-bad">
+                    <div>
+                        <p class="t">File uploads not working</p>
+                        <p class="d">Set the storage/ directory permissions to 755 or 775</p>
+                    </div>
+                </div>
+                <p style="font-size:.85rem; color:var(--h-mute); margin-top:16px;">Need more help? Contact support.</p>
             </section>
 
         </div>
 
-        <div class="text-center mt-6 text-xs text-slate-400 dark:text-slate-500">Installation Guide</div>
+        <div class="h-footer">Installation Guide</div>
     </div>
+    <script>
+        (function() {
+            var stored = localStorage.getItem('installer-theme');
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var isDark = stored ? stored === 'dark' : prefersDark;
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        })();
+
+        (function() {
+            var btn = document.getElementById('theme-toggle');
+            var icon = document.getElementById('theme-toggle-icon');
+
+            function sync() {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                icon.textContent = isDark ? '☀️' : '🌙';
+            }
+
+            btn.addEventListener('click', function() {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+                localStorage.setItem('installer-theme', isDark ? 'light' : 'dark');
+                sync();
+            });
+
+            sync();
+        })();
+    </script>
 </body>
 </html>

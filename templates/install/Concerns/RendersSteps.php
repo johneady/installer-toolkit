@@ -100,7 +100,7 @@ HTML;
 
         $items = '';
         if (! empty($passed)) {
-            $checkIcon = $this->statusIcon('check', 'w-4 h-4');
+            $checkIcon = $this->statusIcon('check', 16);
             $items .= "<div class=\"h-reqrow good\">
                 <div class=\"icon\">
                     {$checkIcon}
@@ -113,7 +113,7 @@ HTML;
             </div>';
         }
         foreach ($notPassed as $r) {
-            $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning', 'w-4 h-4');
+            $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning', 16);
             $rowClass = $r['critical'] ? 'bad' : 'warn';
             $items .= "<div class=\"h-reqrow {$rowClass}\">
                 <div class=\"icon\">
@@ -131,7 +131,7 @@ HTML;
         $retestButton = $allCriticalPassed ? '' : '<button type="button" class="h-btn h-btn-tint" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
         $warning = $allCriticalPassed ? '' : '<div class="h-alert h-alert-bad">
             <div class="icon">
-                '.$this->statusIcon('warning', 'w-4 h-4').'
+                '.$this->statusIcon('warning', 16).'
             </div>
             <div>
                 <p class="t">Requirements Not Met</p>
@@ -1003,7 +1003,7 @@ HTML;
         if (! $zipDeleted) {
             $deletionMessages .= '<div class="h-alert h-alert-warn">
                 <div class="icon">
-                    '.$this->statusIcon('warning', 'w-4 h-4').'
+                    '.$this->statusIcon('warning', 16).'
                 </div>
                 <div>
                     <p class="t">Manual Cleanup Required</p>
@@ -1022,7 +1022,7 @@ HTML;
         $cleanupUrl = str_replace('//', '/', $cleanupUrl);
 
         $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
-        $bigCheckIcon = $this->statusIcon('check', 'w-8 h-8');
+        $bigCheckIcon = $this->statusIcon('check', 32);
 
         $content = <<<HTML
         <!-- Success Icon -->
@@ -1090,7 +1090,7 @@ HTML;
 
     private function renderAlreadyInstalled(): void
     {
-        $warningIcon = $this->statusIcon('warning', 'w-5 h-5');
+        $warningIcon = $this->statusIcon('warning', 20);
 
         $content = <<<HTML
         <!-- Warning Alert -->

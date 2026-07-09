@@ -8,13 +8,18 @@ trait RendersLayout
      * All use currentColor so they inherit whatever text-color class wraps
      * them. Kept here (rather than per-trait) since every step includes
      * this trait and needs the same three icons.
+     *
+     * Size is applied via explicit width/height attributes rather than a
+     * class, since these SVGs have no intrinsic size (only a viewBox) —
+     * without one a browser falls back to its default SVG size (often
+     * ~300x150), rendering the icon comically oversized.
      */
-    private function statusIcon(string $type, string $sizeClass = 'w-5 h-5'): string
+    private function statusIcon(string $type, int $size = 20): string
     {
         return match ($type) {
-            'check' => "<svg class=\"{$sizeClass} inline-block\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"3\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.5 12.75l6 6 9-13.5\" /></svg>",
-            'x' => "<svg class=\"{$sizeClass} inline-block\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"3\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M6 18L18 6M6 6l12 12\" /></svg>",
-            'warning' => "<svg class=\"{$sizeClass} inline-block\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"2\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z\" /></svg>",
+            'check' => "<svg width=\"{$size}\" height=\"{$size}\" class=\"inline-block\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"3\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.5 12.75l6 6 9-13.5\" /></svg>",
+            'x' => "<svg width=\"{$size}\" height=\"{$size}\" class=\"inline-block\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"3\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M6 18L18 6M6 6l12 12\" /></svg>",
+            'warning' => "<svg width=\"{$size}\" height=\"{$size}\" class=\"inline-block\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"2\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z\" /></svg>",
             default => '',
         };
     }
@@ -137,8 +142,8 @@ trait RendersLayout
             'check' => $this->statusIcon('check'),
             'x' => $this->statusIcon('x'),
             'warning' => $this->statusIcon('warning'),
-            'checkSmall' => $this->statusIcon('check', 'w-3.5 h-3.5'),
-            'xSmall' => $this->statusIcon('x', 'w-3.5 h-3.5'),
+            'checkSmall' => $this->statusIcon('check', 14),
+            'xSmall' => $this->statusIcon('x', 14),
         ]);
 
         echo <<<HTML
@@ -314,7 +319,7 @@ HTML;
 
             if ($isDone) {
                 $state = 'done';
-                $inner = $this->statusIcon('check', 'w-3.5 h-3.5');
+                $inner = $this->statusIcon('check', 14);
             } elseif ($isCurrentGroup) {
                 $state = 'now';
                 $inner = (string) $visualNum;
