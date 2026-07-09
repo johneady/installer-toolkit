@@ -68,13 +68,40 @@ trait ChecksRequirements
             'critical' => false, // warning only
         ];
 
-        // Writable directory
+        // Writable directory — verified with a real write test, not just
+        // is_writable(), which can report false positives on hosts with
+        // ACLs, disk quotas, or open_basedir restrictions.
+        $docRootWritable = $this->verifyWritableByTest(__DIR__);
         $results[] = [
             'name' => 'Document Root Writable',
-            'detail' => is_writable(__DIR__) ? 'Writable' : 'Not writable',
-            'passed' => is_writable(__DIR__),
+            'detail' => $docRootWritable ? 'Writable (verified by write test)' : 'Not writable — the installer must be able to create files and folders here.',
+            'passed' => $docRootWritable,
             'critical' => true,
         ];
+
+        // Pre-existing files from a previous install attempt must be
+        // overwritable. Files uploaded via FTP/SSH are often owned by a
+        // different user than PHP runs as — a common shared-hosting pitfall
+        // that would otherwise fail halfway through extraction.
+        $existingPaths = [
+            'Existing .htaccess' => __DIR__.'/.htaccess',
+            'Existing App Folder ('.APP_FOLDER.')' => __DIR__.'/'.APP_FOLDER,
+            'Existing .env File' => __DIR__.'/'.APP_FOLDER.'/.env',
+        ];
+        foreach ($existingPaths as $label => $path) {
+            if (! file_exists($path)) {
+                continue;
+            }
+            $writable = is_dir($path) ? $this->verifyWritableByTest($path) : is_writable($path);
+            $results[] = [
+                'name' => $label.' Writable',
+                'detail' => $writable
+                    ? 'Writable — will be overwritten during installation'
+                    : 'Not writable — likely left over from a previous attempt and owned by a different user. Delete it or fix its permissions (e.g. via your hosting file manager), then re-run this check.',
+                'passed' => $writable,
+                'critical' => true,
+            ];
+        }
 
         // Restricted core functions (must not be in disable_functions — used by Laravel Scheduler & Symfony Process)
         $requiredCoreFunctions = ['exec', 'shell_exec', 'proc_open', 'proc_close'];
@@ -89,15 +116,71 @@ trait ChecksRequirements
             'critical' => false,
         ];
 
-        // Zip file exists
+        // Zip file exists and is readable
+        $zipPath = __DIR__.'/'.ZIP_FILENAME;
+        $zipExists = file_exists($zipPath);
+        $zipReadable = $zipExists && is_readable($zipPath);
         $results[] = [
             'name' => 'Application Package',
-            'detail' => file_exists(__DIR__.'/'.ZIP_FILENAME) ? 'Found '.ZIP_FILENAME : ZIP_FILENAME.' Not found',
-            'passed' => file_exists(__DIR__.'/'.ZIP_FILENAME),
+            'detail' => ! $zipExists
+                ? ZIP_FILENAME.' Not found'
+                : (! $zipReadable
+                    ? 'Found '.ZIP_FILENAME.' but it is not readable. Fix its permissions (e.g. 0644) and re-run this check.'
+                    : 'Found '.ZIP_FILENAME),
+            'passed' => $zipReadable,
             'critical' => true,
         ];
 
+        // Free disk space — extraction needs the working copy of the zip
+        // plus the extracted files, roughly 3x the zip size. Heuristic, so
+        // a warning rather than a hard block.
+        if ($zipReadable) {
+            $needed = (int) filesize($zipPath) * 3;
+            $free = function_exists('disk_free_space') ? @disk_free_space(__DIR__) : false;
+            $results[] = [
+                'name' => 'Free Disk Space',
+                'detail' => $free === false
+                    ? 'Could not determine free space. Ensure at least '.$this->formatBytes($needed).' is available before continuing.'
+                    : $this->formatBytes((int) $free).' free ('.($free >= $needed ? 'at least' : 'less than the recommended').' '.$this->formatBytes($needed).' needed)',
+                'passed' => $free === false || $free >= $needed,
+                'critical' => false,
+            ];
+        }
+
         return $results;
+    }
+
+    /**
+     * Test writability by actually creating and deleting a temp file.
+     * More trustworthy than is_writable(), which can report false
+     * positives under ACLs, disk quotas, or open_basedir restrictions.
+     */
+    private function verifyWritableByTest(string $dir): bool
+    {
+        if (! is_dir($dir)) {
+            return false;
+        }
+
+        $testFile = rtrim($dir, '/').'/.install-write-test-'.uniqid();
+        if (@file_put_contents($testFile, 'test') === false) {
+            return false;
+        }
+        @unlink($testFile);
+
+        return true;
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $i = 0;
+        $value = (float) $bytes;
+        while ($value >= 1024 && $i < count($units) - 1) {
+            $value /= 1024;
+            $i++;
+        }
+
+        return round($value, $value >= 100 ? 0 : 1).' '.$units[$i];
     }
 
     private function checkModRewrite(): array

@@ -264,10 +264,13 @@ HTACCESS;
             $appDir.'/storage/logs',
         ];
         foreach ($writableDirs as $dir) {
-            if (! is_dir($dir)) {
-                mkdir($dir, 0755, true);
+            if (! is_dir($dir) && ! @mkdir($dir, 0755, true) && ! is_dir($dir)) {
+                throw new RuntimeException('Failed to create required directory: '.$dir.'. Check permissions on the '.APP_FOLDER.' folder.');
             }
-            chmod($dir, 0755);
+            @chmod($dir, 0755);
+            if (! $this->verifyWritableByTest($dir)) {
+                throw new RuntimeException('Directory is not writable: '.$dir.'. Fix its permissions (0755, owned by the web server user) and retry.');
+            }
         }
 
         // Clear cached bootstrap files — they may reference dev-only
