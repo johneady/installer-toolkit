@@ -2,6 +2,7 @@
 
 namespace InstallerToolkit\Tests;
 
+use Illuminate\Contracts\Console\Kernel;
 use InstallerToolkit\Tests\Fixtures\FakePackageBuildCommand;
 use InstallerToolkit\Tests\Fixtures\FakePackageSandboxCommand;
 use InstallerToolkit\Tests\Fixtures\FakePackageTestCommand;
@@ -16,7 +17,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function defineEnvironment($app): void
     {
-        $kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
+        $kernel = $app->make(Kernel::class);
         $kernel->registerCommand(new FakePackageBuildCommand);
         $kernel->registerCommand(new FakePackageTestCommand);
         $kernel->registerCommand(new FakePackageSandboxCommand);

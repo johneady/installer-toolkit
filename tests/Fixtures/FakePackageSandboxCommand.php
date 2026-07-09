@@ -2,7 +2,9 @@
 
 namespace InstallerToolkit\Tests\Fixtures;
 
+use Illuminate\Console\Command;
 use InstallerToolkit\PackageSandboxCommand;
+use Symfony\Component\Console\Input\ArrayInput;
 
 class FakePackageSandboxCommand extends PackageSandboxCommand
 {
@@ -37,12 +39,12 @@ class FakePackageSandboxCommand extends PackageSandboxCommand
      */
     public function withOptions(array $options): static
     {
-        $input = new \Symfony\Component\Console\Input\ArrayInput(
+        $input = new ArrayInput(
             array_combine(array_map(fn ($key) => "--{$key}", array_keys($options)), array_values($options)),
             $this->getDefinition(),
         );
 
-        (new \ReflectionProperty(\Illuminate\Console\Command::class, 'input'))->setValue($this, $input);
+        (new \ReflectionProperty(Command::class, 'input'))->setValue($this, $input);
 
         return $this;
     }

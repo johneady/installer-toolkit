@@ -106,38 +106,39 @@ HTML;
 
         $items = '';
         if (! empty($passed)) {
+            $checkIcon = $this->statusIcon('check');
             $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700 shadow-sm\">
                 <div class=\"flex-shrink-0 w-10 h-10 rounded-xl text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center\">
-                    <span class=\"text-lg font-bold\">✓</span>
+                    {$checkIcon}
                 </div>
                 <div class=\"flex-1\">
-                    <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">".count($passed)." requirement".(count($passed) === 1 ? '' : 's')." met</h4>
-                    <p class=\"text-xs text-slate-600 dark:text-slate-400 mt-0.5\">".implode(', ', array_map(fn ($r) => $r['name'], $passed))."</p>
+                    <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">".count($passed).' requirement'.(count($passed) === 1 ? '' : 's').' met</h4>
+                    <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">'.implode(', ', array_map(fn ($r) => $r['name'], $passed)).'</p>
                 </div>
-                <span class=\"px-3 py-1 rounded-full text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 text-xs font-semibold\">Passed</span>
-            </div>";
+                <span class="px-3 py-1 rounded-full text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 text-xs font-semibold">Passed</span>
+            </div>';
         }
         foreach ($notPassed as $r) {
-            $icon = $r['critical'] ? '✕' : '⚠';
+            $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning');
             $statusClass = $r['critical'] ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
             $iconClass = $r['critical'] ? 'text-red-500 bg-red-100 dark:bg-red-900/30' : 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900/30';
             $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 {$statusClass} shadow-sm hover:shadow-md transition-shadow\">
                 <div class=\"flex-shrink-0 w-10 h-10 rounded-xl {$iconClass} flex items-center justify-center\">
-                    <span class=\"text-lg font-bold\">{$icon}</span>
+                    {$icon}
                 </div>
                 <div class=\"flex-1\">
                     <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">{$r['name']}</h4>
                     <p class=\"text-xs text-slate-600 dark:text-slate-400 mt-0.5\">{$r['detail']}</p>
                 </div>
-                <span class=\"px-3 py-1 rounded-full {$iconClass} text-xs font-semibold\">" . ($r['critical'] ? 'Critical' : 'Warning') . "</span>
-            </div>";
+                <span class=\"px-3 py-1 rounded-full {$iconClass} text-xs font-semibold\">".($r['critical'] ? 'Critical' : 'Warning').'</span>
+            </div>';
         }
 
         $disabled = $allCriticalPassed ? '' : 'disabled';
         $retestButton = $allCriticalPassed ? '' : '<button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
         $warning = $allCriticalPassed ? '' : '<div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <span class="text-red-500 text-lg">⚠️</span>
+            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">
+                '.$this->statusIcon('warning').'
             </div>
             <div>
                 <h3 class="font-semibold text-red-900 dark:text-red-400">Requirements Not Met</h3>
@@ -260,8 +261,7 @@ HTML;
                     resultDiv.className = data.success 
                         ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl p-4 mb-6 flex items-start gap-3'
                         : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center">' +
-                        '<span class="' + (data.success ? 'text-emerald-500' : 'text-red-500') + ' text-lg">' + (data.success ? '✓' : '✕') + '</span></div>' +
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center ' + (data.success ? 'text-emerald-500' : 'text-red-500') + '">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
                         '<div><p class="font-semibold ' + (data.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400') + '">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="text-sm ' + (data.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') + '">' + data.message + '</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
@@ -269,7 +269,7 @@ HTML;
                 .catch(function(err) {
                     resultDiv.classList.remove('hidden');
                     resultDiv.className = 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><span class="text-red-500 text-lg">✕</span></div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the connection.</p></div>';
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">' + window.INSTALLER_ICONS.x + '</div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the connection.</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
                 });
@@ -498,8 +498,7 @@ HTML;
                     resultDiv.className = data.success 
                         ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl p-4 mb-6 flex items-start gap-3'
                         : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center">' +
-                        '<span class="' + (data.success ? 'text-emerald-500' : 'text-red-500') + ' text-lg">' + (data.success ? '✓' : '✕') + '</span></div>' +
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center ' + (data.success ? 'text-emerald-500' : 'text-red-500') + '">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
                         '<div><p class="font-semibold ' + (data.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400') + '">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="text-sm ' + (data.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') + '">' + data.message + '</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
@@ -507,7 +506,7 @@ HTML;
                 .catch(function(err) {
                     resultDiv.classList.remove('hidden');
                     resultDiv.className = 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><span class="text-red-500 text-lg">✕</span></div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the mail connection.</p></div>';
+                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">' + window.INSTALLER_ICONS.x + '</div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the mail connection.</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
                 });
@@ -574,7 +573,8 @@ HTML;
                                     <input type="password" name="admin_password" id="admin_password" minlength="8" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
                                 </div>
-                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">Minimum 8 characters</p>
+                                <div class="mt-1.5 flex gap-1" id="password-strength-bars"></div>
+                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1" id="password-strength-label">Minimum 8 characters</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Confirm Password <span class="text-red-500">*</span></label>
@@ -582,6 +582,7 @@ HTML;
                                     <input type="password" name="admin_password_confirm" id="admin_password_confirm" minlength="8" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
                                 </div>
+                                <p class="text-xs mt-1 hidden" id="password-match-message"></p>
                             </div>
                         </div>
                     </div>
@@ -591,9 +592,86 @@ HTML;
             <!-- Actions -->
             <div class="flex justify-between items-center gap-3">
                 <a href="install.php?step=5" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
-                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
+                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all" id="admin-submit-btn">Continue →</button>
             </div>
         </form>
+        <script>
+            (function() {
+                var passwordInput = document.getElementById('admin_password');
+                var confirmInput = document.getElementById('admin_password_confirm');
+                var strengthBars = document.getElementById('password-strength-bars');
+                var strengthLabel = document.getElementById('password-strength-label');
+                var matchMessage = document.getElementById('password-match-message');
+                var submitBtn = document.getElementById('admin-submit-btn');
+                var form = passwordInput.closest('form');
+
+                var barColors = ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-emerald-500'];
+                for (var i = 0; i < 4; i++) {
+                    var bar = document.createElement('div');
+                    bar.className = 'h-1.5 flex-1 rounded-full bg-slate-200 dark:bg-slate-600 transition-colors';
+                    strengthBars.appendChild(bar);
+                }
+                var bars = strengthBars.querySelectorAll('div');
+
+                function scorePassword(value) {
+                    if (!value) return 0;
+                    var score = 0;
+                    if (value.length >= 8) score++;
+                    if (value.length >= 12) score++;
+                    if (/[0-9]/.test(value) && /[a-zA-Z]/.test(value)) score++;
+                    if (/[^a-zA-Z0-9]/.test(value)) score++;
+                    return Math.min(score, 4);
+                }
+
+                function updateStrength() {
+                    var value = passwordInput.value;
+                    var score = scorePassword(value);
+
+                    bars.forEach(function(bar, i) {
+                        bar.className = 'h-1.5 flex-1 rounded-full transition-colors ' + (i < score ? barColors[score - 1] : 'bg-slate-200 dark:bg-slate-600');
+                    });
+
+                    if (!value) {
+                        strengthLabel.textContent = 'Minimum 8 characters';
+                        strengthLabel.className = 'text-xs text-slate-600 dark:text-slate-400 mt-1';
+                    } else {
+                        var labels = ['Too short', 'Weak', 'Okay', 'Good', 'Strong'];
+                        var labelColors = ['text-red-600 dark:text-red-400', 'text-orange-600 dark:text-orange-400', 'text-yellow-600 dark:text-yellow-400', 'text-emerald-600 dark:text-emerald-400'];
+                        strengthLabel.textContent = labels[score];
+                        strengthLabel.className = 'text-xs mt-1 ' + (labelColors[score - 1] || labelColors[0]);
+                    }
+                }
+
+                function updateMatch() {
+                    if (!confirmInput.value) {
+                        matchMessage.classList.add('hidden');
+                        return true;
+                    }
+                    matchMessage.classList.remove('hidden');
+                    if (passwordInput.value === confirmInput.value) {
+                        matchMessage.innerHTML = window.INSTALLER_ICONS.checkSmall + ' Passwords match';
+                        matchMessage.className = 'text-xs mt-1 text-emerald-600 dark:text-emerald-400 flex items-center gap-1';
+                        return true;
+                    }
+                    matchMessage.innerHTML = window.INSTALLER_ICONS.xSmall + ' Passwords do not match';
+                    matchMessage.className = 'text-xs mt-1 text-red-600 dark:text-red-400 flex items-center gap-1';
+                    return false;
+                }
+
+                passwordInput.addEventListener('input', function() {
+                    updateStrength();
+                    updateMatch();
+                });
+                confirmInput.addEventListener('input', updateMatch);
+
+                form.addEventListener('submit', function(e) {
+                    if (!updateMatch()) {
+                        e.preventDefault();
+                        confirmInput.focus();
+                    }
+                });
+            })();
+        </script>
 HTML;
 
         $this->renderLayout('Admin Account', $content, 6);
@@ -650,6 +728,9 @@ HTML;
         ]);
 
         $appFolder = APP_FOLDER;
+        $xIcon = $this->statusIcon('x');
+        $checkIconJson = json_encode($this->statusIcon('check'));
+        $xIconJson = json_encode($this->statusIcon('x'));
 
         $content = <<<HTML
         <p class="text-slate-600 dark:text-slate-400 mb-6">Installing your application. Please do not close this page.</p>
@@ -684,8 +765,8 @@ HTML;
         </div>
 
         <div id="install-error" class="hidden bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <span class="text-red-500 text-lg">✕</span>
+            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">
+                {$xIcon}
             </div>
             <div>
                 <h3 class="font-semibold text-red-900 dark:text-red-400">Installation Failed</h3>
@@ -694,8 +775,11 @@ HTML;
         </div>
 
         <div class="actions hidden flex justify-between items-center gap-3" id="install-actions">
-            <button type="button" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all hidden" id="retry-btn">Retry</button>
-            <a href="install.php?step=8" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all hidden" id="continue-btn">Continue →</a>
+            <a href="install.php?step=3" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all hidden" id="start-over-btn">← Start Over</a>
+            <div class="flex gap-3 ml-auto">
+                <button type="button" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all hidden" id="retry-btn">Retry</button>
+                <a href="install.php?step=8" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all hidden" id="continue-btn">Continue →</a>
+            </div>
         </div>
         <script>
             var tasks = {$tasksJson};
@@ -704,10 +788,7 @@ HTML;
             var currentTaskIndex = 0;
 
             document.querySelectorAll('.task-item[data-status="done"]').forEach(function(el) {
-                var icon = el.querySelector('.task-icon');
-                icon.innerHTML = '✓';
-                icon.classList.add('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400');
-                el.querySelector('.task-label').classList.add('text-emerald-600', 'dark:text-emerald-400');
+                setTaskState(el, 'done');
                 currentTaskIndex++;
             });
 
@@ -716,31 +797,51 @@ HTML;
                 document.getElementById('progress-bar').style.width = percent + '%';
             }
 
+            var SPINNER_SVG = '<svg class="w-5 h-5 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+            var TASK_STATE_CLASSES = {
+                pending: { row: [], icon: 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500', label: [], html: '' },
+                active: { row: ['bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700'], icon: 'bg-sky-100 dark:bg-sky-900/30 text-sky-500 dark:text-sky-400', label: ['text-sky-600', 'dark:text-sky-400'], html: SPINNER_SVG },
+                done: { row: [], icon: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 dark:text-emerald-400', label: ['text-emerald-600', 'dark:text-emerald-400'], html: {$checkIconJson} },
+                error: { row: [], icon: 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400', label: ['text-red-600', 'dark:text-red-400'], html: {$xIconJson} },
+            };
+            var ALL_ROW_CLASSES = ['bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700'];
+            var ALL_LABEL_CLASSES = ['text-emerald-600', 'dark:text-emerald-400', 'text-red-600', 'dark:text-red-400', 'text-sky-600', 'dark:text-sky-400'];
+
+            function setTaskState(el, state, message) {
+                var spec = TASK_STATE_CLASSES[state];
+                var icon = el.querySelector('.task-icon');
+
+                el.dataset.status = state;
+                el.classList.remove.apply(el.classList, ALL_ROW_CLASSES);
+                el.classList.add.apply(el.classList, spec.row);
+
+                icon.className = 'task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg ' + spec.icon;
+                icon.innerHTML = spec.html;
+
+                var label = el.querySelector('.task-label');
+                label.classList.remove.apply(label.classList, ALL_LABEL_CLASSES);
+                label.classList.add.apply(label.classList, spec.label);
+
+                el.querySelector('.task-message').textContent = message || '';
+            }
+
             function runTasks(fullReset) {
                 document.getElementById('install-error').classList.add('hidden');
                 document.getElementById('retry-btn').classList.add('hidden');
+                document.getElementById('start-over-btn').classList.add('hidden');
 
                 if (fullReset) {
                     currentTaskIndex = 0;
                     document.querySelectorAll('.task-item').forEach(function(el) {
-                        var icon = el.querySelector('.task-icon');
-                        el.classList.remove('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400', 'bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400', 'bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                        icon.innerHTML = '';
-                        icon.className = 'task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500';
-                        el.querySelector('.task-label').classList.remove('text-emerald-600', 'dark:text-emerald-400', 'text-red-600', 'dark:text-red-400', 'text-sky-600', 'dark:text-sky-400');
-                        el.querySelector('.task-message').textContent = '';
+                        setTaskState(el, 'pending');
                     });
                     updateProgress(0);
                     fetch('install.php?step=7&reset=1', { method: 'POST' }).then(function() { runNextTask(); });
                 } else {
                     document.querySelectorAll('.task-item').forEach(function(el) {
-                        var icon = el.querySelector('.task-icon');
-                        if (!icon.innerHTML.includes('✓')) {
-                            el.classList.remove('bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400', 'bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                            icon.className = 'task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500';
-                            icon.innerHTML = '';
-                            el.querySelector('.task-label').classList.remove('text-red-600', 'dark:text-red-400', 'text-sky-600', 'dark:text-sky-400');
-                            el.querySelector('.task-message').textContent = '';
+                        if (el.dataset.status !== 'done') {
+                            setTaskState(el, 'pending');
                         }
                     });
                     runNextTask();
@@ -748,44 +849,21 @@ HTML;
             }
 
             function runSeedBatch(el) {
-                el.classList.add('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700');
-                var icon = el.querySelector('.task-icon');
-                icon.innerHTML = '<svg class="w-5 h-5 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-                icon.classList.add('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                el.querySelector('.task-label').classList.add('text-sky-600', 'dark:text-sky-400');
+                setTaskState(el, 'active');
                 fetch('install.php?step=7&task=seed_batch', { method: 'POST' })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data.success && data.seed_done === false) {
-                            el.querySelector('.task-message').textContent = data.message || '';
+                            setTaskState(el, 'active', data.message);
                             runSeedBatch(el);
                         } else if (data.success) {
-                            el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
-                            icon.innerHTML = '✓';
-                            icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                            icon.classList.add('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400');
-                            el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
-                            el.querySelector('.task-label').classList.add('text-emerald-600', 'dark:text-emerald-400');
-                            el.querySelector('.task-message').textContent = '';
-                            currentTaskIndex++;
-                            updateProgress((currentTaskIndex / tasks.length) * 100);
-                            runNextTask();
+                            handleTaskSuccess(el);
                         } else {
                             throw new Error(data.message);
                         }
                     })
                     .catch(function(err) {
-                        el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
-                        icon.innerHTML = '✕';
-                        icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                        icon.classList.add('bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400');
-                        el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
-                        el.querySelector('.task-label').classList.add('text-red-600', 'dark:text-red-400');
-                        document.getElementById('install-error').classList.remove('hidden');
-                        document.getElementById('error-message').textContent = 'Installation failed: ' + err.message;
-                        document.getElementById('install-actions').classList.remove('hidden');
-                        document.getElementById('install-actions').classList.add('flex');
-                        document.getElementById('retry-btn').classList.remove('hidden');
+                        handleTaskError(el, err.message);
                     });
             }
 
@@ -799,30 +877,17 @@ HTML;
             }
 
             function handleTaskError(el, message) {
-                el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
-                var icon = el.querySelector('.task-icon');
-                icon.innerHTML = '✕';
-                icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                icon.classList.add('bg-red-100', 'dark:bg-red-900/30', 'text-red-500', 'dark:text-red-400');
-                el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
-                el.querySelector('.task-label').classList.add('text-red-600', 'dark:text-red-400');
-                el.querySelector('.task-message').textContent = message || '';
+                setTaskState(el, 'error', message);
                 document.getElementById('install-error').classList.remove('hidden');
                 document.getElementById('error-message').textContent = 'Installation failed: ' + message;
                 document.getElementById('install-actions').classList.remove('hidden');
                 document.getElementById('install-actions').classList.add('flex');
                 document.getElementById('retry-btn').classList.remove('hidden');
+                document.getElementById('start-over-btn').classList.remove('hidden');
             }
 
             function handleTaskSuccess(el) {
-                el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700', 'text-sky-600', 'dark:text-sky-400');
-                var icon = el.querySelector('.task-icon');
-                icon.innerHTML = '✓';
-                icon.classList.remove('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                icon.classList.add('bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-500', 'dark:text-emerald-400');
-                el.querySelector('.task-label').classList.remove('text-sky-600', 'dark:text-sky-400');
-                el.querySelector('.task-label').classList.add('text-emerald-600', 'dark:text-emerald-400');
-                el.querySelector('.task-message').textContent = '';
+                setTaskState(el, 'done');
                 currentTaskIndex++;
                 updateProgress((currentTaskIndex / tasks.length) * 100);
                 runNextTask();
@@ -838,11 +903,7 @@ HTML;
 
                 var task = tasks[currentTaskIndex];
                 var el = document.querySelector('.task-item[data-task="' + task + '"]');
-                el.classList.add('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700');
-                var icon = el.querySelector('.task-icon');
-                icon.innerHTML = '<svg class="w-5 h-5 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-                icon.classList.add('bg-sky-100', 'dark:bg-sky-900/30', 'text-sky-500', 'dark:text-sky-400');
-                el.querySelector('.task-label').classList.add('text-sky-600', 'dark:text-sky-400');
+                setTaskState(el, 'active');
 
                 if (cleanProcessTasks.hasOwnProperty(task)) {
                     fetch('install.php?step=7&task=' + task, { method: 'POST' })
@@ -870,15 +931,13 @@ HTML;
                 fetch('install.php?step=7&task=' + task, { method: 'POST' })
                     .then(parseJsonResponse)
                     .then(function(data) {
-                        el.classList.remove('bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700');
                         if (data.success && data.extract_done === false) {
-                            el.querySelector('.task-message').textContent = data.message || '';
+                            setTaskState(el, 'active', data.message);
                             updateProgress(data.percent || 0);
                             runNextTask();
                         } else if (data.success && data.seed_done === false) {
-                            el.querySelector('.task-message').textContent = data.message || '';
+                            setTaskState(el, 'active', data.message);
                             runSeedBatch(el);
-                            return;
                         } else if (data.success) {
                             handleTaskSuccess(el);
                         } else {
@@ -889,6 +948,10 @@ HTML;
                         handleTaskError(el, err.message);
                     });
             }
+
+            document.getElementById('retry-btn').addEventListener('click', function() {
+                runTasks(false);
+            });
 
             if (currentTaskIndex < tasks.length) {
                 runTasks(true);
@@ -925,11 +988,41 @@ HTML;
             </div>
             <div class="p-6">
                 <div class="bg-slate-900 dark:bg-black rounded-xl p-4 mb-4 border border-slate-700">
-                    <code class="text-emerald-400 text-sm font-mono break-all">{$cronCommand}</code>
+                    <code class="text-emerald-400 text-sm font-mono break-all" id="cron-command">{$cronCommand}</code>
                 </div>
-                <button type="button" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all text-sm" onclick="navigator.clipboard.writeText(document.querySelector('.bg-slate-900 code').textContent).then(function(){this.textContent='Copied!';}.bind(this))">📋 Copy to Clipboard</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all text-sm" id="copy-cron-btn">📋 Copy to Clipboard</button>
             </div>
         </div>
+        <script>
+            (function() {
+                var btn = document.getElementById('copy-cron-btn');
+                var codeEl = document.getElementById('cron-command');
+                var originalLabel = btn.textContent;
+
+                function showCopied() {
+                    btn.textContent = '✓ Copied!';
+                    setTimeout(function() { btn.textContent = originalLabel; }, 2000);
+                }
+
+                function selectFallback() {
+                    var range = document.createRange();
+                    range.selectNodeContents(codeEl);
+                    var selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    btn.textContent = 'Press Ctrl+C / Cmd+C to copy';
+                    setTimeout(function() { btn.textContent = originalLabel; }, 3000);
+                }
+
+                btn.addEventListener('click', function() {
+                    if (!navigator.clipboard) {
+                        selectFallback();
+                        return;
+                    }
+                    navigator.clipboard.writeText(codeEl.textContent).then(showCopied).catch(selectFallback);
+                });
+            })();
+        </script>
 
         <!-- How to Add Instructions -->
         <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
@@ -1004,8 +1097,8 @@ HTML;
 
         if (! $zipDeleted) {
             $deletionMessages .= '<div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                    <span class="text-yellow-500 text-lg">⚠️</span>
+                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-yellow-500">
+                    '.$this->statusIcon('warning').'
                 </div>
                 <div>
                     <h3 class="font-semibold text-yellow-900 dark:text-yellow-400">Manual Cleanup Required</h3>
@@ -1024,12 +1117,13 @@ HTML;
         $cleanupUrl = str_replace('//', '/', $cleanupUrl);
 
         $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
+        $bigCheckIcon = $this->statusIcon('check', 'w-10 h-10');
 
         $content = <<<HTML
         <!-- Success Icon -->
         <div class="flex justify-center mb-6">
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce">
-                <span class="text-4xl">✓</span>
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce text-white">
+                {$bigCheckIcon}
             </div>
         </div>
 
@@ -1098,11 +1192,13 @@ HTML;
 
     private function renderAlreadyInstalled(): void
     {
-        $content = <<<'HTML'
+        $warningIcon = $this->statusIcon('warning', 'w-7 h-7');
+
+        $content = <<<HTML
         <!-- Warning Alert -->
         <div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-6 flex items-start gap-4">
-            <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                <span class="text-yellow-500 text-2xl">⚠️</span>
+            <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-yellow-500">
+                {$warningIcon}
             </div>
             <div class="flex-1">
                 <h3 class="text-lg font-bold text-yellow-900 dark:text-yellow-400 mb-2">Already Installed</h3>

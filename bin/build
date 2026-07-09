@@ -76,6 +76,29 @@ $template = preg_replace(
     $template
 );
 
+$installerCssPath = $toolkitDir.'/templates/install/installer.css';
+if (! file_exists($installerCssPath)) {
+    echo "Error: {$installerCssPath} not found. Run build-tools/compile-css.sh in the toolkit repo first.\n";
+    exit(1);
+}
+$installerCss = trim(file_get_contents($installerCssPath));
+
+// preg_replace_callback (not preg_replace) so the compiled CSS is inserted
+// literally — preg_replace would interpret \1/$1-style sequences in the CSS
+// as backreferences and silently corrupt the output.
+$template = preg_replace_callback(
+    '/\/\* \[\[INSTALLER_CSS\]\] \*\/.*?\/\* \[\[\/INSTALLER_CSS\]\] \*\//s',
+    fn () => $installerCss,
+    $template,
+    1,
+    $cssReplaced
+);
+
+if ($cssReplaced !== 1) {
+    echo "Error: Failed to substitute [[INSTALLER_CSS]] marker in Concerns/RendersLayout.php\n";
+    exit(1);
+}
+
 $essentialSeeders = $config['essential_seeders'] ?? [];
 $sampleSeeders = $config['sample_seeders'] ?? [];
 

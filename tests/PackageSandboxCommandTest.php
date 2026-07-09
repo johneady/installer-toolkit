@@ -1,14 +1,19 @@
 <?php
 
+use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use InstallerToolkit\Tests\Fixtures\FakePackageSandboxCommand;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\NullOutput;
+use Symfony\Component\Process\Process;
 
 function fakeSandboxCommand(array $config = []): FakePackageSandboxCommand
 {
     $command = new FakePackageSandboxCommand;
-    $command->setOutput(new \Illuminate\Console\OutputStyle(
-        new \Symfony\Component\Console\Input\ArrayInput([]),
-        new \Symfony\Component\Console\Output\NullOutput,
+    $command->setOutput(new OutputStyle(
+        new ArrayInput([]),
+        new NullOutput,
     ));
 
     return $command->withConfig($config);
@@ -103,7 +108,7 @@ test('generateRouterScript writes a router that protects install.php and the app
 
     $contents = file_get_contents($routerPath);
 
-    expect($contents)->toContain("/install.php")
+    expect($contents)->toContain('/install.php')
         ->and($contents)->toContain('/fake-app/public')
         ->and($contents)->toContain('_cleanup.php');
 });
@@ -118,14 +123,14 @@ test('generated router serves a nested public asset requested by its root-relati
     $routerPath = $command->callProtected('generateRouterScript', $tempDir);
 
     $port = $command->callProtected('findFreePort');
-    $process = new \Symfony\Component\Process\Process(['php', '-S', "127.0.0.1:{$port}", '-t', $tempDir, $routerPath]);
+    $process = new Process(['php', '-S', "127.0.0.1:{$port}", '-t', $tempDir, $routerPath]);
     $process->start();
     (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
 
     try {
         $command->callProtected('waitForServer', $port);
 
-        $response = \Illuminate\Support\Facades\Http::get("http://127.0.0.1:{$port}/build/assets/app.js");
+        $response = Http::get("http://127.0.0.1:{$port}/build/assets/app.js");
 
         expect($response->status())->toBe(200)
             ->and($response->body())->toBe('console.log("fake-app");')
@@ -158,7 +163,7 @@ test('waitForServer returns once the PHP built-in server accepts connections', f
     $command = fakeSandboxCommand();
 
     $port = $command->callProtected('findFreePort');
-    $process = new \Symfony\Component\Process\Process(['php', '-S', "127.0.0.1:{$port}"]);
+    $process = new Process(['php', '-S', "127.0.0.1:{$port}"]);
     $process->start();
     (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
 
@@ -173,7 +178,7 @@ test('waitForServer throws immediately when the server process is not running', 
     $command = fakeSandboxCommand();
 
     $port = $command->callProtected('findFreePort');
-    $process = new \Symfony\Component\Process\Process(['php', '-r', 'exit(1);']);
+    $process = new Process(['php', '-r', 'exit(1);']);
     $process->run();
     (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
 

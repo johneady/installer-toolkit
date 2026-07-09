@@ -418,5 +418,4 @@ trait HandlesRequests
         header('Location: install.php?step=7');
         exit;
     }
-
 }

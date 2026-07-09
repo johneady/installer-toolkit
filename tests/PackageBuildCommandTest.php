@@ -1,14 +1,17 @@
 <?php
 
+use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Facades\File;
 use InstallerToolkit\Tests\Fixtures\FakePackageBuildCommand;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\NullOutput;
 
 function fakeCommand(array $config = []): FakePackageBuildCommand
 {
     $command = new FakePackageBuildCommand;
-    $command->setOutput(new \Illuminate\Console\OutputStyle(
-        new \Symfony\Component\Console\Input\ArrayInput([]),
-        new \Symfony\Component\Console\Output\NullOutput,
+    $command->setOutput(new OutputStyle(
+        new ArrayInput([]),
+        new NullOutput,
     ));
 
     return $command->withConfig($config);
@@ -91,9 +94,9 @@ test('shouldExclude merges extraExcludeDirs without requiring a full override', 
     {
         protected array $extraExcludeDirs = ['screenshots', 'marketing_info'];
     };
-    $command->setOutput(new \Illuminate\Console\OutputStyle(
-        new \Symfony\Component\Console\Input\ArrayInput([]),
-        new \Symfony\Component\Console\Output\NullOutput,
+    $command->setOutput(new OutputStyle(
+        new ArrayInput([]),
+        new NullOutput,
     ));
     $command->withConfig([]);
 
@@ -117,9 +120,9 @@ test('shouldExclude honors includeStorageFiles override', function () {
     {
         protected array $includeStorageFiles = ['app/license.key'];
     };
-    $command->setOutput(new \Illuminate\Console\OutputStyle(
-        new \Symfony\Component\Console\Input\ArrayInput([]),
-        new \Symfony\Component\Console\Output\NullOutput,
+    $command->setOutput(new OutputStyle(
+        new ArrayInput([]),
+        new NullOutput,
     ));
     $command->withConfig([]);
 

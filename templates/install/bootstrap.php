@@ -257,7 +257,7 @@ function renderFatalErrorPage(Throwable $e): void
 <body>
     <div class="wrapper">
         <div class="brand">
-            <span class="brand-icon">🐾</span>
+            <span class="brand-icon">⚙️</span>
             Application Installer v{$version}
         </div>
 

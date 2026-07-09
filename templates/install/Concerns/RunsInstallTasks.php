@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\Console\Output\BufferedOutput;
+
 trait RunsInstallTasks
 {
     // ========================================================================
@@ -70,7 +74,7 @@ trait RunsInstallTasks
             $_SESSION['installer']['completed_tasks'][] = $task;
             echo json_encode(['success' => true, 'message' => 'Completed.']);
         } catch (Throwable $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => $this->describeTaskFailure($task, $e->getMessage())]);
         }
 
         exit;
@@ -360,7 +364,7 @@ ENV;
         require $autoloadPath;
         $app = require $bootstrapPath;
 
-        return $app->make(Illuminate\Contracts\Console\Kernel::class);
+        return $app->make(Kernel::class);
     }
 
     /**
@@ -381,9 +385,9 @@ ENV;
         // to run migrate:fresh once here, before any real data exists, so
         // lift the prohibition after boot but before the command runs.
         $kernel->bootstrap();
-        Illuminate\Support\Facades\DB::prohibitDestructiveCommands(false);
+        DB::prohibitDestructiveCommands(false);
 
-        $output = new Symfony\Component\Console\Output\BufferedOutput;
+        $output = new BufferedOutput;
 
         // Capture any stray output (e.g. from Laravel's exception handler
         // rendering HTML) so it doesn't corrupt our JSON response.
@@ -405,6 +409,29 @@ ENV;
         }
 
         return $artisanOutput;
+    }
+
+    /**
+     * Prefix a raw task failure with a plain-English hint for the common
+     * failure classes an installer hits on shared hosting (bad DB
+     * credentials, missing extensions, permissions). The raw detail is
+     * always kept below the hint so a support ticket still has everything
+     * needed to diagnose anything this doesn't recognize. Called once, from
+     * handleInstallTask()'s catch block, so every task benefits regardless
+     * of which task method actually threw.
+     */
+    private function describeTaskFailure(string $task, string $rawMessage): string
+    {
+        $hint = match (true) {
+            str_contains($rawMessage, 'SQLSTATE[HY000] [2002]'), str_contains($rawMessage, 'Connection refused') => 'Could not reach the database server. Double-check the database host and port, and make sure the database server is running and accessible from this server.',
+            str_contains($rawMessage, 'SQLSTATE[HY000] [1045]'), str_contains($rawMessage, 'Access denied for user') => 'The database username or password was rejected. Double-check the database credentials.',
+            str_contains($rawMessage, 'SQLSTATE[HY000] [1049]'), str_contains($rawMessage, 'Unknown database') => 'The database name does not exist on the server. Create the database first, or check for a typo in the database name.',
+            str_contains($rawMessage, 'Permission denied'), str_contains($rawMessage, 'failed to open stream') => 'The web server does not have permission to read or write a required file or directory. Check file ownership and permissions.',
+            str_contains($rawMessage, 'Class') && str_contains($rawMessage, 'not found') => 'A required PHP class is missing, which usually means a Composer dependency did not get uploaded correctly. Try re-uploading the application package.',
+            default => null,
+        };
+
+        return $hint !== null ? "{$hint} ({$rawMessage})" : $rawMessage;
     }
 
     private function taskMigrate(): void
@@ -555,6 +582,27 @@ if (! in_array(\$command, \$allowed, true)) {
     exit;
 }
 
+// Mirrors RunsInstallTasks::describeTaskFailure() — duplicated here because
+// this script runs as its own standalone PHP process (see the class
+// docblock above) with no access to the installer class's methods.
+function describeOptimizeFailure(string \$command, string \$rawMessage, ?int \$exitCode = null): string
+{
+    \$hint = match (true) {
+        str_contains(\$rawMessage, 'SQLSTATE[HY000] [2002]'), str_contains(\$rawMessage, 'Connection refused') => 'Could not reach the database server. Double-check the database host and port, and make sure the database server is running and accessible from this server.',
+        str_contains(\$rawMessage, 'SQLSTATE[HY000] [1045]'), str_contains(\$rawMessage, 'Access denied for user') => 'The database username or password was rejected. Double-check the database credentials.',
+        str_contains(\$rawMessage, 'SQLSTATE[HY000] [1049]'), str_contains(\$rawMessage, 'Unknown database') => 'The database name does not exist on the server. Create the database first, or check for a typo in the database name.',
+        str_contains(\$rawMessage, 'Permission denied'), str_contains(\$rawMessage, 'failed to open stream') => 'The web server does not have permission to read or write a required file or directory. Check file ownership and permissions.',
+        str_contains(\$rawMessage, 'Class') && str_contains(\$rawMessage, 'not found') => 'A required PHP class is missing, which usually means a Composer dependency did not get uploaded correctly. Try re-uploading the application package.',
+        default => null,
+    };
+
+    \$detail = \$exitCode !== null
+        ? "{\$command} failed (exit code {\$exitCode}): ".substr(\$rawMessage, 0, 500)
+        : "{\$command} failed: ".\$rawMessage;
+
+    return \$hint !== null ? "{\$hint} ({\$detail})" : \$detail;
+}
+
 // Bootstrap Laravel from its own directory.  We must trick the
 // application into thinking it is running in the console so that
 // service providers register their Artisan commands (Filament,
@@ -575,7 +623,7 @@ try {
     \$exitCode = \$kernel->call(\$command, ['--no-interaction' => true], \$output);
 } catch (Throwable \$e) {
     ob_end_clean();
-    echo json_encode(['success' => false, 'message' => \$command . ' failed: ' . \$e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$e->getMessage())]);
     exit;
 }
 
@@ -583,7 +631,7 @@ ob_end_clean();
 
 if (\$exitCode !== 0) {
     \$message = trim(\$output->fetch()) ?: 'Unknown error';
-    echo json_encode(['success' => false, 'message' => \$command . ' failed (exit code ' . \$exitCode . '): ' . substr(\$message, 0, 500)]);
+    echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$message, \$exitCode)]);
     exit;
 }
 
@@ -704,5 +752,4 @@ OPTIMIZER_PHP;
             @unlink($optimizerPath);
         }
     }
-
 }

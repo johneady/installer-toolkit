@@ -24,6 +24,6 @@ class Installer
         6 => 'Admin Account',
     ];
 
-// [[INSTALLER_TRAITS]]
-// [[/INSTALLER_TRAITS]]
+    // [[INSTALLER_TRAITS]]
+    // [[/INSTALLER_TRAITS]]
 }

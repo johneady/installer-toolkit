@@ -23,10 +23,12 @@
     "minimum-stability": "stable",
     "require-dev": {
         "pestphp/pest": "^4.1",
-        "orchestra/testbench": "^10.0"
+        "orchestra/testbench": "^10.0",
+        "laravel/pint": "^1.29"
     },
     "scripts": {
-        "test": "pest"
+        "test": "pest --parallel",
+        "pint": "pint"
     },
     "config": {
         "allow-plugins": {

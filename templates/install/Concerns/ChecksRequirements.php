@@ -171,5 +171,4 @@ trait ChecksRequirements
             return ['passed' => true, 'detail' => 'Could not verify (error during test). Ensure mod_rewrite is enabled.'];
         }
     }
-
 }
