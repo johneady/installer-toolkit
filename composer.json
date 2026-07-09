@@ -27,7 +27,7 @@
         "laravel/pint": "^1.29"
     },
     "scripts": {
-        "test": "pest --parallel",
+        "test": "pest",
         "pint": "pint"
     },
     "config": {
