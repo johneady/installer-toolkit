@@ -2,23 +2,19 @@
 
 namespace InstallerToolkit;
 
-use Dotenv\Dotenv;
 use GuzzleHttp\Cookie\CookieJar;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use InstallerToolkit\Concerns\LoadsPackageConfig;
-use PDO;
-use PDOException;
+use InstallerToolkit\Concerns\ProvisionsSandboxEnvironment;
 use RuntimeException;
-use Symfony\Component\Process\Process;
 use Throwable;
-use ZipArchive;
 
 abstract class PackageTestCommand extends Command
 {
     use LoadsPackageConfig;
+    use ProvisionsSandboxEnvironment;
 
     protected $signature = 'package:test
         {--output=package : Output directory package:build wrote packages/ into}
@@ -75,12 +71,6 @@ abstract class PackageTestCommand extends Command
     protected string $testAdminPassword = 'TestPassword123!';
 
     protected string $sampleDataMode = 'full';
-
-    protected ?Process $serverProcess = null;
-
-    protected ?string $mysqlContainerName = null;
-
-    protected ?string $tempDir = null;
 
     public function handle(): int
     {
@@ -150,193 +140,19 @@ abstract class PackageTestCommand extends Command
         }
     }
 
-    protected function locateFullZip(): string
+    protected function buildHint(): string
     {
-        $version = config('app.version');
-        $packagesDir = base_path($this->option('output')).'/packages';
-        $zipPath = "{$packagesDir}/{$this->slug}-v{$version}-full.zip";
-
-        if (! file_exists($zipPath)) {
-            throw new RuntimeException("Expected built package not found: {$zipPath}. Run package:build first, or omit --skip-build.");
-        }
-
-        return $zipPath;
+        return 'Run package:build first, or omit --skip-build.';
     }
 
-    /**
-     * @return array{host: string, port: int, name: string, user: string, pass: string}
-     */
-    protected function provisionMysql(): array
+    protected function mysqlCredentials(): array
     {
-        $mysqlPortOption = $this->option('mysql-port');
-
-        if (! ctype_digit((string) $mysqlPortOption)) {
-            throw new RuntimeException("--mysql-port must be a non-negative integer, got: '{$mysqlPortOption}'.");
-        }
-
-        // findFreePort() releases its probe socket before returning, so there
-        // is an inherent (small) race if another process grabs the port
-        // first — acceptable for a local/CI test harness; Docker will fail
-        // fast and loudly via the isSuccessful() check below if that happens.
-        $port = ((int) $mysqlPortOption) ?: $this->findFreePort();
-        $dbName = 'installer_test';
-        $dbUser = 'installer_test';
-        $dbPass = 'installer_test';
-
-        $this->info("Starting throwaway MySQL container on port {$port}...");
-
-        $process = new Process([
-            'docker', 'run', '-d', '--rm',
-            '--name', $this->mysqlContainerName,
-            '-e', 'MYSQL_ROOT_PASSWORD=root',
-            '-e', "MYSQL_DATABASE={$dbName}",
-            '-e', "MYSQL_USER={$dbUser}",
-            '-e', "MYSQL_PASSWORD={$dbPass}",
-            '-p', "{$port}:3306",
-            'mysql:8.0',
-            '--default-authentication-plugin=mysql_native_password',
-        ]);
-        // Generous timeout to accommodate a cold `docker pull` of the mysql
-        // image on a machine/CI runner that doesn't have it cached yet.
-        $process->setTimeout(300);
-        $process->run();
-
-        if (! $process->isSuccessful()) {
-            throw new RuntimeException('Failed to start MySQL container: '.$process->getErrorOutput());
-        }
-
-        $mysql = ['host' => '127.0.0.1', 'port' => $port, 'name' => $dbName, 'user' => $dbUser, 'pass' => $dbPass];
-
-        $this->waitForMysql($mysql);
-
-        return $mysql;
+        return ['installer_test', 'installer_test', 'installer_test'];
     }
 
-    /**
-     * @param  array{host: string, port: int, name: string, user: string, pass: string}  $mysql
-     */
-    protected function waitForMysql(array $mysql): void
+    protected function routerFilename(): string
     {
-        $this->info('Waiting for MySQL to accept connections...');
-
-        $deadline = microtime(true) + 30;
-
-        while (microtime(true) < $deadline) {
-            try {
-                new PDO(
-                    "mysql:host={$mysql['host']};port={$mysql['port']};dbname={$mysql['name']}",
-                    $mysql['user'],
-                    $mysql['pass'],
-                    [PDO::ATTR_TIMEOUT => 2]
-                );
-
-                $this->info('MySQL is ready.');
-
-                return;
-            } catch (PDOException) {
-                usleep(500_000);
-            }
-        }
-
-        throw new RuntimeException("Timed out waiting for MySQL container {$this->mysqlContainerName} to accept connections on port {$mysql['port']}.");
-    }
-
-    protected function extractOuterPackage(string $zipPath, string $tempDir): void
-    {
-        $this->info('Extracting built package...');
-
-        File::ensureDirectoryExists($tempDir);
-
-        $zip = new ZipArchive;
-        if ($zip->open($zipPath) !== true) {
-            throw new RuntimeException("Failed to open built package zip: {$zipPath}");
-        }
-
-        $zip->extractTo($tempDir);
-        $zip->close();
-
-        if (! file_exists($tempDir.'/install.php')) {
-            throw new RuntimeException('install.php not found after extracting the built package.');
-        }
-    }
-
-    protected function startPhpServer(string $tempDir, int $port): void
-    {
-        $this->info("Starting PHP built-in server on 127.0.0.1:{$port}...");
-
-        // package:test runs inside this very app's own Laravel process, whose
-        // .env has already been loaded into the process environment by
-        // Dotenv (via putenv()/$_SERVER/$_ENV). Symfony Process inherits the
-        // parent environment by default, so without clearing every key this
-        // dev app's own .env defines, the installed app's freshly-written
-        // .env would be silently shadowed by this dev environment's own
-        // values (Dotenv's immutable repository refuses to overwrite
-        // already-set env vars) — the same class of bug bootstrapLaravel()
-        // in install.php guards against for session/cache/queue.
-        $blankEnv = array_fill_keys($this->parentAppEnvKeys(), false);
-
-        $routerPath = $this->generateRouterScript($tempDir);
-
-        $this->serverProcess = new Process(['php', '-S', "127.0.0.1:{$port}", '-t', $tempDir, $routerPath]);
-        $this->serverProcess->setTimeout(null);
-        $this->serverProcess->start(null, $blankEnv);
-    }
-
-    /**
-     * Every key defined in this dev app's own .env file — used to blank out
-     * the child php -S process's environment so none of it can shadow the
-     * freshly-installed app's own .env values.
-     *
-     * @return array<string>
-     */
-    protected function parentAppEnvKeys(): array
-    {
-        $envPath = base_path('.env');
-
-        if (! file_exists($envPath)) {
-            return [];
-        }
-
-        return array_keys(Dotenv::parse(file_get_contents($envPath)));
-    }
-
-    /**
-     * PHP's built-in server has no equivalent of the .htaccess rewrite
-     * install.php writes for Apache, so requests other than install.php
-     * itself would 404 instead of reaching {slug}/public/index.php. This
-     * router script replicates that rewrite for the duration of the test.
-     */
-    protected function generateRouterScript(string $tempDir): string
-    {
-        $slug = $this->slug;
-
-        $router = <<<PHP
-<?php
-\$uri = urldecode(parse_url(\$_SERVER['REQUEST_URI'], PHP_URL_PATH));
-
-if (\$uri === '/install.php' || \$uri === '/_cleanup.php') {
-    return false;
-}
-
-if (str_starts_with(\$uri, '/{$slug}/public/')) {
-    return false;
-}
-
-\$publicPath = __DIR__ . '/{$slug}/public' . \$uri;
-if (\$uri !== '/' && is_file(\$publicPath)) {
-    return false;
-}
-
-\$_SERVER['SCRIPT_NAME'] = '/index.php';
-\$_SERVER['SCRIPT_FILENAME'] = __DIR__ . '/{$slug}/public/index.php';
-chdir(__DIR__ . '/{$slug}/public');
-require __DIR__ . '/{$slug}/public/index.php';
-PHP;
-
-        $routerPath = $tempDir.'/.package-test-router.php';
-        file_put_contents($routerPath, $router);
-
-        return $routerPath;
+        return '.package-test-router.php';
     }
 
     protected function waitForServer(PendingRequest $client): void
@@ -354,20 +170,6 @@ PHP;
         }
 
         throw new RuntimeException('Timed out waiting for the PHP built-in server to respond.');
-    }
-
-    protected function findFreePort(): int
-    {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-
-        if ($socket === false) {
-            throw new RuntimeException("Failed to find a free port: {$errstr}");
-        }
-
-        $name = stream_socket_get_name($socket, false);
-        fclose($socket);
-
-        return (int) substr($name, strrpos($name, ':') + 1);
     }
 
     /**
@@ -616,14 +418,6 @@ PHP;
             return;
         }
 
-        if ($this->mysqlContainerName) {
-            $stopProcess = new Process(['docker', 'stop', $this->mysqlContainerName]);
-            $stopProcess->setTimeout(30);
-            $stopProcess->run();
-        }
-
-        if ($this->tempDir && is_dir($this->tempDir)) {
-            File::deleteDirectory($this->tempDir);
-        }
+        $this->teardownSandboxEnvironment();
     }
 }

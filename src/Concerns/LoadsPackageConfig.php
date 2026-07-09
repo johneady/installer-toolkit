@@ -24,7 +24,12 @@ trait LoadsPackageConfig
             }
         }
 
-        $this->slug = $this->config['slug'];
+        $slug = $this->config['slug'];
+        if (! preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', $slug)) {
+            return "package-config.php's 'slug' must contain only lowercase letters, numbers, and hyphens, got: '{$slug}'.";
+        }
+
+        $this->slug = $slug;
 
         return null;
     }

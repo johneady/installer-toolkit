@@ -43,6 +43,16 @@ test('handle fails when package-config.php is missing a required key', function 
         ->expectsOutputToContain("missing required key: '{$missingKey}'");
 })->with(['name', 'slug', 'min_php_version']);
 
+test('handle fails when slug contains characters outside docker/path-safe charset', function () {
+    File::ensureDirectoryExists(base_path('package'));
+    $config = ['name' => 'Fake App', 'slug' => 'my app!', 'min_php_version' => '8.3.0'];
+    file_put_contents(base_path('package/package-config.php'), '<?php return '.var_export($config, true).';');
+
+    $this->artisan('package:sandbox')
+        ->assertFailed()
+        ->expectsOutputToContain("'slug' must contain only lowercase letters, numbers, and hyphens");
+});
+
 test('handle fails when the built full zip is missing', function () {
     File::ensureDirectoryExists(base_path('package'));
     $config = ['name' => 'Fake App', 'slug' => 'fake-app', 'min_php_version' => '8.3.0'];
@@ -115,4 +125,49 @@ test('extractOuterPackage throws when install.php is missing from the zip', func
         ->toThrow(RuntimeException::class, 'install.php not found after extracting the built package.');
 
     File::delete($zipPath);
+});
+
+test('waitForServer returns once the PHP built-in server accepts connections', function () {
+    $command = fakeSandboxCommand();
+
+    $port = $command->callProtected('findFreePort');
+    $process = new \Symfony\Component\Process\Process(['php', '-S', "127.0.0.1:{$port}"]);
+    $process->start();
+    (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
+
+    try {
+        $command->callProtected('waitForServer', $port);
+    } finally {
+        $process->stop(3);
+    }
+})->throwsNoExceptions();
+
+test('waitForServer throws immediately when the server process is not running', function () {
+    $command = fakeSandboxCommand();
+
+    $port = $command->callProtected('findFreePort');
+    $process = new \Symfony\Component\Process\Process(['php', '-r', 'exit(1);']);
+    $process->run();
+    (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
+
+    expect(fn () => $command->callProtected('waitForServer', $port))
+        ->toThrow(RuntimeException::class, 'PHP built-in server failed to start');
+});
+
+test('teardown with --keep leaves the temp dir and stops only the server process', function () {
+    $command = fakeSandboxCommand();
+
+    $tempDir = storage_path('app/sandbox-keep-test');
+    File::ensureDirectoryExists($tempDir);
+
+    (new ReflectionProperty($command, 'tempDir'))->setValue($command, $tempDir);
+    (new ReflectionProperty($command, 'mysqlContainerName'))->setValue($command, 'package-sandbox-fake-app-keep-test');
+
+    $command->withOptions(['keep' => true]);
+
+    $command->callProtected('teardown');
+
+    expect(is_dir($tempDir))->toBeTrue();
+
+    File::deleteDirectory($tempDir);
 });

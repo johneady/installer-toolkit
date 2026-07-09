@@ -29,4 +29,21 @@ class FakePackageSandboxCommand extends PackageSandboxCommand
     {
         return (new \ReflectionMethod($this, $method))->invoke($this, ...$args);
     }
+
+    /**
+     * Bind option values (e.g. ['keep' => true]) so $this->option() resolves
+     * them inside a directly-called protected method, without running the
+     * command through the console kernel.
+     */
+    public function withOptions(array $options): static
+    {
+        $input = new \Symfony\Component\Console\Input\ArrayInput(
+            array_combine(array_map(fn ($key) => "--{$key}", array_keys($options)), array_values($options)),
+            $this->getDefinition(),
+        );
+
+        (new \ReflectionProperty(\Illuminate\Console\Command::class, 'input'))->setValue($this, $input);
+
+        return $this;
+    }
 }
