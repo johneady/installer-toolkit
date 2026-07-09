@@ -414,38 +414,28 @@ ENV;
 
     /**
      * Essential seeder classes that are always run. These set up core
-     * configuration, species, menus, pages, and other foundational data.
+     * configuration and other foundational data the application needs
+     * to function (e.g. an admin user, default settings, navigation).
+     *
+     * Customize this list for your application's own seeders.
      *
      * @var list<string>
      */
     private const ESSENTIAL_SEED_CLASSES = [
         'Database\\Seeders\\AdminUserSeeder',
-        'Database\\Seeders\\SpeciesSeeder',
-        'Database\\Seeders\\MembershipPlanSeeder',
-        'Database\\Seeders\\FormQuestionSeeder',
         'Database\\Seeders\\SettingSeeder',
-        'Database\\Seeders\\TagSeeder',
-        'Database\\Seeders\\MenuSeeder',
-        'Database\\Seeders\\PageSeeder',
     ];
 
     /**
      * Additional seeder classes that populate the site with demonstration
-     * data (sample pets, applications, blog posts, etc.).
+     * data, run only when the user opts in to sample data during install.
+     *
+     * Customize this list for your application's own seeders.
      *
      * @var list<string>
      */
     private const SAMPLE_SEED_CLASSES = [
-        'Database\\Seeders\\PetSeeder',
-        'Database\\Seeders\\AdoptionApplicationSeeder',
-        'Database\\Seeders\\FosteringApplicationSeeder',
-        'Database\\Seeders\\AssistanceApplicationSeeder',
-        'Database\\Seeders\\ApplicationStatusHistorySeeder',
-        'Database\\Seeders\\InterviewSeeder',
-        'Database\\Seeders\\BlogPostSeeder',
-        'Database\\Seeders\\MembershipSeeder',
-        'Database\\Seeders\\DrawSeeder',
-        'Database\\Seeders\\DocumentSeeder',
+        // 'Database\\Seeders\\DemoContentSeeder',
     ];
 
     /**
