@@ -108,6 +108,33 @@ test('generateRouterScript writes a router that protects install.php and the app
         ->and($contents)->toContain('_cleanup.php');
 });
 
+test('generated router serves a nested public asset requested by its root-relative URL', function () {
+    $command = fakeSandboxCommand(['slug' => 'fake-app']);
+
+    $tempDir = storage_path('app/sandbox-router-asset-test');
+    File::ensureDirectoryExists($tempDir.'/fake-app/public/build/assets');
+    file_put_contents($tempDir.'/fake-app/public/build/assets/app.js', 'console.log("fake-app");');
+
+    $routerPath = $command->callProtected('generateRouterScript', $tempDir);
+
+    $port = $command->callProtected('findFreePort');
+    $process = new \Symfony\Component\Process\Process(['php', '-S', "127.0.0.1:{$port}", '-t', $tempDir, $routerPath]);
+    $process->start();
+    (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
+
+    try {
+        $command->callProtected('waitForServer', $port);
+
+        $response = \Illuminate\Support\Facades\Http::get("http://127.0.0.1:{$port}/build/assets/app.js");
+
+        expect($response->status())->toBe(200)
+            ->and($response->body())->toBe('console.log("fake-app");')
+            ->and($response->header('Content-Type'))->toContain('javascript');
+    } finally {
+        $process->stop(3);
+    }
+});
+
 test('extractOuterPackage throws when install.php is missing from the zip', function () {
     $command = fakeSandboxCommand(['slug' => 'fake-app']);
 

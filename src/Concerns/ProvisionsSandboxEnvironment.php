@@ -216,7 +216,30 @@ if (str_starts_with(\$uri, '/{$slug}/public/')) {
 
 \$publicPath = __DIR__ . '/{$slug}/public' . \$uri;
 if (\$uri !== '/' && is_file(\$publicPath)) {
-    return false;
+    \$extensionMimeTypes = [
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'mjs' => 'application/javascript',
+        'json' => 'application/json',
+        'svg' => 'image/svg+xml',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'ico' => 'image/x-icon',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf' => 'font/ttf',
+        'txt' => 'text/plain',
+        'webmanifest' => 'application/manifest+json',
+    ];
+    \$extension = strtolower(pathinfo(\$publicPath, PATHINFO_EXTENSION));
+    \$mimeType = \$extensionMimeTypes[\$extension] ?? (mime_content_type(\$publicPath) ?: 'application/octet-stream');
+    header('Content-Type: ' . \$mimeType);
+    readfile(\$publicPath);
+
+    return true;
 }
 
 \$_SERVER['SCRIPT_NAME'] = '/index.php';
