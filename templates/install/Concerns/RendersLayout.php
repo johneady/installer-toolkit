@@ -25,9 +25,9 @@ trait RendersLayout
             return '';
         }
 
-        $html = '<div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6"><ul class="space-y-2">';
+        $html = '<div class="h-errors"><ul>';
         foreach ($this->errors as $error) {
-            $html .= '<li class="flex items-start gap-2 text-red-800 dark:text-red-300"><span class="text-red-500 mt-0.5">•</span>'.htmlspecialchars($error).'</li>';
+            $html .= '<li>'.htmlspecialchars($error).'</li>';
         }
         $html .= '</ul></div>';
 
@@ -83,10 +83,10 @@ trait RendersLayout
     }
 
     /**
-     * Computes "Step X of N" (optionally suffixed with the current
-     * settings sub-step name) directly from $stepNames/$settingsSubSteps
-     * — the same data renderStepIndicator() uses — so the two displays
-     * can't disagree.
+     * Computes "X of N" (optionally suffixed with the current settings
+     * sub-step name) directly from $stepNames/$settingsSubSteps — the
+     * same data renderProgress() uses — so the two displays can't
+     * disagree.
      */
     private function getStepLabel(int $step): string
     {
@@ -110,10 +110,10 @@ trait RendersLayout
             return '';
         }
 
-        $label = "Step {$matchedNum} of {$total}";
+        $label = "{$matchedNum} of {$total}";
 
         if (in_array($step, $this->settingsSubSteps)) {
-            $label .= ' — '.$this->stepNames[3];
+            $label .= ': '.$this->settingsSubStepNames[$step];
         }
 
         return $label;
@@ -121,14 +121,12 @@ trait RendersLayout
 
     private function renderLayout(string $title, string $content, int $currentStep): void
     {
-        $stepIndicator = $this->renderStepIndicator($currentStep);
-        $subStepIndicator = $this->renderSubStepIndicator($currentStep);
+        $progress = $this->renderProgress($currentStep);
         $installTimer = $this->renderInstallTimer($currentStep);
         $version = INSTALLER_VERSION;
         $sidebar = $this->getSidebarInfo($currentStep);
         $sidebarIcon = $sidebar['icon'];
         $sidebarDesc = htmlspecialchars($sidebar['desc']);
-        $sidebarLabel = htmlspecialchars($this->getStepLabel($currentStep));
 
         // Exposed globally so per-step inline scripts (DB/mail connection
         // tests, task list, etc.) can build status HTML without duplicating
@@ -151,20 +149,6 @@ trait RendersLayout
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Application Installer - {$title}</title>
     <style>
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-25%); }
-        }
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
         /* [[INSTALLER_CSS]] */
         /* [[/INSTALLER_CSS]] */
     </style>
@@ -174,37 +158,32 @@ trait RendersLayout
         (function() {
             var stored = localStorage.getItem('installer-theme');
             var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (stored ? stored === 'dark' : prefersDark) {
-                document.documentElement.classList.add('dark');
-            }
+            var isDark = stored ? stored === 'dark' : prefersDark;
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         })();
     </script>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-100 to-sky-50 dark:from-slate-900 dark:to-slate-800 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
-    <div class="max-w-4xl mx-auto p-6 md:p-8">
-        <div class="flex justify-end mb-2">
-            <button type="button" id="theme-toggle" aria-label="Toggle dark mode" class="w-10 h-10 rounded-xl flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-sky-300 dark:hover:border-sky-700 transition-all">
+<body class="h-body">
+    <div class="h-shell">
+        <div class="h-topbar">
+            <button type="button" id="theme-toggle" aria-label="Toggle dark mode" class="h-theme-btn">
                 <span id="theme-toggle-icon">🌙</span>
             </button>
         </div>
-        <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 mb-4 shadow-lg shadow-sky-500/30">
-                <span class="text-3xl">{$sidebarIcon}</span>
-            </div>
-            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-2">{$title}</h1>
-            <p class="text-slate-500 dark:text-slate-400">{$sidebarDesc}</p>
-            <p class="text-xs font-semibold text-sky-500 dark:text-sky-400 uppercase tracking-wide mt-2">{$sidebarLabel}</p>
+        <div class="h-head">
+            <div class="h-head-icon">{$sidebarIcon}</div>
+            <h1>{$title}</h1>
+            <p>{$sidebarDesc}</p>
         </div>
 
-        {$stepIndicator}
-        {$subStepIndicator}
+        {$progress}
         {$installTimer}
 
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 md:p-8">
+        <div class="h-card">
             {$content}
         </div>
 
-        <div class="text-center mt-6 text-xs text-slate-400 dark:text-slate-500">Application Installer v{$version}</div>
+        <div class="h-footer">Application Installer v{$version}</div>
     </div>
     <script>
         (function() {
@@ -212,14 +191,14 @@ trait RendersLayout
             var icon = document.getElementById('theme-toggle-icon');
 
             function sync() {
-                var isDark = document.documentElement.classList.contains('dark');
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
                 icon.textContent = isDark ? '☀️' : '🌙';
             }
 
             btn.addEventListener('click', function() {
-                document.documentElement.classList.toggle('dark');
-                var isDark = document.documentElement.classList.contains('dark');
-                localStorage.setItem('installer-theme', isDark ? 'dark' : 'light');
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+                localStorage.setItem('installer-theme', isDark ? 'light' : 'dark');
                 sync();
             });
 
@@ -238,18 +217,18 @@ HTML;
         }
 
         return <<<'HTML'
-        <div class="flex justify-center flex-wrap gap-4 md:gap-8 mb-6 p-3 md:p-4 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-sm" id="install-timer">
-            <div class="flex items-center gap-2">
-                <span class="font-semibold text-slate-700 dark:text-slate-300">Started:</span>
-                <span class="font-mono text-slate-900 dark:text-white" id="timer-start">--:--:--</span>
+        <div class="h-timer" id="install-timer">
+            <div>
+                <span>Started:</span>
+                <span id="timer-start">--:--:--</span>
             </div>
-            <div class="flex items-center gap-2">
-                <span class="font-semibold text-slate-700 dark:text-slate-300">Elapsed:</span>
-                <span class="font-mono text-slate-900 dark:text-white" id="timer-elapsed">0s</span>
+            <div>
+                <span>Elapsed:</span>
+                <span id="timer-elapsed">0s</span>
             </div>
-            <div class="flex items-center gap-2">
-                <span class="font-semibold text-slate-700 dark:text-slate-300">Remaining:</span>
-                <span class="font-mono text-slate-900 dark:text-white" id="timer-remaining">Calculating...</span>
+            <div>
+                <span>Remaining:</span>
+                <span id="timer-remaining">Calculating...</span>
             </div>
         </div>
         <script>
@@ -305,73 +284,91 @@ HTML;
 HTML;
     }
 
-    private function renderStepIndicator(int $currentStep): string
+    /**
+     * Top-level progress: a row of circular numbered badges joined by
+     * connector lines (done = filled solid, current = outlined + tinted,
+     * upcoming = plain outline), plus a text caption naming the current
+     * step. When the current step falls inside the Settings group, a
+     * second smaller dot row renders underneath for the 4 sub-steps
+     * (see renderSubProgress()) so users can see exactly where they are
+     * within Settings without a second row of full-size badges.
+     */
+    private function renderProgress(int $currentStep): string
     {
         if ($currentStep === 0) {
             return '';
         }
 
-        $html = '<div class="flex justify-center flex-wrap gap-2 mb-6">';
+        $total = count($this->stepNames);
+        $badges = '';
         $visualNum = 0;
+        $currentName = '';
+
         foreach ($this->stepNames as $num => $name) {
             $visualNum++;
             $isSettingsGroup = ($num === 3);
+            $isCurrentGroup = $isSettingsGroup
+                ? in_array($currentStep, $this->settingsSubSteps)
+                : ($num === $currentStep);
+            $isDone = $isSettingsGroup ? ($currentStep > 6) : ($num < $currentStep);
 
-            if ($isSettingsGroup) {
-                if ($currentStep > 6) {
-                    $class = 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20';
-                    $icon = $this->statusIcon('check');
-                } elseif (in_array($currentStep, $this->settingsSubSteps)) {
-                    $class = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/20';
-                    $icon = "{$visualNum}.";
-                } else {
-                    $class = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600';
-                    $icon = "{$visualNum}.";
-                }
+            if ($isDone) {
+                $state = 'done';
+                $inner = $this->statusIcon('check', 'w-3.5 h-3.5');
+            } elseif ($isCurrentGroup) {
+                $state = 'now';
+                $inner = (string) $visualNum;
+                $currentName = $name;
             } else {
-                if ($num < $currentStep) {
-                    $class = 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20';
-                    $icon = $this->statusIcon('check');
-                } elseif ($num === $currentStep) {
-                    $class = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/20';
-                    $icon = "{$visualNum}.";
-                } else {
-                    $class = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600';
-                    $icon = "{$visualNum}.";
-                }
+                $state = '';
+                $inner = (string) $visualNum;
             }
 
-            $html .= "<div class=\"flex items-center gap-2 px-3 py-1.5 rounded-full {$class} text-sm font-semibold\">{$icon} {$name}</div>";
-        }
-        $html .= '</div>';
+            if ($visualNum > 1) {
+                $lineDone = $isDone || $isCurrentGroup ? 'done' : '';
+                // A connector is "done" once we've reached or passed the step it leads to.
+                $badges .= "<div class=\"h-pline {$lineDone}\"></div>";
+            }
 
-        return $html;
+            $badges .= "<div class=\"h-pstep {$state}\">{$inner}</div>";
+        }
+
+        if ($currentName === '') {
+            // currentStep matched neither a top-level nor a settings-group step
+            // (defensive — keeps the caption blank rather than stale).
+            $currentName = $this->stepNames[$currentStep] ?? '';
+        }
+
+        $label = $this->getStepLabel($currentStep);
+        $caption = $label !== '' ? "<div class=\"h-progress-label\"><b>{$currentName}</b> — Step ".htmlspecialchars($label).'</div>' : '';
+
+        $sub = $this->renderSubProgress($currentStep);
+
+        return "<div class=\"h-progress\">{$badges}</div>{$caption}{$sub}";
     }
 
-    private function renderSubStepIndicator(int $currentStep): string
+    /**
+     * Small dot row for the 4 settings sub-steps (Database / Application /
+     * Email / Admin Account), rendered only while inside that group.
+     */
+    private function renderSubProgress(int $currentStep): string
     {
         if (! in_array($currentStep, $this->settingsSubSteps)) {
             return '';
         }
 
-        $html = '<div class="flex justify-center flex-wrap gap-2 mb-6">';
-        foreach ($this->settingsSubSteps as $index => $step) {
+        $dots = '';
+        foreach ($this->settingsSubSteps as $step) {
             if ($step < $currentStep) {
-                $class = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700';
-                $icon = $this->statusIcon('check');
+                $state = 'done';
             } elseif ($step === $currentStep) {
-                $class = 'bg-sky-500 text-white shadow-lg shadow-sky-500/20';
-                $icon = ($index + 1).'.';
+                $state = 'now';
             } else {
-                $class = 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600';
-                $icon = ($index + 1).'.';
+                $state = '';
             }
-            $name = $this->settingsSubStepNames[$step];
-            $num = $index + 1;
-            $html .= "<div class=\"flex items-center gap-1.5 px-3 py-1.5 rounded-full {$class} text-xs font-semibold\">{$icon} {$name}</div>";
+            $dots .= "<div class=\"h-sdot {$state}\"></div>";
         }
-        $html .= '</div>';
 
-        return $html;
+        return "<div class=\"h-subprogress\">{$dots}</div>";
     }
 }

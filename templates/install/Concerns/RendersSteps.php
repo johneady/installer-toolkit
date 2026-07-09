@@ -48,35 +48,29 @@ trait RendersSteps
         {$errors}
         <form method="POST" action="install.php?step=1">
             <!-- EULA Box -->
-            <div class="bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6 shadow-sm">
-                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <div class="flex items-center gap-3">
-                        <span class="text-2xl">⚖️</span>
-                        <div>
-                            <h3 class="font-semibold text-slate-900 dark:text-white text-base">End User License Agreement</h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400">Please read carefully before proceeding</p>
-                        </div>
+            <div class="h-eula">
+                <div class="h-eula-head">
+                    <span class="icon">⚖️</span>
+                    <div>
+                        <h3>End User License Agreement</h3>
+                        <p>Please read carefully before proceeding</p>
                     </div>
                 </div>
-                <div class="p-6 max-h-80 overflow-y-auto scrollbar-hide">
-                    <div class="prose prose-sm max-w-none text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{$eula}</div>
-                </div>
+                <div class="h-eula-body">{$eula}</div>
             </div>
 
             <!-- Checkbox -->
-            <div class="bg-gradient-to-r from-sky-50 to-cyan-50 dark:from-sky-900/20 dark:to-cyan-900/20 rounded-xl p-4 mb-6 border border-sky-200 dark:border-sky-800">
-                <label class="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" name="accept_eula" value="1" id="accept-eula" class="w-5 h-5 mt-0.5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 transition-all">
-                    <div>
-                        <span class="font-medium text-slate-900 dark:text-white">I have read and agree to the End User License Agreement</span>
-                        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">By checking this box, you confirm that you understand and accept all terms</p>
-                    </div>
-                </label>
-            </div>
+            <label class="h-checkline" for="accept-eula" style="cursor:pointer;">
+                <input type="checkbox" name="accept_eula" value="1" id="accept-eula">
+                <div>
+                    <span class="t">I have read and agree to the End User License Agreement</span>
+                    <p class="d">By checking this box, you confirm that you understand and accept all terms</p>
+                </div>
+            </label>
 
             <!-- Actions -->
-            <div class="flex justify-end">
-                <button type="submit" class="btn btn-primary px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" id="accept-btn" disabled>I Accept →</button>
+            <div class="h-actions end">
+                <button type="submit" class="h-btn h-btn-primary" id="accept-btn" disabled>I Accept →</button>
             </div>
         </form>
         <script>
@@ -106,55 +100,54 @@ HTML;
 
         $items = '';
         if (! empty($passed)) {
-            $checkIcon = $this->statusIcon('check');
-            $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700 shadow-sm\">
-                <div class=\"flex-shrink-0 w-10 h-10 rounded-xl text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center\">
+            $checkIcon = $this->statusIcon('check', 'w-4 h-4');
+            $items .= "<div class=\"h-reqrow good\">
+                <div class=\"icon\">
                     {$checkIcon}
                 </div>
-                <div class=\"flex-1\">
-                    <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">".count($passed).' requirement'.(count($passed) === 1 ? '' : 's').' met</h4>
-                    <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">'.implode(', ', array_map(fn ($r) => $r['name'], $passed)).'</p>
+                <div class=\"body\">
+                    <p class=\"t\">".count($passed).' requirement'.(count($passed) === 1 ? '' : 's').' met</p>
+                    <p class="d">'.implode(', ', array_map(fn ($r) => $r['name'], $passed)).'</p>
                 </div>
-                <span class="px-3 py-1 rounded-full text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30 text-xs font-semibold">Passed</span>
+                <span class="badge">Passed</span>
             </div>';
         }
         foreach ($notPassed as $r) {
-            $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning');
-            $statusClass = $r['critical'] ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700';
-            $iconClass = $r['critical'] ? 'text-red-500 bg-red-100 dark:bg-red-900/30' : 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900/30';
-            $items .= "<div class=\"flex items-center gap-4 p-4 rounded-xl border-2 {$statusClass} shadow-sm hover:shadow-md transition-shadow\">
-                <div class=\"flex-shrink-0 w-10 h-10 rounded-xl {$iconClass} flex items-center justify-center\">
+            $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning', 'w-4 h-4');
+            $rowClass = $r['critical'] ? 'bad' : 'warn';
+            $items .= "<div class=\"h-reqrow {$rowClass}\">
+                <div class=\"icon\">
                     {$icon}
                 </div>
-                <div class=\"flex-1\">
-                    <h4 class=\"font-semibold text-slate-900 dark:text-white text-sm\">{$r['name']}</h4>
-                    <p class=\"text-xs text-slate-600 dark:text-slate-400 mt-0.5\">{$r['detail']}</p>
+                <div class=\"body\">
+                    <p class=\"t\">{$r['name']}</p>
+                    <p class=\"d\">{$r['detail']}</p>
                 </div>
-                <span class=\"px-3 py-1 rounded-full {$iconClass} text-xs font-semibold\">".($r['critical'] ? 'Critical' : 'Warning').'</span>
+                <span class=\"badge\">".($r['critical'] ? 'Critical' : 'Warning').'</span>
             </div>';
         }
 
         $disabled = $allCriticalPassed ? '' : 'disabled';
-        $retestButton = $allCriticalPassed ? '' : '<button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
-        $warning = $allCriticalPassed ? '' : '<div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">
-                '.$this->statusIcon('warning').'
+        $retestButton = $allCriticalPassed ? '' : '<button type="button" class="h-btn h-btn-tint" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
+        $warning = $allCriticalPassed ? '' : '<div class="h-alert h-alert-bad">
+            <div class="icon">
+                '.$this->statusIcon('warning', 'w-4 h-4').'
             </div>
             <div>
-                <h3 class="font-semibold text-red-900 dark:text-red-400">Requirements Not Met</h3>
-                <p class="text-red-700 dark:text-red-300 text-sm">Some critical requirements are not met. Please resolve them before continuing.</p>
+                <p class="t">Requirements Not Met</p>
+                <p class="d">Some critical requirements are not met. Please resolve them before continuing.</p>
             </div>
         </div>';
 
         $content = <<<HTML
         {$warning}
         <form method="POST" action="install.php?step=2">
-        <div class="grid gap-3 mb-6">{$items}</div>
-        <div class="flex justify-between items-center gap-3">
-            <a href="install.php?step=1" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
-            <div class="flex gap-3">
+        <div>{$items}</div>
+        <div class="h-actions">
+            <a href="install.php?step=1" class="h-btn h-btn-ghost">← Back</a>
+            <div class="h-actions-group">
                 {$retestButton}
-                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" {$disabled}>Continue →</button>
+                <button type="submit" class="h-btn h-btn-primary" {$disabled}>Continue →</button>
             </div>
         </div>
         </form>
@@ -176,68 +169,51 @@ HTML;
 
         $content = <<<HTML
         {$errors}
-        <div id="db-test-result" class="hidden"></div>
+        <div id="db-test-result" class="h-hidden"></div>
         <form method="POST" action="install.php?step=3" id="db-form">
             <!-- Database Configuration Card -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-                <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <div class="flex items-center gap-3">
-                        <span class="text-2xl">🗄️</span>
-                        <div>
-                            <h3 class="font-semibold text-slate-900 dark:text-white">MySQL Database Connection</h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400">Provide your database credentials</p>
-                        </div>
+            <div class="h-card" style="padding:0; margin-bottom:20px;">
+                <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
+                    <span class="icon">🗄️</span>
+                    <div>
+                        <h3>MySQL Database Connection</h3>
+                        <p>Provide your database credentials</p>
                     </div>
                 </div>
-                <div class="p-6">
-                    <div class="grid md:grid-cols-2 gap-5">
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Host <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <input type="text" name="db_host" id="db_host" value="{$host}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🌐</span>
-                            </div>
+                <div style="padding:24px;">
+                    <div class="h-grid2">
+                        <div class="h-field">
+                            <label>Database Host <span class="req">*</span></label>
+                            <input type="text" name="db_host" id="db_host" value="{$host}" required>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Port</label>
-                            <div class="relative">
-                                <input type="text" name="db_port" id="db_port" value="{$port}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔢</span>
-                            </div>
+                        <div class="h-field">
+                            <label>Database Port</label>
+                            <input type="text" name="db_port" id="db_port" value="{$port}">
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Name <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <input type="text" name="db_name" id="db_name" value="{$name}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">📊</span>
-                            </div>
+                        <div class="h-field">
+                            <label>Database Name <span class="req">*</span></label>
+                            <input type="text" name="db_name" id="db_name" value="{$name}" required>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Username <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <input type="text" name="db_user" id="db_user" value="{$user}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
-                            </div>
+                        <div class="h-field">
+                            <label>Database Username <span class="req">*</span></label>
+                            <input type="text" name="db_user" id="db_user" value="{$user}" required>
                         </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Database Password</label>
-                            <div class="relative">
-                                <input type="password" name="db_pass" id="db_pass" value="{$pass}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
-                            </div>
-                        </div>
+                    </div>
+                    <div class="h-field">
+                        <label>Database Password</label>
+                        <input type="password" name="db_pass" id="db_pass" value="{$pass}">
                     </div>
                 </div>
             </div>
 
             <!-- Actions -->
-            <div class="flex justify-between items-center gap-3">
-                <a href="install.php?step=2" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
-                <div class="flex gap-3">
-                    <button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all flex items-center gap-2" id="test-db-btn">
+            <div class="h-actions">
+                <a href="install.php?step=2" class="h-btn h-btn-ghost">← Back</a>
+                <div class="h-actions-group">
+                    <button type="button" class="h-btn h-btn-tint" id="test-db-btn">
                         <span>🔗</span> Test Connection
                     </button>
-                    <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
+                    <button type="submit" class="h-btn h-btn-primary">Continue →</button>
                 </div>
             </div>
         </form>
@@ -246,8 +222,8 @@ HTML;
                 var btn = this;
                 var resultDiv = document.getElementById('db-test-result');
                 btn.disabled = true;
-                btn.innerHTML = '<span class="animate-spin">⏳</span> Testing...';
-                resultDiv.classList.add('hidden');
+                btn.innerHTML = '<span class="h-spin">⏳</span> Testing...';
+                resultDiv.classList.add('h-hidden');
 
                 var formData = new FormData(document.getElementById('db-form'));
 
@@ -257,19 +233,17 @@ HTML;
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    resultDiv.classList.remove('hidden');
-                    resultDiv.className = data.success 
-                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl p-4 mb-6 flex items-start gap-3'
-                        : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center ' + (data.success ? 'text-emerald-500' : 'text-red-500') + '">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
-                        '<div><p class="font-semibold ' + (data.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400') + '">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="text-sm ' + (data.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') + '">' + data.message + '</p></div>';
+                    resultDiv.classList.remove('h-hidden');
+                    resultDiv.className = data.success ? 'h-alert h-alert-good' : 'h-alert h-alert-bad';
+                    resultDiv.innerHTML = '<div class="icon">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
+                        '<div><p class="t">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="d">' + data.message + '</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
                 })
                 .catch(function(err) {
-                    resultDiv.classList.remove('hidden');
-                    resultDiv.className = 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">' + window.INSTALLER_ICONS.x + '</div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the connection.</p></div>';
+                    resultDiv.classList.remove('h-hidden');
+                    resultDiv.className = 'h-alert h-alert-bad';
+                    resultDiv.innerHTML = '<div class="icon">' + window.INSTALLER_ICONS.x + '</div><div><p class="t">Error</p><p class="d">An error occurred while testing the connection.</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
                 });
@@ -307,62 +281,48 @@ HTML;
         {$errors}
         <form method="POST" action="install.php?step=4">
             <!-- Application Settings -->
-            <div class="mb-8">
-                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span class="w-1 h-6 bg-gradient-to-b from-sky-500 to-cyan-500 rounded-full"></span>
-                    Application
-                </h3>
-                <div class="grid md:grid-cols-2 gap-5">
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Application Name <span class="text-red-500">*</span></label>
-                        <div class="relative">
-                            <input type="text" name="app_name" id="app_name" value="{$appName}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🏷️</span>
-                        </div>
+            <div style="margin-bottom:32px;">
+                <h3 class="h-section-title"><span class="bump"></span>Application</h3>
+                <div class="h-grid2">
+                    <div class="h-field">
+                        <label>Application Name <span class="req">*</span></label>
+                        <input type="text" name="app_name" id="app_name" value="{$appName}" required>
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Application URL <span class="text-red-500">*</span></label>
-                        <div class="relative">
-                            <input type="url" name="app_url" id="app_url" value="{$appUrl}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🌐</span>
-                        </div>
+                    <div class="h-field">
+                        <label>Application URL <span class="req">*</span></label>
+                        <input type="url" name="app_url" id="app_url" value="{$appUrl}" required>
                     </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Timezone <span class="text-red-500">*</span></label>
-                        <select name="timezone" id="timezone" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white cursor-pointer">{$tzOptions}</select>
-                    </div>
+                </div>
+                <div class="h-field">
+                    <label>Timezone <span class="req">*</span></label>
+                    <select name="timezone" id="timezone" required>{$tzOptions}</select>
                 </div>
             </div>
 
             <!-- Initial Data -->
             <div>
-                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                    <span class="w-1 h-6 bg-gradient-to-b from-sky-500 to-cyan-500 rounded-full"></span>
-                    Initial Data
-                </h3>
-                <p class="text-slate-600 dark:text-slate-400 text-sm mb-4">Choose how much content to pre-populate your site with. You can always add your own data later.</p>
-                <div class="space-y-3">
-                    <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 cursor-pointer hover:border-sky-300 dark:hover:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all bg-white dark:bg-slate-800">
-                        <input type="radio" name="sample_data" value="essential"{$essentialChecked} class="w-5 h-5 mt-0.5 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 transition-all">
-                        <div>
-                            <span class="font-semibold text-slate-900 dark:text-white">Essentials only</span>
-                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Sets up core configuration, menus, and pages — a clean slate ready for your own affiliates and content.</p>
-                        </div>
-                    </label>
-                    <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 cursor-pointer hover:border-sky-300 dark:hover:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all bg-white dark:bg-slate-800">
-                        <input type="radio" name="sample_data" value="full"{$fullChecked} class="w-5 h-5 mt-0.5 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 transition-all">
-                        <div>
-                            <span class="font-semibold text-slate-900 dark:text-white">Full demonstration data</span>
-                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Includes sample affiliates, applications, blog posts, and more — ideal for exploring all features before going live.</p>
-                        </div>
-                    </label>
-                </div>
+                <h3 class="h-section-title"><span class="bump"></span>Initial Data</h3>
+                <p class="h-lede" style="margin-top:-6px;">Choose how much content to pre-populate your site with. You can always add your own data later.</p>
+                <label class="h-radio">
+                    <input type="radio" name="sample_data" value="essential"{$essentialChecked}>
+                    <div>
+                        <span class="t">Essentials only</span>
+                        <p class="d">Sets up core configuration, menus, and pages — a clean slate ready for your own affiliates and content.</p>
+                    </div>
+                </label>
+                <label class="h-radio">
+                    <input type="radio" name="sample_data" value="full"{$fullChecked}>
+                    <div>
+                        <span class="t">Full demonstration data</span>
+                        <p class="d">Includes sample affiliates, applications, blog posts, and more — ideal for exploring all features before going live.</p>
+                    </div>
+                </label>
             </div>
 
             <!-- Actions -->
-            <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-                <a href="install.php?step=3" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
-                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
+            <div class="h-actions end">
+                <a href="install.php?step=3" class="h-btn h-btn-ghost">← Back</a>
+                <button type="submit" class="h-btn h-btn-primary">Continue →</button>
             </div>
         </form>
 HTML;
@@ -387,104 +347,104 @@ HTML;
         $smtpSelected = $mailMailer === 'smtp' ? ' selected' : '';
         $sendmailSelected = $mailMailer === 'sendmail' ? ' selected' : '';
         $logSelected = $mailMailer === 'log' ? ' selected' : '';
-        $smtpDisplay = $mailMailer === 'smtp' ? '' : 'hidden';
-        $sendmailDisplay = $mailMailer === 'sendmail' ? '' : 'hidden';
-        $fromDisplay = $mailMailer === 'log' ? 'hidden' : '';
+        $smtpDisplay = $mailMailer === 'smtp' ? '' : 'h-hidden';
+        $sendmailDisplay = $mailMailer === 'sendmail' ? '' : 'h-hidden';
+        $fromDisplay = $mailMailer === 'log' ? 'h-hidden' : '';
 
         $content = <<<HTML
         {$errors}
-        <div id="mail-test-result" class="hidden"></div>
+        <div id="mail-test-result" class="h-hidden"></div>
         <form method="POST" action="install.php?step=5" id="mail-form">
             <!-- Mail Configuration -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-                <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <div class="flex items-center gap-3">
-                        <span class="text-2xl">✉️</span>
-                        <div>
-                            <h3 class="font-semibold text-slate-900 dark:text-white">Email Configuration</h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400">Set up how this application sends email notifications</p>
-                        </div>
+            <div class="h-card" style="padding:0; margin-bottom:20px;">
+                <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
+                    <span class="icon">✉️</span>
+                    <div>
+                        <h3>Email Configuration</h3>
+                        <p>Set up how this application sends email notifications</p>
                     </div>
                 </div>
-                <div class="p-6">
-                    <div class="mb-6">
-                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Mail Driver</label>
-                        <select name="mail_mailer" id="mail_mailer" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white cursor-pointer">
+                <div style="padding:24px;">
+                    <div class="h-field">
+                        <label>Mail Driver</label>
+                        <select name="mail_mailer" id="mail_mailer">
                             <option value="smtp"{$smtpSelected}>SMTP</option>
                             <option value="sendmail"{$sendmailSelected}>Sendmail (PHP mail)</option>
                             <option value="log"{$logSelected}>Log (no emails sent)</option>
                         </select>
-                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">Select "Log" if you want to configure email later.</p>
+                        <p class="hint">Select "Log" if you want to configure email later.</p>
                     </div>
 
                     <!-- SMTP Fields -->
                     <div id="smtp-fields" class="{$smtpDisplay}">
-                        <div class="grid md:grid-cols-2 gap-5">
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Host</label>
-                                <input type="text" name="mail_host" id="mail_host" value="{$mailHost}" placeholder="smtp.example.com" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                        <div class="h-grid2">
+                            <div class="h-field">
+                                <label>SMTP Host</label>
+                                <input type="text" name="mail_host" id="mail_host" value="{$mailHost}" placeholder="smtp.example.com">
                             </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Port</label>
-                                <input type="text" name="mail_port" id="mail_port" value="{$mailPort}" placeholder="587" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            <div class="h-field">
+                                <label>SMTP Port</label>
+                                <input type="text" name="mail_port" id="mail_port" value="{$mailPort}" placeholder="587">
                             </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Username</label>
-                                <input type="text" name="mail_username" id="mail_username" value="{$mailUsername}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            <div class="h-field">
+                                <label>SMTP Username</label>
+                                <input type="text" name="mail_username" id="mail_username" value="{$mailUsername}">
                             </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">SMTP Password</label>
-                                <input type="password" name="mail_password" id="mail_password" value="{$mailPassword}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                            <div class="h-field">
+                                <label>SMTP Password</label>
+                                <input type="password" name="mail_password" id="mail_password" value="{$mailPassword}">
                             </div>
                         </div>
                     </div>
 
                     <!-- Sendmail Info -->
                     <div id="sendmail-fields" class="{$sendmailDisplay}">
-                        <div class="bg-sky-50 dark:bg-sky-900/20 rounded-xl p-4 border border-sky-200 dark:border-sky-800">
-                            <p class="text-sm text-sky-800 dark:text-sky-300">Uses your server's built-in sendmail/PHP mail function. No additional server configuration needed.</p>
+                        <div class="h-alert h-alert-good" style="margin-bottom:0;">
+                            <div>
+                                <p class="d" style="color:var(--h-ink);">Uses your server's built-in sendmail/PHP mail function. No additional server configuration needed.</p>
+                            </div>
                         </div>
                     </div>
 
                     <!-- From Fields -->
-                    <div id="from-fields" class="{$fromDisplay} mt-6 grid md:grid-cols-2 gap-5">
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">From Address</label>
-                            <input type="email" name="mail_from_address" id="mail_from_address" value="{$mailFromAddress}" placeholder="noreply@yourdomain.com" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                    <div id="from-fields" class="{$fromDisplay} h-grid2" style="margin-top:20px;">
+                        <div class="h-field">
+                            <label>From Address</label>
+                            <input type="email" name="mail_from_address" id="mail_from_address" value="{$mailFromAddress}" placeholder="noreply@yourdomain.com">
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">From Name</label>
-                            <input type="text" name="mail_from_name" id="mail_from_name" value="{$mailFromName}" placeholder="{$appName}" class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
+                        <div class="h-field">
+                            <label>From Name</label>
+                            <input type="text" name="mail_from_name" id="mail_from_name" value="{$mailFromName}" placeholder="{$appName}">
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Actions -->
-            <div class="flex justify-between items-center gap-3">
-                <a href="install.php?step=4" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
-                <div class="flex gap-3">
-                    <button type="button" class="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-semibold border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all flex items-center gap-2" id="test-mail-btn">
+            <div class="h-actions">
+                <a href="install.php?step=4" class="h-btn h-btn-ghost">← Back</a>
+                <div class="h-actions-group">
+                    <button type="button" class="h-btn h-btn-tint" id="test-mail-btn">
                         <span>🔗</span> Test Connection
                     </button>
-                    <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</button>
+                    <button type="submit" class="h-btn h-btn-primary">Continue →</button>
                 </div>
             </div>
         </form>
         <script>
             document.getElementById('mail_mailer').addEventListener('change', function() {
-                document.getElementById('smtp-fields').classList.toggle('hidden', this.value !== 'smtp');
-                document.getElementById('sendmail-fields').classList.toggle('hidden', this.value !== 'sendmail');
-                document.getElementById('from-fields').classList.toggle('hidden', this.value === 'log');
-                document.getElementById('mail-test-result').classList.add('hidden');
+                document.getElementById('smtp-fields').classList.toggle('h-hidden', this.value !== 'smtp');
+                document.getElementById('sendmail-fields').classList.toggle('h-hidden', this.value !== 'sendmail');
+                document.getElementById('from-fields').classList.toggle('h-hidden', this.value === 'log');
+                document.getElementById('mail-test-result').classList.add('h-hidden');
             });
 
             document.getElementById('test-mail-btn').addEventListener('click', function() {
                 var btn = this;
                 var resultDiv = document.getElementById('mail-test-result');
                 btn.disabled = true;
-                btn.innerHTML = '<span class="animate-spin">⏳</span> Testing...';
-                resultDiv.classList.add('hidden');
+                btn.innerHTML = '<span class="h-spin">⏳</span> Testing...';
+                resultDiv.classList.add('h-hidden');
 
                 var formData = new FormData(document.getElementById('mail-form'));
 
@@ -494,19 +454,17 @@ HTML;
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    resultDiv.classList.remove('hidden');
-                    resultDiv.className = data.success 
-                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl p-4 mb-6 flex items-start gap-3'
-                        : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg ' + (data.success ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30') + ' flex items-center justify-center ' + (data.success ? 'text-emerald-500' : 'text-red-500') + '">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
-                        '<div><p class="font-semibold ' + (data.success ? 'text-emerald-900 dark:text-emerald-400' : 'text-red-900 dark:text-red-400') + '">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="text-sm ' + (data.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') + '">' + data.message + '</p></div>';
+                    resultDiv.classList.remove('h-hidden');
+                    resultDiv.className = data.success ? 'h-alert h-alert-good' : 'h-alert h-alert-bad';
+                    resultDiv.innerHTML = '<div class="icon">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
+                        '<div><p class="t">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="d">' + data.message + '</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
                 })
                 .catch(function(err) {
-                    resultDiv.classList.remove('hidden');
-                    resultDiv.className = 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3';
-                    resultDiv.innerHTML = '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">' + window.INSTALLER_ICONS.x + '</div><div><p class="font-semibold text-red-900 dark:text-red-400">Error</p><p class="text-sm text-red-700 dark:text-red-300">An error occurred while testing the mail connection.</p></div>';
+                    resultDiv.classList.remove('h-hidden');
+                    resultDiv.className = 'h-alert h-alert-bad';
+                    resultDiv.innerHTML = '<div class="icon">' + window.INSTALLER_ICONS.x + '</div><div><p class="t">Error</p><p class="d">An error occurred while testing the mail connection.</p></div>';
                     btn.disabled = false;
                     btn.innerHTML = '<span>🔗</span> Test Connection';
                 });
@@ -528,71 +486,52 @@ HTML;
 
         $content = <<<HTML
         {$errors}
-        <p class="text-slate-600 dark:text-slate-400 mb-6">Create your administrator account. You will use these credentials to log into the admin panel.</p>
+        <p class="h-lede">Create your administrator account. You will use these credentials to log into the admin panel.</p>
         <form method="POST" action="install.php?step=6">
             <!-- Admin Account Card -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-                <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <div class="flex items-center gap-3">
-                        <span class="text-2xl">👤</span>
-                        <div>
-                            <h3 class="font-semibold text-slate-900 dark:text-white">Administrator Account</h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400">Set up your admin credentials</p>
-                        </div>
+            <div class="h-card" style="padding:0; margin-bottom:20px;">
+                <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
+                    <span class="icon">👤</span>
+                    <div>
+                        <h3>Administrator Account</h3>
+                        <p>Set up your admin credentials</p>
                     </div>
                 </div>
-                <div class="p-6">
-                    <div class="space-y-5">
-                        <div class="grid md:grid-cols-2 gap-5">
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">First Name <span class="text-red-500">*</span></label>
-                                <div class="relative">
-                                    <input type="text" name="admin_first_name" id="admin_first_name" value="{$firstName}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Last Name <span class="text-red-500">*</span></label>
-                                <div class="relative">
-                                    <input type="text" name="admin_last_name" id="admin_last_name" value="{$lastName}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">👤</span>
-                                </div>
-                            </div>
+                <div style="padding:24px;">
+                    <div class="h-grid2">
+                        <div class="h-field">
+                            <label>First Name <span class="req">*</span></label>
+                            <input type="text" name="admin_first_name" id="admin_first_name" value="{$firstName}" required>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Email Address <span class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <input type="email" name="admin_email" id="admin_email" value="{$email}" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">📧</span>
-                            </div>
+                        <div class="h-field">
+                            <label>Last Name <span class="req">*</span></label>
+                            <input type="text" name="admin_last_name" id="admin_last_name" value="{$lastName}" required>
                         </div>
-                        <div class="grid md:grid-cols-2 gap-5">
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Password <span class="text-red-500">*</span></label>
-                                <div class="relative">
-                                    <input type="password" name="admin_password" id="admin_password" minlength="8" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
-                                </div>
-                                <div class="mt-1.5 flex gap-1" id="password-strength-bars"></div>
-                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1" id="password-strength-label">Minimum 8 characters</p>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Confirm Password <span class="text-red-500">*</span></label>
-                                <div class="relative">
-                                    <input type="password" name="admin_password_confirm" id="admin_password_confirm" minlength="8" required class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500">
-                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">🔒</span>
-                                </div>
-                                <p class="text-xs mt-1 hidden" id="password-match-message"></p>
-                            </div>
+                    </div>
+                    <div class="h-field">
+                        <label>Email Address <span class="req">*</span></label>
+                        <input type="email" name="admin_email" id="admin_email" value="{$email}" required>
+                    </div>
+                    <div class="h-grid2">
+                        <div class="h-field">
+                            <label>Password <span class="req">*</span></label>
+                            <input type="password" name="admin_password" id="admin_password" minlength="8" required>
+                            <div class="h-strength-bars" id="password-strength-bars"></div>
+                            <p class="hint" id="password-strength-label">Minimum 8 characters</p>
+                        </div>
+                        <div class="h-field">
+                            <label>Confirm Password <span class="req">*</span></label>
+                            <input type="password" name="admin_password_confirm" id="admin_password_confirm" minlength="8" required>
+                            <p class="h-match-msg h-hidden" id="password-match-message"></p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Actions -->
-            <div class="flex justify-between items-center gap-3">
-                <a href="install.php?step=5" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">← Back</a>
-                <button type="submit" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all" id="admin-submit-btn">Continue →</button>
+            <div class="h-actions">
+                <a href="install.php?step=5" class="h-btn h-btn-ghost">← Back</a>
+                <button type="submit" class="h-btn h-btn-primary" id="admin-submit-btn">Continue →</button>
             </div>
         </form>
         <script>
@@ -602,14 +541,11 @@ HTML;
                 var strengthBars = document.getElementById('password-strength-bars');
                 var strengthLabel = document.getElementById('password-strength-label');
                 var matchMessage = document.getElementById('password-match-message');
-                var submitBtn = document.getElementById('admin-submit-btn');
                 var form = passwordInput.closest('form');
 
-                var barColors = ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-emerald-500'];
+                var barColors = ['var(--h-bad)', 'var(--h-warn)', 'var(--h-warn)', 'var(--h-good)'];
                 for (var i = 0; i < 4; i++) {
-                    var bar = document.createElement('div');
-                    bar.className = 'h-1.5 flex-1 rounded-full bg-slate-200 dark:bg-slate-600 transition-colors';
-                    strengthBars.appendChild(bar);
+                    strengthBars.appendChild(document.createElement('div'));
                 }
                 var bars = strengthBars.querySelectorAll('div');
 
@@ -628,33 +564,32 @@ HTML;
                     var score = scorePassword(value);
 
                     bars.forEach(function(bar, i) {
-                        bar.className = 'h-1.5 flex-1 rounded-full transition-colors ' + (i < score ? barColors[score - 1] : 'bg-slate-200 dark:bg-slate-600');
+                        bar.style.background = i < score ? barColors[score - 1] : '';
                     });
 
                     if (!value) {
                         strengthLabel.textContent = 'Minimum 8 characters';
-                        strengthLabel.className = 'text-xs text-slate-600 dark:text-slate-400 mt-1';
+                        strengthLabel.style.color = '';
                     } else {
                         var labels = ['Too short', 'Weak', 'Okay', 'Good', 'Strong'];
-                        var labelColors = ['text-red-600 dark:text-red-400', 'text-orange-600 dark:text-orange-400', 'text-yellow-600 dark:text-yellow-400', 'text-emerald-600 dark:text-emerald-400'];
                         strengthLabel.textContent = labels[score];
-                        strengthLabel.className = 'text-xs mt-1 ' + (labelColors[score - 1] || labelColors[0]);
+                        strengthLabel.style.color = barColors[score - 1] || barColors[0];
                     }
                 }
 
                 function updateMatch() {
                     if (!confirmInput.value) {
-                        matchMessage.classList.add('hidden');
+                        matchMessage.classList.add('h-hidden');
                         return true;
                     }
-                    matchMessage.classList.remove('hidden');
+                    matchMessage.classList.remove('h-hidden');
                     if (passwordInput.value === confirmInput.value) {
                         matchMessage.innerHTML = window.INSTALLER_ICONS.checkSmall + ' Passwords match';
-                        matchMessage.className = 'text-xs mt-1 text-emerald-600 dark:text-emerald-400 flex items-center gap-1';
+                        matchMessage.className = 'h-match-msg good';
                         return true;
                     }
                     matchMessage.innerHTML = window.INSTALLER_ICONS.xSmall + ' Passwords do not match';
-                    matchMessage.className = 'text-xs mt-1 text-red-600 dark:text-red-400 flex items-center gap-1';
+                    matchMessage.className = 'h-match-msg bad';
                     return false;
                 }
 
@@ -701,10 +636,10 @@ HTML;
         $taskList = '';
         foreach ($tasks as $key => $label) {
             $status = in_array($key, $completedTasks) ? 'done' : 'pending';
-            $taskList .= "<div class=\"task-item flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 transition-all bg-white dark:bg-slate-800\" data-task=\"{$key}\" data-status=\"{$status}\">";
-            $taskList .= '<span class="task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"></span>';
-            $taskList .= "<span class=\"task-label flex-1 text-sm font-medium text-slate-900 dark:text-white\">{$label}</span>";
-            $taskList .= '<span class="task-message text-xs text-red-600 dark:text-red-400 text-right font-medium max-w-[50%]"></span>';
+            $taskList .= "<div class=\"h-task task-item\" data-task=\"{$key}\" data-status=\"{$status}\">";
+            $taskList .= '<span class="icon task-icon"></span>';
+            $taskList .= "<span class=\"label task-label\">{$label}</span>";
+            $taskList .= '<span class="msg task-message"></span>';
             $taskList .= '</div>';
         }
 
@@ -733,52 +668,48 @@ HTML;
         $xIconJson = json_encode($this->statusIcon('x'));
 
         $content = <<<HTML
-        <p class="text-slate-600 dark:text-slate-400 mb-6">Installing your application. Please do not close this page.</p>
-        
+        <p class="h-lede">Installing your application. Please do not close this page.</p>
+
         <!-- Progress Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-            <div class="bg-gradient-to-r from-sky-500 to-cyan-500 px-6 py-4">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                            <span class="text-white text-xl">⚡</span>
-                        </div>
-                        <div>
-                            <h3 class="font-semibold text-white">Installation Progress</h3>
-                            <p class="text-sky-100 text-sm">Step 7 of 9</p>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-2xl font-bold text-white" id="progress-percent">0%</div>
-                        <div class="text-sky-100 text-sm">Complete</div>
+        <div class="h-progress-card">
+            <div class="h-progress-card-head">
+                <div class="left">
+                    <div class="icn">⚡</div>
+                    <div>
+                        <h3>Installation Progress</h3>
+                        <p class="sub">Step 7 of 9</p>
                     </div>
                 </div>
+                <div>
+                    <div class="pct" id="progress-percent">0%</div>
+                    <div class="pct-label">Complete</div>
+                </div>
             </div>
-            
+
             <!-- Progress Bar -->
-            <div class="h-2 bg-slate-100 dark:bg-slate-700">
-                <div id="progress-bar" class="h-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-500" style="width: 0%"></div>
+            <div class="h-track">
+                <div id="progress-bar" class="h-track-fill" style="width: 0%"></div>
             </div>
 
             <!-- Task List -->
-            <div class="p-6 space-y-3" id="task-list">{$taskList}</div>
+            <div class="h-tasklist" id="task-list">{$taskList}</div>
         </div>
 
-        <div id="install-error" class="hidden bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">
+        <div id="install-error" class="h-hidden h-alert h-alert-bad">
+            <div class="icon">
                 {$xIcon}
             </div>
             <div>
-                <h3 class="font-semibold text-red-900 dark:text-red-400">Installation Failed</h3>
-                <p class="text-sm text-red-700 dark:text-red-300" id="error-message"></p>
+                <p class="t">Installation Failed</p>
+                <p class="d" id="error-message"></p>
             </div>
         </div>
 
-        <div class="actions hidden flex justify-between items-center gap-3" id="install-actions">
-            <a href="install.php?step=3" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all hidden" id="start-over-btn">← Start Over</a>
-            <div class="flex gap-3 ml-auto">
-                <button type="button" class="px-6 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all hidden" id="retry-btn">Retry</button>
-                <a href="install.php?step=8" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all hidden" id="continue-btn">Continue →</a>
+        <div class="h-actions h-hidden" id="install-actions">
+            <a href="install.php?step=3" class="h-btn h-btn-ghost h-hidden" id="start-over-btn">← Start Over</a>
+            <div class="h-actions-group" style="margin-left:auto;">
+                <button type="button" class="h-btn h-btn-ghost h-hidden" id="retry-btn">Retry</button>
+                <a href="install.php?step=8" class="h-btn h-btn-primary h-hidden" id="continue-btn">Continue →</a>
             </div>
         </div>
         <script>
@@ -797,39 +728,30 @@ HTML;
                 document.getElementById('progress-bar').style.width = percent + '%';
             }
 
-            var SPINNER_SVG = '<svg class="w-5 h-5 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+            var SPINNER_SVG = '<svg class="h-spin" width="16" height="16" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
-            var TASK_STATE_CLASSES = {
-                pending: { row: [], icon: 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500', label: [], html: '' },
-                active: { row: ['bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700'], icon: 'bg-sky-100 dark:bg-sky-900/30 text-sky-500 dark:text-sky-400', label: ['text-sky-600', 'dark:text-sky-400'], html: SPINNER_SVG },
-                done: { row: [], icon: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 dark:text-emerald-400', label: ['text-emerald-600', 'dark:text-emerald-400'], html: {$checkIconJson} },
-                error: { row: [], icon: 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400', label: ['text-red-600', 'dark:text-red-400'], html: {$xIconJson} },
+            var TASK_STATE_HTML = {
+                pending: '',
+                active: SPINNER_SVG,
+                done: {$checkIconJson},
+                error: {$xIconJson},
             };
-            var ALL_ROW_CLASSES = ['bg-sky-50', 'dark:bg-sky-900/20', 'border-sky-300', 'dark:border-sky-700'];
-            var ALL_LABEL_CLASSES = ['text-emerald-600', 'dark:text-emerald-400', 'text-red-600', 'dark:text-red-400', 'text-sky-600', 'dark:text-sky-400'];
 
             function setTaskState(el, state, message) {
-                var spec = TASK_STATE_CLASSES[state];
                 var icon = el.querySelector('.task-icon');
 
                 el.dataset.status = state;
-                el.classList.remove.apply(el.classList, ALL_ROW_CLASSES);
-                el.classList.add.apply(el.classList, spec.row);
+                el.className = 'h-task task-item' + (state !== 'pending' ? ' ' + state : '');
 
-                icon.className = 'task-icon flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg ' + spec.icon;
-                icon.innerHTML = spec.html;
-
-                var label = el.querySelector('.task-label');
-                label.classList.remove.apply(label.classList, ALL_LABEL_CLASSES);
-                label.classList.add.apply(label.classList, spec.label);
+                icon.innerHTML = TASK_STATE_HTML[state];
 
                 el.querySelector('.task-message').textContent = message || '';
             }
 
             function runTasks(fullReset) {
-                document.getElementById('install-error').classList.add('hidden');
-                document.getElementById('retry-btn').classList.add('hidden');
-                document.getElementById('start-over-btn').classList.add('hidden');
+                document.getElementById('install-error').classList.add('h-hidden');
+                document.getElementById('retry-btn').classList.add('h-hidden');
+                document.getElementById('start-over-btn').classList.add('h-hidden');
 
                 if (fullReset) {
                     currentTaskIndex = 0;
@@ -878,12 +800,11 @@ HTML;
 
             function handleTaskError(el, message) {
                 setTaskState(el, 'error', message);
-                document.getElementById('install-error').classList.remove('hidden');
+                document.getElementById('install-error').classList.remove('h-hidden');
                 document.getElementById('error-message').textContent = 'Installation failed: ' + message;
-                document.getElementById('install-actions').classList.remove('hidden');
-                document.getElementById('install-actions').classList.add('flex');
-                document.getElementById('retry-btn').classList.remove('hidden');
-                document.getElementById('start-over-btn').classList.remove('hidden');
+                document.getElementById('install-actions').classList.remove('h-hidden');
+                document.getElementById('retry-btn').classList.remove('h-hidden');
+                document.getElementById('start-over-btn').classList.remove('h-hidden');
             }
 
             function handleTaskSuccess(el) {
@@ -895,9 +816,8 @@ HTML;
 
             function runNextTask() {
                 if (currentTaskIndex >= tasks.length) {
-                    document.getElementById('install-actions').classList.remove('hidden');
-                    document.getElementById('install-actions').classList.add('flex');
-                    document.getElementById('continue-btn').classList.remove('hidden');
+                    document.getElementById('install-actions').classList.remove('h-hidden');
+                    document.getElementById('continue-btn').classList.remove('h-hidden');
                     return;
                 }
 
@@ -956,9 +876,8 @@ HTML;
             if (currentTaskIndex < tasks.length) {
                 runTasks(true);
             } else {
-                document.getElementById('install-actions').classList.remove('hidden');
-                document.getElementById('install-actions').classList.add('flex');
-                document.getElementById('continue-btn').classList.remove('hidden');
+                document.getElementById('install-actions').classList.remove('h-hidden');
+                document.getElementById('continue-btn').classList.remove('h-hidden');
             }
         </script>
 HTML;
@@ -973,24 +892,22 @@ HTML;
         $cronCommand = "* * * * * {$phpBinary} {$appPath}/artisan schedule:run >> /dev/null 2>&1";
 
         $content = <<<HTML
-        <p class="text-slate-600 dark:text-slate-400 mb-6">Your application requires a scheduled task (cron job) to run background processes such as sending emails, expiring memberships, and running health checks.</p>
+        <p class="h-lede">Your application requires a scheduled task (cron job) to run background processes such as sending emails, expiring memberships, and running health checks.</p>
 
         <!-- Cron Job Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-            <div class="bg-gradient-to-r from-slate-50 to-sky-50 dark:from-slate-800 dark:to-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                <div class="flex items-center gap-3">
-                    <span class="text-2xl">⏰</span>
-                    <div>
-                        <h3 class="font-semibold text-slate-900 dark:text-white">Cron Job Setup</h3>
-                        <p class="text-sm text-slate-600 dark:text-slate-400">Add this cron job to your server</p>
-                    </div>
+        <div class="h-card" style="padding:0; margin-bottom:24px;">
+            <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
+                <span class="icon">⏰</span>
+                <div>
+                    <h3>Cron Job Setup</h3>
+                    <p>Add this cron job to your server</p>
                 </div>
             </div>
-            <div class="p-6">
-                <div class="bg-slate-900 dark:bg-black rounded-xl p-4 mb-4 border border-slate-700">
-                    <code class="text-emerald-400 text-sm font-mono break-all" id="cron-command">{$cronCommand}</code>
+            <div style="padding:24px;">
+                <div class="h-code-block accent">
+                    <code id="cron-command">{$cronCommand}</code>
                 </div>
-                <button type="button" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all text-sm" id="copy-cron-btn">📋 Copy to Clipboard</button>
+                <button type="button" class="h-btn h-btn-ghost" id="copy-cron-btn">📋 Copy to Clipboard</button>
             </div>
         </div>
         <script>
@@ -1025,43 +942,31 @@ HTML;
         </script>
 
         <!-- How to Add Instructions -->
-        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-            <span class="w-1 h-6 bg-gradient-to-b from-sky-500 to-cyan-500 rounded-full"></span>
-            How to Add a Cron Job
-        </h3>
-        <div class="space-y-3 mb-6">
-            <details class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <summary class="px-6 py-4 font-semibold text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
-                    cPanel
-                    <span class="text-slate-400 dark:text-slate-500 text-2xl transform transition-transform">+</span>
-                </summary>
-                <ol class="px-6 py-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+        <h3 class="h-section-title"><span class="bump"></span>How to Add a Cron Job</h3>
+        <div style="margin-bottom:24px;">
+            <details class="h-details">
+                <summary>cPanel</summary>
+                <ol>
                     <li>Log in to cPanel and find "Cron Jobs" under "Advanced"</li>
-                    <li>Set the timing to "Once Per Minute" (or <code class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-mono text-xs">* * * * *</code>)</li>
+                    <li>Set the timing to "Once Per Minute" (or <code>* * * * *</code>)</li>
                     <li>Paste the command above into the "Command" field</li>
                     <li>Click "Add New Cron Job"</li>
                 </ol>
             </details>
-            <details class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <summary class="px-6 py-4 font-semibold text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
-                    Plesk
-                    <span class="text-slate-400 dark:text-slate-500 text-2xl transform transition-transform">+</span>
-                </summary>
-                <ol class="px-6 py-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+            <details class="h-details">
+                <summary>Plesk</summary>
+                <ol>
                     <li>Go to "Scheduled Tasks" in your Plesk panel</li>
                     <li>Click "Add Task"</li>
                     <li>Set it to run every minute</li>
                     <li>Paste the command above</li>
                 </ol>
             </details>
-            <details class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <summary class="px-6 py-4 font-semibold text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
-                    SSH / Terminal
-                    <span class="text-slate-400 dark:text-slate-500 text-2xl transform transition-transform">+</span>
-                </summary>
-                <ol class="px-6 py-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+            <details class="h-details">
+                <summary>SSH / Terminal</summary>
+                <ol>
                     <li>Connect to your server via SSH</li>
-                    <li>Run <code class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-mono text-xs">crontab -e</code></li>
+                    <li>Run <code>crontab -e</code></li>
                     <li>Add the command above as a new line</li>
                     <li>Save and exit</li>
                 </ol>
@@ -1069,8 +974,8 @@ HTML;
         </div>
 
         <!-- Actions -->
-        <div class="flex justify-end">
-            <a href="install.php?step=9" class="px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transform hover:-translate-y-0.5 transition-all">Continue →</a>
+        <div class="h-actions end">
+            <a href="install.php?step=9" class="h-btn h-btn-primary">Continue →</a>
         </div>
 HTML;
 
@@ -1096,13 +1001,13 @@ HTML;
         }
 
         if (! $zipDeleted) {
-            $deletionMessages .= '<div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-yellow-500">
-                    '.$this->statusIcon('warning').'
+            $deletionMessages .= '<div class="h-alert h-alert-warn">
+                <div class="icon">
+                    '.$this->statusIcon('warning', 'w-4 h-4').'
                 </div>
                 <div>
-                    <h3 class="font-semibold text-yellow-900 dark:text-yellow-400">Manual Cleanup Required</h3>
-                    <p class="text-sm text-yellow-700 dark:text-yellow-300">Could not automatically delete <strong>'.ZIP_FILENAME.'</strong>. Please delete it manually for security.</p>
+                    <p class="t">Manual Cleanup Required</p>
+                    <p class="d">Could not automatically delete <strong>'.ZIP_FILENAME.'</strong>. Please delete it manually for security.</p>
                 </div>
             </div>';
         }
@@ -1117,69 +1022,62 @@ HTML;
         $cleanupUrl = str_replace('//', '/', $cleanupUrl);
 
         $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
-        $bigCheckIcon = $this->statusIcon('check', 'w-10 h-10');
+        $bigCheckIcon = $this->statusIcon('check', 'w-8 h-8');
 
         $content = <<<HTML
         <!-- Success Icon -->
-        <div class="flex justify-center mb-6">
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce text-white">
+        <div style="display:flex; justify-content:center;">
+            <div class="h-success-icon h-bounce">
                 {$bigCheckIcon}
             </div>
         </div>
 
         <!-- Success Message -->
-        <div class="text-center mb-8">
-            <h2 class="text-2xl md:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-2">Installation Complete!</h2>
-            <p class="text-slate-600 dark:text-slate-400">Your {$appName} application has been successfully installed.</p>
+        <div class="h-success-head">
+            <h2>Installation Complete!</h2>
+            <p>Your {$appName} application has been successfully installed.</p>
         </div>
 
         {$deletionMessages}
 
         <!-- Admin Credentials -->
-        <div class="bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-900/20 dark:to-sky-900/20 rounded-2xl p-6 mb-6 border-2 border-blue-200 dark:border-blue-800">
-            <h3 class="text-lg font-bold text-blue-900 dark:text-blue-400 mb-4 flex items-center gap-2">
-                <span class="w-1 h-6 bg-gradient-to-b from-blue-500 to-sky-500 rounded-full"></span>
-                Admin Login Details
-            </h3>
-            <div class="space-y-3">
-                <div class="flex items-center gap-3">
-                    <span class="text-blue-500 text-xl">🔗</span>
-                    <div class="flex-1">
-                        <p class="text-sm font-semibold text-blue-900 dark:text-blue-400">Admin Login</p>
-                        <a href="{$cleanupUrl}" class="text-blue-600 dark:text-blue-300 font-medium hover:underline">{$appUrl}/login</a>
-                    </div>
+        <div class="h-credentials">
+            <h3 class="h-section-title" style="margin-bottom:6px;"><span class="bump"></span>Admin Login Details</h3>
+            <div class="row">
+                <span class="icon">🔗</span>
+                <div>
+                    <p class="t">Admin Login</p>
+                    <a href="{$cleanupUrl}">{$appUrl}/login</a>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-blue-500 text-xl">📧</span>
-                    <div class="flex-1">
-                        <p class="text-sm font-semibold text-blue-900 dark:text-blue-400">Email</p>
-                        <p class="text-slate-700 dark:text-slate-300">{$adminEmail}</p>
-                    </div>
+            </div>
+            <div class="row">
+                <span class="icon">📧</span>
+                <div>
+                    <p class="t">Email</p>
+                    <span class="v">{$adminEmail}</span>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-blue-500 text-xl">🔒</span>
-                    <div class="flex-1">
-                        <p class="text-sm font-semibold text-blue-900 dark:text-blue-400">Password</p>
-                        <p class="text-slate-700 dark:text-slate-300">(the password you entered during setup)</p>
-                    </div>
+            </div>
+            <div class="row">
+                <span class="icon">🔒</span>
+                <div>
+                    <p class="t">Password</p>
+                    <span class="v">(the password you entered during setup)</span>
                 </div>
             </div>
         </div>
 
         <!-- Security Warning -->
-        <div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                <span class="text-yellow-500 text-lg">🔒</span>
-            </div>
+        <div class="h-alert h-alert-warn">
+            <div class="icon">🔒</div>
             <div>
-                <h3 class="font-semibold text-yellow-900 dark:text-yellow-400">Important</h3>
-                <p class="text-sm text-yellow-700 dark:text-yellow-300">For security, the installer files will be deleted when you proceed. If auto-deletion fails, please manually delete <code class="px-2 py-1 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-300 font-mono text-xs">install.php</code> and <code class="px-2 py-1 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-300 font-mono text-xs">{$zipPath}</code> from your server.</p>
+                <p class="t">Important</p>
+                <p class="d">For security, the installer files will be deleted when you proceed. If auto-deletion fails, please manually delete <code>install.php</code> and <code>{$zipPath}</code> from your server.</p>
             </div>
         </div>
 
         <!-- Actions -->
-        <div class="flex justify-end">
-            <a href="{$cleanupUrl}" class="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transform hover:-translate-y-0.5 transition-all flex items-center gap-2">
+        <div class="h-actions end">
+            <a href="{$cleanupUrl}" class="h-btn h-btn-good">
                 <span>🚀</span> Go to Application →
             </a>
         </div>
@@ -1192,18 +1090,18 @@ HTML;
 
     private function renderAlreadyInstalled(): void
     {
-        $warningIcon = $this->statusIcon('warning', 'w-7 h-7');
+        $warningIcon = $this->statusIcon('warning', 'w-5 h-5');
 
         $content = <<<HTML
         <!-- Warning Alert -->
-        <div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-xl p-6 flex items-start gap-4">
-            <div class="flex-shrink-0 w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-yellow-500">
+        <div class="h-alert h-alert-warn" style="align-items:flex-start;">
+            <div class="icon" style="width:44px; height:44px; border-radius:14px;">
                 {$warningIcon}
             </div>
-            <div class="flex-1">
-                <h3 class="text-lg font-bold text-yellow-900 dark:text-yellow-400 mb-2">Already Installed</h3>
-                <p class="text-yellow-800 dark:text-yellow-300 mb-2">This application appears to already be installed. For security reasons, the installer cannot be run again.</p>
-                <p class="text-sm text-yellow-700 dark:text-yellow-400">Please delete <code class="px-2 py-1 rounded bg-yellow-200 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-300 font-mono">install.php</code> from your server immediately.</p>
+            <div>
+                <p class="t" style="font-size:1rem; margin-bottom:6px;">Already Installed</p>
+                <p class="d">This application appears to already be installed. For security reasons, the installer cannot be run again.</p>
+                <p class="d" style="margin-top:6px;">Please delete <code>install.php</code> from your server immediately.</p>
             </div>
         </div>
 HTML;
