@@ -94,44 +94,54 @@ body.h-body {
 
 .h-topbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .h-theme-btn {
-    width: 36px; height: 36px; border-radius: 50%;
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     background: var(--h-surface); border: 1px solid var(--h-border);
-    color: var(--h-mute); cursor: pointer; font-size: 15px;
+    color: var(--h-mute); cursor: pointer; font-size: 14px;
 }
 .h-theme-btn:hover { border-color: var(--h-accent-soft-border); }
 
-.h-head { text-align: center; margin-bottom: 28px; }
-.h-head-icon {
-    width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 16px;
+/*
+ * Header strip: collapses what used to be four stacked blocks (page
+ * icon/title/description, a row of full-size numbered badges, a text
+ * caption, and a settings sub-step dot row) into a single horizontal
+ * card, so the actual form starts much higher on the page. Icon + title
+ * + description on the left, a step-dot row + "Step X of N" + the theme
+ * toggle stacked on the right.
+ */
+.h-strip {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 20px; margin-bottom: 16px;
+    background: var(--h-surface); border: 1px solid var(--h-border); border-radius: 16px;
+}
+.h-strip-icon {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
     background: var(--h-accent-soft); border: 1px solid var(--h-accent-soft-border);
-    display: flex; align-items: center; justify-content: center; font-size: 22px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
 }
-.h-head h1 {
-    font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px;
-    text-wrap: balance;
+.h-strip-text { flex: 1; min-width: 0; }
+.h-strip-text h1 {
+    font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.h-head p { color: var(--h-mute); font-size: .9rem; line-height: 1.6; max-width: 520px; margin: 0 auto; }
+.h-strip-text p {
+    color: var(--h-mute); font-size: .78rem; line-height: 1.4; margin: 2px 0 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.h-strip-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.h-strip-top { display: flex; align-items: center; gap: 12px; }
+.h-strip-dots { display: flex; align-items: center; gap: 4px; }
+.h-sdot2 { width: 6px; height: 6px; border-radius: 50%; background: var(--h-border); flex-shrink: 0; }
+.h-sdot2.done { background: var(--h-accent); }
+.h-sdot2.now { background: var(--h-accent); width: 8px; height: 8px; box-shadow: 0 0 0 3px var(--h-accent-soft); }
+.h-strip-label { font-size: .72rem; font-weight: 700; color: var(--h-mute); white-space: nowrap; }
 
-/* Progress: top-level circular badges + connecting lines */
-.h-progress { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 6px; flex-wrap: nowrap; }
-.h-pstep {
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 28px; height: 28px; border-radius: 50%; font-size: .74rem; font-weight: 700;
-    background: var(--h-surface); border: 1.5px solid var(--h-border); color: var(--h-mute);
+@media (max-width: 640px) {
+    .h-strip { flex-wrap: wrap; }
+    .h-strip-text h1, .h-strip-text p { white-space: normal; }
+    .h-strip-side { flex-direction: row-reverse; align-items: center; width: 100%; justify-content: space-between; }
+    .h-strip-top { flex-direction: row-reverse; }
 }
-.h-pstep.done { background: var(--h-accent); border-color: var(--h-accent); color: #fff; }
-.h-pstep.now { border-color: var(--h-accent); color: var(--h-accent); background: var(--h-accent-soft); }
-.h-pline { flex: 1 1 16px; max-width: 32px; height: 2px; background: var(--h-border); }
-.h-pline.done { background: var(--h-accent); }
-.h-progress-label { text-align: center; font-size: .8rem; color: var(--h-mute); margin: 0 0 20px; }
-.h-progress-label b { color: var(--h-ink); }
-
-/* Sub-progress: small dot row for settings sub-steps */
-.h-subprogress { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0 0 22px; }
-.h-sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--h-border); flex-shrink: 0; }
-.h-sdot.done { background: var(--h-accent); }
-.h-sdot.now { background: var(--h-accent); width: 9px; height: 9px; box-shadow: 0 0 0 3px var(--h-accent-soft); }
 
 .h-timer {
     display: flex; justify-content: center; flex-wrap: wrap; gap: 20px;

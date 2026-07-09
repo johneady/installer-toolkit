@@ -88,10 +88,12 @@ trait RendersLayout
     }
 
     /**
-     * Computes "X of N" (optionally suffixed with the current settings
-     * sub-step name) directly from $stepNames/$settingsSubSteps — the
-     * same data renderProgress() uses — so the two displays can't
-     * disagree.
+     * Computes "X of N" against the top-level journey (License,
+     * Requirements, Settings, Install, Cron, Complete) directly from
+     * $stepNames — the same data renderHeaderStrip() iterates — so the
+     * label can't drift out of sync with the dot row. No sub-step name
+     * suffix: the strip's own title (e.g. "Database Configuration")
+     * already says which Settings sub-step this is.
      */
     private function getStepLabel(int $step): string
     {
@@ -115,23 +117,14 @@ trait RendersLayout
             return '';
         }
 
-        $label = "{$matchedNum} of {$total}";
-
-        if (in_array($step, $this->settingsSubSteps)) {
-            $label .= ': '.$this->settingsSubStepNames[$step];
-        }
-
-        return $label;
+        return "{$matchedNum} of {$total}";
     }
 
     private function renderLayout(string $title, string $content, int $currentStep): void
     {
-        $progress = $this->renderProgress($currentStep);
+        $headerStrip = $this->renderHeaderStrip($title, $currentStep);
         $installTimer = $this->renderInstallTimer($currentStep);
         $version = INSTALLER_VERSION;
-        $sidebar = $this->getSidebarInfo($currentStep);
-        $sidebarIcon = $sidebar['icon'];
-        $sidebarDesc = htmlspecialchars($sidebar['desc']);
 
         // Exposed globally so per-step inline scripts (DB/mail connection
         // tests, task list, etc.) can build status HTML without duplicating
@@ -170,18 +163,7 @@ trait RendersLayout
 </head>
 <body class="h-body">
     <div class="h-shell">
-        <div class="h-topbar">
-            <button type="button" id="theme-toggle" aria-label="Toggle dark mode" class="h-theme-btn">
-                <span id="theme-toggle-icon">🌙</span>
-            </button>
-        </div>
-        <div class="h-head">
-            <div class="h-head-icon">{$sidebarIcon}</div>
-            <h1>{$title}</h1>
-            <p>{$sidebarDesc}</p>
-        </div>
-
-        {$progress}
+        {$headerStrip}
         {$installTimer}
 
         <div class="h-card">
@@ -290,90 +272,83 @@ HTML;
     }
 
     /**
-     * Top-level progress: a row of circular numbered badges joined by
-     * connector lines (done = filled solid, current = outlined + tinted,
-     * upcoming = plain outline), plus a text caption naming the current
-     * step. When the current step falls inside the Settings group, a
-     * second smaller dot row renders underneath for the 4 sub-steps
-     * (see renderSubProgress()) so users can see exactly where they are
-     * within Settings without a second row of full-size badges.
+     * Single-row header: icon + title + description on the left, a compact
+     * step-dot row + "Step X of N" label + theme toggle stacked on the
+     * right. Replaces the old stack of icon/h1/description block, then a
+     * separate row of full-size numbered badges, then a caption, then a
+     * sub-step dot row — four vertically-stacked pieces collapsed into one
+     * card so the actual form starts much higher on the page.
+     *
+     * The dot row uses one dot per top-level step, except the Settings
+     * step (index 3) which is skipped in favor of 4 dots for its own
+     * sub-steps — so the total dot count stays 9 regardless of whether
+     * you're inside Settings or not, and the current position is always
+     * visible without a second indicator.
      */
-    private function renderProgress(int $currentStep): string
+    private function renderHeaderStrip(string $title, int $currentStep): string
     {
         if ($currentStep === 0) {
-            return '';
+            return $this->renderThemeToggleOnly();
         }
 
-        $total = count($this->stepNames);
-        $badges = '';
-        $visualNum = 0;
-        $currentName = '';
+        $sidebar = $this->getSidebarInfo($currentStep);
+        $icon = $sidebar['icon'];
+        $desc = htmlspecialchars($sidebar['desc']);
 
+        $dots = '';
         foreach ($this->stepNames as $num => $name) {
-            $visualNum++;
-            $isSettingsGroup = ($num === 3);
-            $isCurrentGroup = $isSettingsGroup
-                ? in_array($currentStep, $this->settingsSubSteps)
-                : ($num === $currentStep);
-            $isDone = $isSettingsGroup ? ($currentStep > 6) : ($num < $currentStep);
+            if ($num === 3) {
+                foreach ($this->settingsSubSteps as $subStep) {
+                    $dots .= $this->renderStripDot($subStep < $currentStep, $subStep === $currentStep);
+                }
 
-            if ($isDone) {
-                $state = 'done';
-                $inner = $this->statusIcon('check', 14);
-            } elseif ($isCurrentGroup) {
-                $state = 'now';
-                $inner = (string) $visualNum;
-                $currentName = $name;
-            } else {
-                $state = '';
-                $inner = (string) $visualNum;
+                continue;
             }
 
-            if ($visualNum > 1) {
-                $lineDone = $isDone || $isCurrentGroup ? 'done' : '';
-                // A connector is "done" once we've reached or passed the step it leads to.
-                $badges .= "<div class=\"h-pline {$lineDone}\"></div>";
-            }
-
-            $badges .= "<div class=\"h-pstep {$state}\">{$inner}</div>";
+            $dots .= $this->renderStripDot($num < $currentStep, $num === $currentStep);
         }
 
-        if ($currentName === '') {
-            // currentStep matched neither a top-level nor a settings-group step
-            // (defensive — keeps the caption blank rather than stale).
-            $currentName = $this->stepNames[$currentStep] ?? '';
-        }
+        $label = htmlspecialchars($this->getStepLabel($currentStep));
 
-        $label = $this->getStepLabel($currentStep);
-        $caption = $label !== '' ? "<div class=\"h-progress-label\"><b>{$currentName}</b> — Step ".htmlspecialchars($label).'</div>' : '';
+        return <<<HTML
+        <div class="h-strip">
+            <div class="h-strip-icon">{$icon}</div>
+            <div class="h-strip-text">
+                <h1>{$title}</h1>
+                <p>{$desc}</p>
+            </div>
+            <div class="h-strip-side">
+                <div class="h-strip-top">
+                    <div class="h-strip-dots">{$dots}</div>
+                    <button type="button" id="theme-toggle" aria-label="Toggle dark mode" class="h-theme-btn">
+                        <span id="theme-toggle-icon">🌙</span>
+                    </button>
+                </div>
+                <div class="h-strip-label">Step {$label}</div>
+            </div>
+        </div>
+        HTML;
+    }
 
-        $sub = $this->renderSubProgress($currentStep);
+    private function renderStripDot(bool $done, bool $now): string
+    {
+        $state = $done ? 'done' : ($now ? 'now' : '');
 
-        return "<div class=\"h-progress\">{$badges}</div>{$caption}{$sub}";
+        return "<div class=\"h-sdot2 {$state}\"></div>";
     }
 
     /**
-     * Small dot row for the 4 settings sub-steps (Database / Application /
-     * Email / Admin Account), rendered only while inside that group.
+     * The "Already Installed" guard page (step 0) has no title/progress to
+     * show, but still needs the theme toggle available.
      */
-    private function renderSubProgress(int $currentStep): string
+    private function renderThemeToggleOnly(): string
     {
-        if (! in_array($currentStep, $this->settingsSubSteps)) {
-            return '';
-        }
-
-        $dots = '';
-        foreach ($this->settingsSubSteps as $step) {
-            if ($step < $currentStep) {
-                $state = 'done';
-            } elseif ($step === $currentStep) {
-                $state = 'now';
-            } else {
-                $state = '';
-            }
-            $dots .= "<div class=\"h-sdot {$state}\"></div>";
-        }
-
-        return "<div class=\"h-subprogress\">{$dots}</div>";
+        return <<<'HTML'
+        <div class="h-topbar">
+            <button type="button" id="theme-toggle" aria-label="Toggle dark mode" class="h-theme-btn">
+                <span id="theme-toggle-icon">🌙</span>
+            </button>
+        </div>
+        HTML;
     }
 }
