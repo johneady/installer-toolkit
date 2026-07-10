@@ -31,35 +31,20 @@ abstract class PackageTestCommand extends Command
      */
     protected const TASK_SEQUENCE = [
         'extract',
-        'htaccess',
-        'env',
+        'bootstrap_files',
         'migrate',
         'seed',
-        'storage_link',
-        'config_clear',
-        'package_discover',
-        'config_cache',
-        'event_cache',
-        'route_cache',
-        'view_cache',
-        'icons_cache',
-        'filament_optimize',
+        'optimize',
     ];
 
     /**
      * Tasks that run via the standalone install-optimize.php endpoint,
-     * mapped to the Artisan command name it invokes. Must be kept in sync
-     * with templates/install/Concerns/RendersSteps.php's $cleanProcessTasks array.
+     * mapped to the comma-separated Artisan command list it invokes. Must be
+     * kept in sync with templates/install/Concerns/RendersSteps.php's
+     * $cleanProcessTasks array.
      */
     protected const CLEAN_PROCESS_TASKS = [
-        'config_clear' => 'config:clear',
-        'package_discover' => 'package:discover',
-        'config_cache' => 'config:cache',
-        'event_cache' => 'event:cache',
-        'route_cache' => 'route:cache',
-        'view_cache' => 'view:cache',
-        'icons_cache' => 'icons:cache',
-        'filament_optimize' => 'filament:optimize',
+        'optimize' => 'config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize',
     ];
 
     protected string $slug;
@@ -278,7 +263,7 @@ abstract class PackageTestCommand extends Command
         foreach (self::TASK_SEQUENCE as $task) {
             $this->runInstallTask($client, $task, $optimizeToken);
 
-            if ($task === 'env') {
+            if ($task === 'bootstrap_files') {
                 $this->disableSecureSessionCookie();
             }
         }
@@ -305,12 +290,12 @@ abstract class PackageTestCommand extends Command
         $completed = false;
 
         for ($i = 0; $i < $maxIterations; $i++) {
-            // Install tasks run real Artisan commands (migrate:fresh, db:seed,
+            // Install tasks run real Artisan commands (migrate, db:seed,
             // etc.) server-side and can take much longer than the wizard's
             // other, near-instant steps — use a generous per-request timeout
             // here rather than raising it for the whole client. Apps with a
-            // large migration count (200+) can take several minutes for
-            // migrate:fresh alone.
+            // large migration count (200+) can take several minutes to
+            // migrate in total.
             $response = $client->timeout(300)->post("/install.php?step=7&task={$task}");
             $json = $response->json();
 
@@ -323,6 +308,16 @@ abstract class PackageTestCommand extends Command
             }
 
             if ($task === 'extract' && ($json['extract_done'] ?? true) === false) {
+                continue;
+            }
+
+            if ($task === 'migrate' && ($json['migrate_done'] ?? true) === false) {
+                $task = 'migrate_batch';
+
+                continue;
+            }
+
+            if ($task === 'migrate_batch' && ($json['migrate_done'] ?? true) === false) {
                 continue;
             }
 
@@ -345,13 +340,13 @@ abstract class PackageTestCommand extends Command
         }
 
         if (array_key_exists($originalTask, self::CLEAN_PROCESS_TASKS)) {
-            $command = self::CLEAN_PROCESS_TASKS[$originalTask];
+            $commands = self::CLEAN_PROCESS_TASKS[$originalTask];
 
-            $response = $client->get("/{$this->slug}/public/install-optimize.php?command=".urlencode($command).'&token='.urlencode($optimizeToken));
+            $response = $client->get("/{$this->slug}/public/install-optimize.php?commands=".urlencode($commands).'&token='.urlencode($optimizeToken));
             $json = $response->json();
 
             if ($json === null || ! ($json['success'] ?? false)) {
-                throw new RuntimeException("Optimize step '{$command}' failed: ".($json['message'] ?? "HTTP {$response->status()}"));
+                throw new RuntimeException("Optimize step '{$commands}' failed: ".($json['message'] ?? "HTTP {$response->status()}"));
             }
         }
     }

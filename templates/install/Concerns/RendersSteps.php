@@ -616,19 +616,10 @@ HTML;
     {
         $tasks = [
             'extract' => 'Extracting application files',
-            'htaccess' => 'Configuring web server',
-            'env' => 'Generating environment configuration',
+            'bootstrap_files' => 'Configuring web server and environment',
             'migrate' => 'Running database migrations',
             'seed' => 'Seeding database with initial data',
-            'storage_link' => 'Creating storage symlink',
-            'config_clear' => 'Clearing configuration cache',
-            'package_discover' => 'Discovering packages',
-            'config_cache' => 'Caching configuration',
-            'event_cache' => 'Caching events',
-            'route_cache' => 'Caching routes',
-            'view_cache' => 'Caching views',
-            'icons_cache' => 'Caching icons',
-            'filament_optimize' => 'Optimizing Filament',
+            'optimize' => 'Optimizing application',
         ];
 
         $completedTasks = $_SESSION['installer']['completed_tasks'] ?? [];
@@ -652,14 +643,7 @@ HTML;
         $optimizeToken = $_SESSION['installer']['optimize_token'];
 
         $cleanProcessTasks = json_encode([
-            'config_clear' => 'config:clear',
-            'package_discover' => 'package:discover',
-            'config_cache' => 'config:cache',
-            'event_cache' => 'event:cache',
-            'route_cache' => 'route:cache',
-            'view_cache' => 'view:cache',
-            'icons_cache' => 'icons:cache',
-            'filament_optimize' => 'filament:optimize',
+            'optimize' => 'config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize',
         ]);
 
         $appFolder = APP_FOLDER;
@@ -789,6 +773,25 @@ HTML;
                     });
             }
 
+            function runMigrateBatch(el) {
+                setTaskState(el, 'active');
+                fetch('install.php?step=7&task=migrate_batch', { method: 'POST' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.success && data.migrate_done === false) {
+                            setTaskState(el, 'active', data.message);
+                            runMigrateBatch(el);
+                        } else if (data.success) {
+                            handleTaskSuccess(el);
+                        } else {
+                            throw new Error(data.message);
+                        }
+                    })
+                    .catch(function(err) {
+                        handleTaskError(el, err.message);
+                    });
+            }
+
             function parseJsonResponse(r) {
                 if (!r.ok) {
                     return r.text().then(function(text) {
@@ -832,8 +835,8 @@ HTML;
                             if (!data.success) {
                                 throw new Error(data.message);
                             }
-                            var command = cleanProcessTasks[task];
-                            return fetch('{$appFolder}/public/install-optimize.php?command=' + encodeURIComponent(command) + '&token=' + encodeURIComponent(optimizeToken)).then(parseJsonResponse);
+                            var commands = cleanProcessTasks[task];
+                            return fetch('{$appFolder}/public/install-optimize.php?commands=' + encodeURIComponent(commands) + '&token=' + encodeURIComponent(optimizeToken)).then(parseJsonResponse);
                         })
                         .then(function(data) {
                             if (data.success) {
@@ -858,6 +861,9 @@ HTML;
                         } else if (data.success && data.seed_done === false) {
                             setTaskState(el, 'active', data.message);
                             runSeedBatch(el);
+                        } else if (data.success && data.migrate_done === false) {
+                            setTaskState(el, 'active', data.message);
+                            runMigrateBatch(el);
                         } else if (data.success) {
                             handleTaskSuccess(el);
                         } else {

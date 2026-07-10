@@ -34,14 +34,14 @@ trait RunsInstallTasks
                 case 'extract':
                     $this->taskExtract();
                     break;
-                case 'htaccess':
-                    $this->taskHtaccess();
-                    break;
-                case 'env':
-                    $this->taskGenerateEnv();
+                case 'bootstrap_files':
+                    $this->taskBootstrapFiles();
                     break;
                 case 'migrate':
                     $this->taskMigrate();
+                    break;
+                case 'migrate_batch':
+                    $this->taskMigrateBatch();
                     break;
                 case 'seed':
                     $this->taskSeed();
@@ -49,22 +49,8 @@ trait RunsInstallTasks
                 case 'seed_batch':
                     $this->taskSeedBatch();
                     break;
-                case 'storage_link':
-                    $this->taskStorageLink();
-                    break;
-                case 'config_clear':
-                    $this->taskConfigClear();
-                    break;
-                case 'package_discover':
-                    $this->taskPackageDiscover();
-                    break;
-                case 'config_cache':
-                case 'event_cache':
-                case 'route_cache':
-                case 'view_cache':
-                case 'icons_cache':
-                case 'filament_optimize':
-                    $this->taskOptimizeStep($task);
+                case 'optimize':
+                    $this->taskOptimize();
                     break;
                 default:
                     echo json_encode(['success' => false, 'message' => 'Unknown task.']);
@@ -217,6 +203,18 @@ trait RunsInstallTasks
         }
     }
 
+    /**
+     * Run the three fast, in-process bootstrap steps (.htaccess, .env,
+     * storage symlink) in a single request instead of three separate
+     * round trips — each of these is effectively instantaneous on its own.
+     */
+    private function taskBootstrapFiles(): void
+    {
+        $this->taskHtaccess();
+        $this->taskGenerateEnv();
+        $this->taskStorageLink();
+    }
+
     private function taskHtaccess(): void
     {
         $appFolder = APP_FOLDER;
@@ -365,9 +363,8 @@ ENV;
         $_SERVER['QUEUE_CONNECTION'] = 'sync';
 
         require $autoloadPath;
-        $app = require $bootstrapPath;
 
-        return $app->make(Kernel::class);
+        return require $bootstrapPath;
     }
 
     /**
@@ -376,7 +373,8 @@ ENV;
      */
     private function runArtisanCommand(string $command, array $params = []): string
     {
-        $kernel = $this->bootstrapLaravel();
+        $app = $this->bootstrapLaravel();
+        $kernel = $app->make(Kernel::class);
 
         // Force the app to boot (registering + booting all service providers)
         // now, rather than lazily on Kernel::call(). Consuming apps commonly
@@ -385,7 +383,7 @@ ENV;
         // own AppServiceProvider::boot(). .env is deliberately written with
         // APP_ENV=production for a real deployment, so that guard becomes
         // active as soon as providers boot. The installer legitimately needs
-        // to run migrate:fresh once here, before any real data exists, so
+        // to run db:wipe/migrate once here, before any real data exists, so
         // lift the prohibition after boot but before the command runs.
         $kernel->bootstrap();
         DB::prohibitDestructiveCommands(false);
@@ -437,9 +435,88 @@ ENV;
         return $hint !== null ? "{$hint} ({$rawMessage})" : $rawMessage;
     }
 
+    /**
+     * Migrations are the other slow step (alongside extraction) and, unlike
+     * extraction, previously ran as a single opaque migrate:fresh call with
+     * no progress feedback and no protection against gateway timeouts on
+     * large schemas. This now mirrors taskExtract()/taskSeed(): drop all
+     * tables once, then hand off to taskMigrateBatch() to run one migration
+     * file per request, reporting progress as it goes.
+     */
     private function taskMigrate(): void
     {
-        $this->runArtisanCommand('migrate:fresh', ['--force' => true]);
+        $this->runArtisanCommand('db:wipe', ['--force' => true]);
+
+        // Ask Laravel's own migrator for the full set of migration paths
+        // rather than glob()'ing the app's database/migrations directory
+        // directly. Packages (Filament plugins, Spatie packages, etc.)
+        // commonly register their own migrations via loadMigrationsFrom()
+        // in a service provider — those live outside database/migrations
+        // and a plain glob() would silently skip them, exactly the set
+        // migrate:fresh used to pick up automatically.
+        $app = $this->bootstrapLaravel();
+        $app->make(Kernel::class)->bootstrap();
+        $migrator = $app->make('migrator');
+        $paths = array_merge($migrator->paths(), [__DIR__.'/'.APP_FOLDER.'/database/migrations']);
+        $files = array_values($migrator->getMigrationFiles($paths));
+
+        $_SESSION['installer']['migrate_files'] = $files;
+        $_SESSION['installer']['migrate_index'] = 0;
+
+        $this->runMigrateBatch();
+    }
+
+    private function taskMigrateBatch(): void
+    {
+        $this->runMigrateBatch();
+    }
+
+    /**
+     * Run a single pending migration file per call, across multiple HTTP
+     * requests, the same way runSeedBatch() steps through seeders.
+     */
+    private function runMigrateBatch(): void
+    {
+        $files = $_SESSION['installer']['migrate_files'] ?? [];
+        $index = $_SESSION['installer']['migrate_index'] ?? 0;
+        $total = count($files);
+
+        if ($index >= $total) {
+            echo json_encode([
+                'success' => true,
+                'migrate_done' => true,
+                'message' => 'Completed.',
+            ]);
+            exit;
+        }
+
+        $file = $files[$index];
+        $name = basename($file, '.php');
+
+        // $file is an absolute path (it may live outside the app's own
+        // database/migrations — e.g. inside vendor/ for a package that
+        // registers its own migrations), so pass it through as-is with
+        // --realpath rather than reconstructing a database/migrations-
+        // relative path.
+        $this->runArtisanCommand('migrate', [
+            '--force' => true,
+            '--path' => $file,
+            '--realpath' => true,
+        ]);
+
+        $_SESSION['installer']['migrate_index'] = $index + 1;
+        $done = ($index + 1) >= $total;
+
+        if ($done) {
+            unset($_SESSION['installer']['migrate_files'], $_SESSION['installer']['migrate_index']);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'migrate_done' => $done,
+            'message' => "Migrated {$name} (".($index + 1)."/{$total})",
+        ]);
+        exit;
     }
 
     /**
@@ -577,10 +654,10 @@ if (! isset(\$_GET['token']) || ! hash_equals(\$expectedToken, \$_GET['token']))
     exit;
 }
 
-\$command = \$_GET['command'] ?? '';
+\$commands = array_filter(explode(',', \$_GET['commands'] ?? ''));
 \$allowed = ['config:clear', 'config:cache', 'event:cache', 'route:cache', 'view:cache', 'icons:cache', 'filament:optimize', 'package:discover'];
 
-if (! in_array(\$command, \$allowed, true)) {
+if (empty(\$commands) || array_diff(\$commands, \$allowed)) {
     echo json_encode(['success' => false, 'message' => 'Invalid command.']);
     exit;
 }
@@ -618,89 +695,92 @@ putenv('APP_RUNNING_IN_CONSOLE=true');
 require __DIR__ . '/../vendor/autoload.php';
 \$app = require __DIR__ . '/../bootstrap/app.php';
 \$kernel = \$app->make(Illuminate\Contracts\Console\Kernel::class);
-\$output = new Symfony\Component\Console\Output\BufferedOutput;
 
-ob_start();
+foreach (\$commands as \$command) {
+    \$output = new Symfony\Component\Console\Output\BufferedOutput;
 
-try {
-    \$exitCode = \$kernel->call(\$command, ['--no-interaction' => true], \$output);
-} catch (Throwable \$e) {
-    ob_end_clean();
-    echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$e->getMessage())]);
-    exit;
-}
+    ob_start();
 
-ob_end_clean();
-
-if (\$exitCode !== 0) {
-    \$message = trim(\$output->fetch()) ?: 'Unknown error';
-    echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$message, \$exitCode)]);
-    exit;
-}
-
-// After config:cache, verify the cache file exists and contains
-// correct values.  Running config:cache from a web request can
-// silently produce a broken cache (wrong drivers, missing keys)
-// because Dotenv's immutable repository refuses to overwrite
-// values already present in \$_SERVER/\$_ENV.
-if (\$command === 'config:cache') {
-    \$cachePath = \$app->getCachedConfigPath();
-
-    if (! is_file(\$cachePath)) {
-        echo json_encode(['success' => false, 'message' => 'config:cache reported success but cache file was not created. Check bootstrap/cache/ permissions.']);
+    try {
+        \$exitCode = \$kernel->call(\$command, ['--no-interaction' => true], \$output);
+    } catch (Throwable \$e) {
+        ob_end_clean();
+        echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$e->getMessage())]);
         exit;
     }
 
-    \$cached = require \$cachePath;
-    \$problems = [];
+    ob_end_clean();
 
-    // Read expected values straight from the .env file to compare
-    // against the cached config.  This detects when the web server
-    // environment leaked values that override what .env specifies.
-    \$envPath = __DIR__ . '/../.env';
-    \$envValues = [];
+    if (\$exitCode !== 0) {
+        \$message = trim(\$output->fetch()) ?: 'Unknown error';
+        echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$message, \$exitCode)]);
+        exit;
+    }
 
-    if (is_file(\$envPath)) {
-        foreach (file(\$envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as \$line) {
-            if (str_starts_with(\$line, '#')) {
+    // After config:cache, verify the cache file exists and contains
+    // correct values.  Running config:cache from a web request can
+    // silently produce a broken cache (wrong drivers, missing keys)
+    // because Dotenv's immutable repository refuses to overwrite
+    // values already present in \$_SERVER/\$_ENV.
+    if (\$command === 'config:cache') {
+        \$cachePath = \$app->getCachedConfigPath();
+
+        if (! is_file(\$cachePath)) {
+            echo json_encode(['success' => false, 'message' => 'config:cache reported success but cache file was not created. Check bootstrap/cache/ permissions.']);
+            exit;
+        }
+
+        \$cached = require \$cachePath;
+        \$problems = [];
+
+        // Read expected values straight from the .env file to compare
+        // against the cached config.  This detects when the web server
+        // environment leaked values that override what .env specifies.
+        \$envPath = __DIR__ . '/../.env';
+        \$envValues = [];
+
+        if (is_file(\$envPath)) {
+            foreach (file(\$envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as \$line) {
+                if (str_starts_with(\$line, '#')) {
+                    continue;
+                }
+                if (str_contains(\$line, '=')) {
+                    [\$k, \$v] = explode('=', \$line, 2);
+                    \$envValues[trim(\$k)] = trim(\$v, " \t\"'");
+                }
+            }
+        }
+
+        \$checks = [
+            'session.driver'  => \$envValues['SESSION_DRIVER'] ?? null,
+            'cache.default'   => \$envValues['CACHE_STORE'] ?? null,
+            'queue.default'   => \$envValues['QUEUE_CONNECTION'] ?? null,
+            'app.url'         => \$envValues['APP_URL'] ?? null,
+        ];
+
+        foreach (\$checks as \$key => \$expected) {
+            if (\$expected === null) {
                 continue;
             }
-            if (str_contains(\$line, '=')) {
-                [\$k, \$v] = explode('=', \$line, 2);
-                \$envValues[trim(\$k)] = trim(\$v, " \t\"'");
+
+            \$parts = explode('.', \$key);
+            \$value = \$cached;
+
+            foreach (\$parts as \$part) {
+                \$value = \$value[\$part] ?? null;
+            }
+
+            if (\$value !== \$expected) {
+                \$problems[] = \$key . ' is "' . (\$value ?? 'null') . '" (expected "' . \$expected . '")';
             }
         }
-    }
 
-    \$checks = [
-        'session.driver'  => \$envValues['SESSION_DRIVER'] ?? null,
-        'cache.default'   => \$envValues['CACHE_STORE'] ?? null,
-        'queue.default'   => \$envValues['QUEUE_CONNECTION'] ?? null,
-        'app.url'         => \$envValues['APP_URL'] ?? null,
-    ];
-
-    foreach (\$checks as \$key => \$expected) {
-        if (\$expected === null) {
-            continue;
+        if (! empty(\$problems)) {
+            // Delete the broken cache so the app falls back to .env
+            @unlink(\$cachePath);
+            echo json_encode(['success' => false, 'message' => 'Config cache had incorrect values — ' . implode('; ', \$problems) . '. Cache removed; the web server environment may be overriding .env values.']);
+            exit;
         }
-
-        \$parts = explode('.', \$key);
-        \$value = \$cached;
-
-        foreach (\$parts as \$part) {
-            \$value = \$value[\$part] ?? null;
-        }
-
-        if (\$value !== \$expected) {
-            \$problems[] = \$key . ' is "' . (\$value ?? 'null') . '" (expected "' . \$expected . '")';
-        }
-    }
-
-    if (! empty(\$problems)) {
-        // Delete the broken cache so the app falls back to .env
-        @unlink(\$cachePath);
-        echo json_encode(['success' => false, 'message' => 'Config cache had incorrect values — ' . implode('; ', \$problems) . '. Cache removed; the web server environment may be overriding .env values.']);
-        exit;
     }
 }
 
@@ -713,35 +793,18 @@ OPTIMIZER_PHP;
     }
 
     /**
-     * Prepare the optimizer endpoint for config:clear (the actual
-     * command runs in a separate HTTP request via the browser JS).
+     * Prepare the optimizer endpoint. The actual commands (config:clear,
+     * package:discover, and the various *:cache steps) all run together in
+     * a single request against install-optimize.php via the browser JS,
+     * since they share the same "must run in a clean process" constraint —
+     * no need for a separate prepare + execute round trip per command.
      */
-    private function taskConfigClear(): void
-    {
-        $this->ensureOptimizerEndpoint();
-    }
-
-    /**
-     * Prepare the optimizer endpoint for package:discover.
-     */
-    private function taskPackageDiscover(): void
-    {
-        $this->ensureOptimizerEndpoint();
-    }
-
-    /**
-     * Prepare the optimizer endpoint for an individual optimization
-     * sub-command. Each runs in its own HTTP request to avoid gateway
-     * timeouts on shared hosting.
-     */
-    private function taskOptimizeStep(string $task): void
+    private function taskOptimize(): void
     {
         $this->ensureOptimizerEndpoint();
 
-        // Mark installation as complete after the final optimization step.
-        if ($task === 'filament_optimize') {
-            $_SESSION['installer']['install_complete'] = true;
-        }
+        // Mark installation as complete — this is the final install task.
+        $_SESSION['installer']['install_complete'] = true;
     }
 
     /**

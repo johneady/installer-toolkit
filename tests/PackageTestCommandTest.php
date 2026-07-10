@@ -79,19 +79,10 @@ test('TASK_SEQUENCE matches the task list install.php drives', function () {
 
     expect($reflection->getConstant('TASK_SEQUENCE'))->toBe([
         'extract',
-        'htaccess',
-        'env',
+        'bootstrap_files',
         'migrate',
         'seed',
-        'storage_link',
-        'config_clear',
-        'package_discover',
-        'config_cache',
-        'event_cache',
-        'route_cache',
-        'view_cache',
-        'icons_cache',
-        'filament_optimize',
+        'optimize',
     ]);
 });
 
@@ -99,14 +90,7 @@ test('CLEAN_PROCESS_TASKS matches the optimize-endpoint command map install.php 
     $reflection = new ReflectionClass(PackageTestCommand::class);
 
     expect($reflection->getConstant('CLEAN_PROCESS_TASKS'))->toBe([
-        'config_clear' => 'config:clear',
-        'package_discover' => 'package:discover',
-        'config_cache' => 'config:cache',
-        'event_cache' => 'event:cache',
-        'route_cache' => 'route:cache',
-        'view_cache' => 'view:cache',
-        'icons_cache' => 'icons:cache',
-        'filament_optimize' => 'filament:optimize',
+        'optimize' => 'config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize',
     ]);
 });
 
@@ -123,6 +107,26 @@ test('runInstallTask polls extract until extract_done is true', function () {
     $command->callProtected('runInstallTask', $client, 'extract', 'deadbeef');
 
     Http::assertSentCount(3);
+});
+
+test('runInstallTask switches to migrate_batch after the first migrate response', function () {
+    Http::fake([
+        '*/install.php*' => Http::sequence()
+            ->push(['success' => true, 'migrate_done' => false, 'message' => 'migration 1'])
+            ->push(['success' => true, 'migrate_done' => false, 'message' => 'migration 2'])
+            ->push(['success' => true, 'migrate_done' => true, 'message' => 'done']),
+    ]);
+
+    $command = fakeTestCommand();
+    $client = Http::baseUrl('http://127.0.0.1:0');
+    $command->callProtected('runInstallTask', $client, 'migrate', 'deadbeef');
+
+    $requestedUrls = collect(Http::recorded())->map(fn ($pair) => (string) $pair[0]->url())->all();
+
+    expect($requestedUrls[0])->toContain('task=migrate')
+        ->and($requestedUrls[0])->not->toContain('task=migrate_batch')
+        ->and($requestedUrls[1])->toContain('task=migrate_batch')
+        ->and($requestedUrls[2])->toContain('task=migrate_batch');
 });
 
 test('runInstallTask switches to seed_batch after the first seed response', function () {
@@ -147,14 +151,14 @@ test('runInstallTask switches to seed_batch after the first seed response', func
 
 test('runInstallTask throws with the server message when a task fails', function () {
     Http::fake([
-        '*/install.php*' => Http::response(['success' => false, 'message' => 'migrate:fresh failed (exit code 1): boom']),
+        '*/install.php*' => Http::response(['success' => false, 'message' => 'migrate failed (exit code 1): boom']),
     ]);
 
     $command = fakeTestCommand();
     $client = Http::baseUrl('http://127.0.0.1:0');
 
     expect(fn () => $command->callProtected('runInstallTask', $client, 'migrate', 'deadbeef'))
-        ->toThrow(RuntimeException::class, 'migrate:fresh failed (exit code 1): boom');
+        ->toThrow(RuntimeException::class, 'migrate failed (exit code 1): boom');
 });
 
 test('runInstallTask follows up clean-process tasks through the optimize endpoint', function () {
@@ -165,11 +169,11 @@ test('runInstallTask follows up clean-process tasks through the optimize endpoin
 
     $command = fakeTestCommand(['slug' => 'fake-app']);
     $client = Http::baseUrl('http://127.0.0.1:0');
-    $command->callProtected('runInstallTask', $client, 'config_cache', 'deadbeef');
+    $command->callProtected('runInstallTask', $client, 'optimize', 'deadbeef');
 
     Http::assertSent(function ($request) {
         return str_contains((string) $request->url(), 'install-optimize.php')
-            && str_contains((string) $request->url(), 'command=config%3Acache')
+            && str_contains((string) $request->url(), 'commands=config%3Aclear%2Cpackage%3Adiscover%2Cconfig%3Acache%2Cevent%3Acache%2Croute%3Acache%2Cview%3Acache%2Cicons%3Acache%2Cfilament%3Aoptimize')
             && str_contains((string) $request->url(), 'token=deadbeef');
     });
 });
@@ -183,6 +187,6 @@ test('runInstallTask throws when the optimize endpoint itself fails', function (
     $command = fakeTestCommand(['slug' => 'fake-app']);
     $client = Http::baseUrl('http://127.0.0.1:0');
 
-    expect(fn () => $command->callProtected('runInstallTask', $client, 'config_cache', 'deadbeef'))
+    expect(fn () => $command->callProtected('runInstallTask', $client, 'optimize', 'deadbeef'))
         ->toThrow(RuntimeException::class, 'config:cache failed (exit code 1): bad env');
 });
