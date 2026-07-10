@@ -569,8 +569,28 @@ ENV;
     }
 
     /**
-     * Run a single pending migration file per call, across multiple HTTP
-     * requests, the same way runSeedBatch() steps through seeders.
+     * How many migration files to run per HTTP request.
+     *
+     * Booting the framework — registering and booting every service
+     * provider — is by far the dominant cost of each request, measured at
+     * roughly 5x the cost of actually running one migration. Because every
+     * batched request is a fresh PHP process, running a single file per
+     * request makes N migrations cost N full framework boots (which is why
+     * the wizard's migrate step is dramatically slower than a one-shot
+     * `migrate:fresh`). Bounding a request to a handful of files amortises
+     * that boot across the batch while still keeping each request well
+     * under any shared-hosting gateway/execution-time budget and keeping
+     * per-batch progress visible. Tune up for a small schema on a host with
+     * generous execution time.
+     */
+    private const MIGRATIONS_PER_REQUEST = 10;
+
+    /**
+     * Run a batch of pending migration files per call, across multiple HTTP
+     * requests, the same way runSeedBatch() steps through seeders. Each
+     * request reuses a single booted framework instance for the whole batch
+     * (see MIGRATIONS_PER_REQUEST) instead of paying one full framework
+     * boot per migration file.
      */
     private function runMigrateBatch(?object $app = null): void
     {
@@ -588,22 +608,37 @@ ENV;
             exit;
         }
 
-        $file = $files[$index];
-        $name = basename($file, '.php');
+        $end = min($index + self::MIGRATIONS_PER_REQUEST, $total);
 
-        // $file is an absolute path (it may live outside the app's own
-        // database/migrations — e.g. inside vendor/ for a package that
-        // registers its own migrations), so pass it through as-is with
-        // --realpath rather than reconstructing a database/migrations-
-        // relative path.
-        $this->runArtisanCommand('migrate', [
-            '--force' => true,
-            '--path' => $file,
-            '--realpath' => true,
-        ], $app);
+        // Reuse one booted framework instance for the entire batch rather
+        // than letting runArtisanCommand() boot a fresh one per file: the
+        // first call receives the instance taskMigrate() already booted,
+        // and subsequent migrate_batch requests boot exactly once here.
+        $app ??= $this->bootLaravelKernel();
 
-        $_SESSION['installer']['migrate_index'] = $index + 1;
-        $done = ($index + 1) >= $total;
+        for ($i = $index; $i < $end; $i++) {
+            $file = $files[$i];
+
+            // $file is an absolute path (it may live outside the app's own
+            // database/migrations — e.g. inside vendor/ for a package that
+            // registers its own migrations), so pass it through as-is with
+            // --realpath rather than reconstructing a database/migrations-
+            // relative path.
+            $this->runArtisanCommand('migrate', [
+                '--force' => true,
+                '--path' => $file,
+                '--realpath' => true,
+            ], $app);
+
+            // Advance the cursor after each successful file so a mid-batch
+            // failure resumes from the next file on retry. Already-run
+            // migrations are no-ops (the migrator skips anything present in
+            // the migrations repository), so this is purely to avoid
+            // re-evaluating them.
+            $_SESSION['installer']['migrate_index'] = $i + 1;
+        }
+
+        $done = $end >= $total;
 
         if ($done) {
             unset($_SESSION['installer']['migrate_files'], $_SESSION['installer']['migrate_index']);
@@ -613,7 +648,7 @@ ENV;
         echo json_encode([
             'success' => true,
             'migrate_done' => $done,
-            'message' => "Migrated {$name} (".($index + 1)."/{$total})",
+            'message' => 'Migrated '.($index + 1)."-{$end} of {$total}",
         ]);
         exit;
     }
