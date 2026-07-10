@@ -961,7 +961,7 @@ HTML;
         $cronCommand = "* * * * * {$phpBinary} {$appPath}/artisan schedule:run >> /dev/null 2>&1";
 
         $content = <<<HTML
-        <p class="h-lede">Your application requires a scheduled task (cron job) to run background processes such as sending emails, expiring memberships, and running health checks.</p>
+        <p class="h-lede">Your application requires a scheduled task (cron job) to run background processes such as sending emails, cleaning up expired data, and running health checks.</p>
 
         <!-- Cron Job Card -->
         <div class="h-card" style="padding:0; margin-bottom:24px;">
