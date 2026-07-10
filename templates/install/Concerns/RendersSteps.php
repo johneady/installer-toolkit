@@ -686,7 +686,7 @@ HTML;
         $xIconJson = json_encode($this->statusIcon('x'));
 
         $content = <<<HTML
-        <p class="h-lede">Installing your application. Please do not close this page.</p>
+        <p class="h-lede">Installing your application. <strong>Please do not close this page.</strong></p>
 
         <!-- Progress Card -->
         <div class="h-progress-card">

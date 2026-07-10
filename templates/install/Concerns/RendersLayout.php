@@ -123,7 +123,6 @@ trait RendersLayout
     private function renderLayout(string $title, string $content, int $currentStep): void
     {
         $headerStrip = $this->renderHeaderStrip($title, $currentStep);
-        $installTimer = $this->renderInstallTimer($currentStep);
         $version = INSTALLER_VERSION;
 
         // Exposed globally so per-step inline scripts (DB/mail connection
@@ -164,7 +163,6 @@ trait RendersLayout
 <body class="h-body">
     <div class="h-shell">
         {$headerStrip}
-        {$installTimer}
 
         <div class="h-card">
             {$content}
@@ -172,6 +170,12 @@ trait RendersLayout
 
         <div class="h-footer">Application Installer v{$version}</div>
     </div>
+
+    <!-- Page Transition Overlay -->
+    <div class="h-page-loader" id="page-loader">
+        <div class="h-page-loader-spinner"></div>
+    </div>
+
     <script>
         (function() {
             var btn = document.getElementById('theme-toggle');
@@ -191,83 +195,53 @@ trait RendersLayout
 
             sync();
         })();
+
+        // Shows a full-page spinner while the browser waits on the next
+        // page load, so multi-second server-side work (e.g. the mod_rewrite
+        // self-request and filesystem checks on step 2) doesn't look like a
+        // frozen/broken page. Only fires for plain navigations — AJAX calls
+        // (data-ajax) and buttons that toggle in-page UI (type=button) are
+        // excluded since they don't leave the page.
+        (function() {
+            var loader = document.getElementById('page-loader');
+
+            function showLoader() {
+                loader.classList.add('visible');
+            }
+
+            document.addEventListener('submit', function(e) {
+                var form = e.target;
+                if (form.tagName === 'FORM' && !form.hasAttribute('data-ajax')) {
+                    showLoader();
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                var link = e.target.closest('a[href]');
+                if (!link) {
+                    return;
+                }
+                if (link.target === '_blank' || link.hasAttribute('download') || e.metaKey || e.ctrlKey || e.shiftKey) {
+                    return;
+                }
+                showLoader();
+            });
+
+            // Restores the page if the browser serves it from bfcache on
+            // back/forward nav, where the loader would otherwise still be
+            // showing from the click that navigated away. event.persisted
+            // is true only for bfcache restores, not normal loads — without
+            // that check this would hide the loader on every fresh page
+            // load, immediately after it appears.
+            window.addEventListener('pageshow', function(e) {
+                if (e.persisted) {
+                    loader.classList.remove('visible');
+                }
+            });
+        })();
     </script>
 </body>
 </html>
-HTML;
-    }
-
-    private function renderInstallTimer(int $currentStep): string
-    {
-        if ($currentStep !== 7) {
-            return '';
-        }
-
-        return <<<'HTML'
-        <div class="h-timer" id="install-timer">
-            <div>
-                <span>Started:</span>
-                <span id="timer-start">--:--:--</span>
-            </div>
-            <div>
-                <span>Elapsed:</span>
-                <span id="timer-elapsed">0s</span>
-            </div>
-            <div>
-                <span>Remaining:</span>
-                <span id="timer-remaining">Calculating...</span>
-            </div>
-        </div>
-        <script>
-            (function() {
-                var startTime = Date.now();
-                var startDate = new Date(startTime);
-                var startFormatted = startDate.toLocaleTimeString();
-                document.getElementById('timer-start').textContent = startFormatted;
-
-                function formatDuration(ms) {
-                    var totalSeconds = Math.floor(ms / 1000);
-                    if (totalSeconds < 60) {
-                        return totalSeconds + 's';
-                    }
-                    var minutes = Math.floor(totalSeconds / 60);
-                    var seconds = totalSeconds % 60;
-                    if (minutes < 60) {
-                        return minutes + 'm ' + seconds + 's';
-                    }
-                    var hours = Math.floor(minutes / 60);
-                    minutes = minutes % 60;
-                    return hours + 'h ' + minutes + 'm ' + seconds + 's';
-                }
-
-                function getProgress() {
-                    var percentEl = document.getElementById('progress-percent');
-                    if (!percentEl) {
-                        return 0;
-                    }
-                    return (parseInt(percentEl.textContent, 10) || 0) / 100;
-                }
-
-                var timerInterval = setInterval(function() {
-                    var elapsed = Date.now() - startTime;
-                    document.getElementById('timer-elapsed').textContent = formatDuration(elapsed);
-
-                    var progress = getProgress();
-                    var remainingEl = document.getElementById('timer-remaining');
-
-                    if (progress >= 1) {
-                        remainingEl.textContent = 'Done';
-                        clearInterval(timerInterval);
-                    } else if (progress > 0.05) {
-                        var estimatedTotal = elapsed / progress;
-                        var remaining = estimatedTotal - elapsed;
-                        remainingEl.textContent = '~' + formatDuration(remaining);
-                    } else {
-                        remainingEl.textContent = 'Calculating...';
-                    }
-                }, 1000);
-            })();
-        </script>
 HTML;
     }
 
