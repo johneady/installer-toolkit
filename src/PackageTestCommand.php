@@ -172,7 +172,7 @@ abstract class PackageTestCommand extends Command
 
         while (microtime(true) < $deadline) {
             if (! $this->serverProcess?->isRunning()) {
-                throw new RuntimeException('PHP built-in server failed to start: '.$this->serverProcess?->getErrorOutput());
+                throw new RuntimeException('PHP built-in server failed to start: '.$this->serverErrorOutput());
             }
 
             try {

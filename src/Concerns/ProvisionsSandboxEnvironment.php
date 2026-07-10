@@ -20,6 +20,8 @@ trait ProvisionsSandboxEnvironment
 {
     protected ?Process $serverProcess = null;
 
+    protected ?string $serverLogPath = null;
+
     protected ?string $mysqlContainerName = null;
 
     protected ?string $tempDir = null;
@@ -179,9 +181,35 @@ trait ProvisionsSandboxEnvironment
 
         $routerPath = $this->generateRouterScript($tempDir);
 
-        $this->serverProcess = new Process(['php', '-S', "127.0.0.1:{$port}", '-t', $tempDir, $routerPath]);
+        // php -S logs every request to stdout/stderr. Symfony Process
+        // captures both into an in-memory pipe by default; since nothing
+        // ever reads that pipe here (we only care about isRunning() and,
+        // on failure, getErrorOutput()), it fills up once enough requests
+        // have been logged (a few hundred, depending on message length)
+        // and the server process blocks trying to write to it — hanging
+        // every subsequent request. Route output to a file instead so it
+        // never blocks the server, while still keeping it around for
+        // getErrorOutput()-style diagnostics on startup failure.
+        $this->serverLogPath = $tempDir.'/.php-server.log';
+        $this->serverProcess = Process::fromShellCommandline(
+            'exec php -S '.escapeshellarg("127.0.0.1:{$port}").' -t '.escapeshellarg($tempDir).' '.escapeshellarg($routerPath).' > '.escapeshellarg($this->serverLogPath).' 2>&1'
+        );
         $this->serverProcess->setTimeout(null);
         $this->serverProcess->start(null, $blankEnv);
+    }
+
+    /**
+     * Diagnostic output for the PHP built-in server, read from the log file
+     * it's redirected to (see startPhpServer()) rather than from Symfony
+     * Process's own output capture, which is unused here.
+     */
+    protected function serverErrorOutput(): string
+    {
+        if ($this->serverLogPath === null || ! is_file($this->serverLogPath)) {
+            return '';
+        }
+
+        return (string) file_get_contents($this->serverLogPath);
     }
 
     /**

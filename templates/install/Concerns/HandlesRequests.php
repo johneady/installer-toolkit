@@ -33,11 +33,17 @@ trait HandlesRequests
         // at a finished site, so it must keep passing through — otherwise a
         // plain page reload during install/optimize traps the user on the
         // already-installed screen with no way back into their own install.
-        // The install_complete check bounds this to the install run itself:
-        // 'admin' alone can outlive the session GC window on a completed
-        // install, and without it a stale-but-alive session would keep
-        // bypassing the already-installed screen on a live production site.
-        $inProgress = ! empty($_SESSION['installer']['admin']) && empty($_SESSION['installer']['install_complete']);
+        // This must also keep passing through once install_complete flips
+        // true: step 9 (renderComplete()) is itself the request that deletes
+        // the app zip and install.php's self-delete script, so if this guard
+        // excluded a completed session it would never reach that cleanup and
+        // would show "already installed" instead — the zip cleanup
+        // assertion in package:test caught exactly this. The 'admin' check
+        // alone still bounds this to the install run itself: 'admin' can
+        // outlive the session GC window on a completed install, and without
+        // it a stale-but-alive session would keep bypassing the
+        // already-installed screen on a live production site.
+        $inProgress = ! empty($_SESSION['installer']['admin']);
         if (! $inProgress && $this->isAlreadyInstalled()) {
             $this->renderAlreadyInstalled();
 
