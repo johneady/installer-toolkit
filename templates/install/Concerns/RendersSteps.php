@@ -792,6 +792,43 @@ HTML;
                     });
             }
 
+            // Runs the optimize commands one at a time against
+            // install-optimize.php, mirroring runSeedBatch/runMigrateBatch.
+            // install-optimize.php is a standalone process with no session
+            // access, so this function is what tracks the index across
+            // requests. Once every command has succeeded, it confirms
+            // completion with install.php so install_complete is only set
+            // server-side after everything has actually run.
+            function runOptimizeBatch(el, commands, index) {
+                setTaskState(el, 'active');
+                fetch('{$appFolder}/public/install-optimize.php?commands=' + encodeURIComponent(commands) + '&index=' + index + '&token=' + encodeURIComponent(optimizeToken))
+                    .then(parseJsonResponse)
+                    .then(function(data) {
+                        if (!data.success) {
+                            throw new Error(data.message);
+                        }
+                        if (data.done === false) {
+                            setTaskState(el, 'active', data.message);
+                            runOptimizeBatch(el, commands, index + 1);
+                            return;
+                        }
+                        return fetch('install.php?step=7&task=optimize_confirm', { method: 'POST' }).then(parseJsonResponse);
+                    })
+                    .then(function(data) {
+                        if (!data) {
+                            return;
+                        }
+                        if (data.success) {
+                            handleTaskSuccess(el);
+                        } else {
+                            throw new Error(data.message);
+                        }
+                    })
+                    .catch(function(err) {
+                        handleTaskError(el, err.message);
+                    });
+            }
+
             function parseJsonResponse(r) {
                 if (!r.ok) {
                     return r.text().then(function(text) {
@@ -835,15 +872,7 @@ HTML;
                             if (!data.success) {
                                 throw new Error(data.message);
                             }
-                            var commands = cleanProcessTasks[task];
-                            return fetch('{$appFolder}/public/install-optimize.php?commands=' + encodeURIComponent(commands) + '&token=' + encodeURIComponent(optimizeToken)).then(parseJsonResponse);
-                        })
-                        .then(function(data) {
-                            if (data.success) {
-                                handleTaskSuccess(el);
-                            } else {
-                                handleTaskError(el, data.message);
-                            }
+                            runOptimizeBatch(el, cleanProcessTasks[task], 0);
                         })
                         .catch(function(err) {
                             handleTaskError(el, err.message);
@@ -917,9 +946,9 @@ HTML;
             </div>
         </div>
         <script>
-            (function() {
-                var btn = document.getElementById('copy-cron-btn');
-                var codeEl = document.getElementById('cron-command');
+            function initCopyButton(buttonId, sourceId) {
+                var btn = document.getElementById(buttonId);
+                var codeEl = document.getElementById(sourceId);
                 var originalLabel = btn.textContent;
 
                 function showCopied() {
@@ -944,7 +973,9 @@ HTML;
                     }
                     navigator.clipboard.writeText(codeEl.textContent).then(showCopied).catch(selectFallback);
                 });
-            })();
+            }
+
+            initCopyButton('copy-cron-btn', 'cron-command');
         </script>
 
         <!-- How to Add Instructions -->
@@ -992,6 +1023,18 @@ HTML;
     {
         $appUrl = $_SESSION['installer']['settings']['app_url'] ?? '';
         $adminEmail = htmlspecialchars($_SESSION['installer']['admin']['email'] ?? '');
+
+        $appDir = __DIR__.'/'.APP_FOLDER;
+        $envPath = $appDir.'/.env';
+
+        $appKey = $_SESSION['installer']['app_key'] ?? null;
+        if ($appKey === null) {
+            $envContent = @file_get_contents($envPath);
+            if ($envContent && preg_match('/^APP_KEY=(.+)$/m', $envContent, $m)) {
+                $appKey = trim($m[1]);
+            }
+        }
+        $appKey = htmlspecialchars($appKey ?? '');
 
         $deletionMessages = '';
         $zipPath = __DIR__.'/'.ZIP_FILENAME;
@@ -1069,6 +1112,64 @@ HTML;
                     <p class="t">Password</p>
                     <span class="v">(the password you entered during setup)</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- Application Key -->
+        <div class="h-card" style="padding:0; margin-bottom:20px;">
+            <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
+                <span class="icon">🔑</span>
+                <div>
+                    <h3>Application Key</h3>
+                    <p>Used to encrypt sessions, cookies, and other sensitive data</p>
+                </div>
+            </div>
+            <div style="padding:24px;">
+                <div class="h-code-block accent">
+                    <code id="app-key-value">{$appKey}</code>
+                </div>
+                <button type="button" class="h-btn h-btn-ghost" id="copy-key-btn">📋 Copy to Clipboard</button>
+            </div>
+        </div>
+        <script>
+            function initCopyButton(buttonId, sourceId) {
+                var btn = document.getElementById(buttonId);
+                var codeEl = document.getElementById(sourceId);
+                var originalLabel = btn.textContent;
+
+                function showCopied() {
+                    btn.textContent = '✓ Copied!';
+                    setTimeout(function() { btn.textContent = originalLabel; }, 2000);
+                }
+
+                function selectFallback() {
+                    var range = document.createRange();
+                    range.selectNodeContents(codeEl);
+                    var selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    btn.textContent = 'Press Ctrl+C / Cmd+C to copy';
+                    setTimeout(function() { btn.textContent = originalLabel; }, 3000);
+                }
+
+                btn.addEventListener('click', function() {
+                    if (!navigator.clipboard) {
+                        selectFallback();
+                        return;
+                    }
+                    navigator.clipboard.writeText(codeEl.textContent).then(showCopied).catch(selectFallback);
+                });
+            }
+
+            initCopyButton('copy-key-btn', 'app-key-value');
+        </script>
+
+        <!-- Application Key Warning -->
+        <div class="h-alert h-alert-warn">
+            <div class="icon">🔑</div>
+            <div>
+                <p class="t">Keep This Key Safe</p>
+                <p class="d">This key encrypts sensitive application data, including sessions, cookies, and any encrypted fields. If it is ever lost or changed, that data becomes permanently unrecoverable — for example, every logged-in user would be instantly signed out and unable to log back in until they reset their password, and any data your application stores in an encrypted form (such as saved payment details or personal information) would turn into unreadable garbage forever. It is stored in the <code>.env</code> file at <code>{$envPath}</code> on this server — back it up securely (e.g. in a password manager) and never commit it to version control, email it, or share it insecurely.</p>
             </div>
         </div>
 

@@ -52,12 +52,26 @@ trait RunsInstallTasks
                 case 'optimize':
                     $this->taskOptimize();
                     break;
+                case 'optimize_confirm':
+                    $this->taskOptimizeConfirm();
+                    break;
                 default:
                     echo json_encode(['success' => false, 'message' => 'Unknown task.']);
                     exit;
             }
 
-            $_SESSION['installer']['completed_tasks'][] = $task;
+            // 'optimize' only reflects real completion once the browser has
+            // confirmed every optimize command succeeded (optimize_confirm)
+            // — see taskOptimize()'s docblock. Recording it here instead,
+            // right after ensureOptimizerEndpoint() merely wrote the
+            // endpoint script, would mark the task (and its UI checkmark)
+            // done before any command has actually run.
+            if ($task === 'optimize_confirm') {
+                $_SESSION['installer']['completed_tasks'][] = 'optimize';
+            } elseif ($task !== 'optimize') {
+                $_SESSION['installer']['completed_tasks'][] = $task;
+            }
+
             echo json_encode(['success' => true, 'message' => 'Completed.']);
         } catch (Throwable $e) {
             echo json_encode(['success' => false, 'message' => $this->describeTaskFailure($task, $e->getMessage())]);
@@ -280,6 +294,7 @@ HTACCESS;
 
         // Generate a fresh APP_KEY
         $appKey = 'base64:'.base64_encode(random_bytes(32));
+        $_SESSION['installer']['app_key'] = $appKey;
 
         $env = <<<ENV
 APP_NAME="{$this->escapeEnvValue($settings['app_name'])}"
@@ -662,6 +677,24 @@ if (empty(\$commands) || array_diff(\$commands, \$allowed)) {
     exit;
 }
 
+// Run one command per request — the same "one unit of work per HTTP
+// request" batching used for migrate/seed — so a slow command (typically
+// filament:optimize on an app with many resources) can't blow a shared
+// host's gateway/execution-time budget for the whole optimize step, and a
+// retry after a failure only re-runs from the command that actually
+// failed rather than starting over from config:clear. This script has no
+// session access (see the class docblock above), so the browser tracks
+// and sends the index of the next command to run.
+\$commands = array_values(\$commands);
+\$index = (int) (\$_GET['index'] ?? 0);
+
+if (\$index < 0 || \$index >= count(\$commands)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid command index.']);
+    exit;
+}
+
+\$command = \$commands[\$index];
+
 // Mirrors RunsInstallTasks::describeTaskFailure() — duplicated here because
 // this script runs as its own standalone PHP process (see the class
 // docblock above) with no access to the installer class's methods.
@@ -696,95 +729,99 @@ require __DIR__ . '/../vendor/autoload.php';
 \$app = require __DIR__ . '/../bootstrap/app.php';
 \$kernel = \$app->make(Illuminate\Contracts\Console\Kernel::class);
 
-foreach (\$commands as \$command) {
-    \$output = new Symfony\Component\Console\Output\BufferedOutput;
+\$output = new Symfony\Component\Console\Output\BufferedOutput;
 
-    ob_start();
+ob_start();
 
-    try {
-        \$exitCode = \$kernel->call(\$command, ['--no-interaction' => true], \$output);
-    } catch (Throwable \$e) {
-        ob_end_clean();
-        echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$e->getMessage())]);
-        exit;
-    }
-
+try {
+    \$exitCode = \$kernel->call(\$command, ['--no-interaction' => true], \$output);
+} catch (Throwable \$e) {
     ob_end_clean();
+    echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$e->getMessage())]);
+    exit;
+}
 
-    if (\$exitCode !== 0) {
-        \$message = trim(\$output->fetch()) ?: 'Unknown error';
-        echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$message, \$exitCode)]);
+ob_end_clean();
+
+if (\$exitCode !== 0) {
+    \$message = trim(\$output->fetch()) ?: 'Unknown error';
+    echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$message, \$exitCode)]);
+    exit;
+}
+
+// After config:cache, verify the cache file exists and contains
+// correct values.  Running config:cache from a web request can
+// silently produce a broken cache (wrong drivers, missing keys)
+// because Dotenv's immutable repository refuses to overwrite
+// values already present in \$_SERVER/\$_ENV.
+if (\$command === 'config:cache') {
+    \$cachePath = \$app->getCachedConfigPath();
+
+    if (! is_file(\$cachePath)) {
+        echo json_encode(['success' => false, 'message' => 'config:cache reported success but cache file was not created. Check bootstrap/cache/ permissions.']);
         exit;
     }
 
-    // After config:cache, verify the cache file exists and contains
-    // correct values.  Running config:cache from a web request can
-    // silently produce a broken cache (wrong drivers, missing keys)
-    // because Dotenv's immutable repository refuses to overwrite
-    // values already present in \$_SERVER/\$_ENV.
-    if (\$command === 'config:cache') {
-        \$cachePath = \$app->getCachedConfigPath();
+    \$cached = require \$cachePath;
+    \$problems = [];
 
-        if (! is_file(\$cachePath)) {
-            echo json_encode(['success' => false, 'message' => 'config:cache reported success but cache file was not created. Check bootstrap/cache/ permissions.']);
-            exit;
-        }
+    // Read expected values straight from the .env file to compare
+    // against the cached config.  This detects when the web server
+    // environment leaked values that override what .env specifies.
+    \$envPath = __DIR__ . '/../.env';
+    \$envValues = [];
 
-        \$cached = require \$cachePath;
-        \$problems = [];
-
-        // Read expected values straight from the .env file to compare
-        // against the cached config.  This detects when the web server
-        // environment leaked values that override what .env specifies.
-        \$envPath = __DIR__ . '/../.env';
-        \$envValues = [];
-
-        if (is_file(\$envPath)) {
-            foreach (file(\$envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as \$line) {
-                if (str_starts_with(\$line, '#')) {
-                    continue;
-                }
-                if (str_contains(\$line, '=')) {
-                    [\$k, \$v] = explode('=', \$line, 2);
-                    \$envValues[trim(\$k)] = trim(\$v, " \t\"'");
-                }
-            }
-        }
-
-        \$checks = [
-            'session.driver'  => \$envValues['SESSION_DRIVER'] ?? null,
-            'cache.default'   => \$envValues['CACHE_STORE'] ?? null,
-            'queue.default'   => \$envValues['QUEUE_CONNECTION'] ?? null,
-            'app.url'         => \$envValues['APP_URL'] ?? null,
-        ];
-
-        foreach (\$checks as \$key => \$expected) {
-            if (\$expected === null) {
+    if (is_file(\$envPath)) {
+        foreach (file(\$envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as \$line) {
+            if (str_starts_with(\$line, '#')) {
                 continue;
             }
-
-            \$parts = explode('.', \$key);
-            \$value = \$cached;
-
-            foreach (\$parts as \$part) {
-                \$value = \$value[\$part] ?? null;
-            }
-
-            if (\$value !== \$expected) {
-                \$problems[] = \$key . ' is "' . (\$value ?? 'null') . '" (expected "' . \$expected . '")';
+            if (str_contains(\$line, '=')) {
+                [\$k, \$v] = explode('=', \$line, 2);
+                \$envValues[trim(\$k)] = trim(\$v, " \t\"'");
             }
         }
+    }
 
-        if (! empty(\$problems)) {
-            // Delete the broken cache so the app falls back to .env
-            @unlink(\$cachePath);
-            echo json_encode(['success' => false, 'message' => 'Config cache had incorrect values — ' . implode('; ', \$problems) . '. Cache removed; the web server environment may be overriding .env values.']);
-            exit;
+    \$checks = [
+        'session.driver'  => \$envValues['SESSION_DRIVER'] ?? null,
+        'cache.default'   => \$envValues['CACHE_STORE'] ?? null,
+        'queue.default'   => \$envValues['QUEUE_CONNECTION'] ?? null,
+        'app.url'         => \$envValues['APP_URL'] ?? null,
+    ];
+
+    foreach (\$checks as \$key => \$expected) {
+        if (\$expected === null) {
+            continue;
         }
+
+        \$parts = explode('.', \$key);
+        \$value = \$cached;
+
+        foreach (\$parts as \$part) {
+            \$value = \$value[\$part] ?? null;
+        }
+
+        if (\$value !== \$expected) {
+            \$problems[] = \$key . ' is "' . (\$value ?? 'null') . '" (expected "' . \$expected . '")';
+        }
+    }
+
+    if (! empty(\$problems)) {
+        // Delete the broken cache so the app falls back to .env
+        @unlink(\$cachePath);
+        echo json_encode(['success' => false, 'message' => 'Config cache had incorrect values — ' . implode('; ', \$problems) . '. Cache removed; the web server environment may be overriding .env values.']);
+        exit;
     }
 }
 
-echo json_encode(['success' => true, 'message' => 'Completed.']);
+\$done = (\$index + 1) >= count(\$commands);
+
+echo json_encode([
+    'success' => true,
+    'done' => \$done,
+    'message' => \$done ? 'Completed.' : "Ran {\$command} (" . (\$index + 1) . '/' . count(\$commands) . ').',
+]);
 OPTIMIZER_PHP;
 
         if (file_put_contents($optimizerPath, $script) === false) {
@@ -794,16 +831,40 @@ OPTIMIZER_PHP;
 
     /**
      * Prepare the optimizer endpoint. The actual commands (config:clear,
-     * package:discover, and the various *:cache steps) all run together in
-     * a single request against install-optimize.php via the browser JS,
-     * since they share the same "must run in a clean process" constraint —
-     * no need for a separate prepare + execute round trip per command.
+     * package:discover, and the various *:cache steps) run one at a time
+     * against install-optimize.php via the browser JS — the same "one
+     * request per unit of work" batching used for migrate/seed — since
+     * they share the "must run in a clean process" constraint.
+     *
+     * Deliberately does NOT mark installation complete here: that only
+     * happens once the browser confirms every optimize command actually
+     * succeeded (see taskOptimizeConfirm()). install-optimize.php runs as
+     * its own standalone process with no session access, so it cannot flag
+     * completion itself — the browser is the only thing that has seen the
+     * result of every optimize request.
      */
     private function taskOptimize(): void
     {
         $this->ensureOptimizerEndpoint();
+    }
 
-        // Mark installation as complete — this is the final install task.
+    /**
+     * Mark installation as complete. Called by the browser only after
+     * install-optimize.php has reported success for every optimize
+     * command — this is the final install task. If the browser never
+     * confirms (tab closed, network drop), 'optimize' simply never lands
+     * in completed_tasks and the whole task is retried from the top on the
+     * next visit to step 7, same as any other interrupted task; every
+     * optimize command is idempotent so re-running is safe.
+     *
+     * Trusts the browser's confirmation the same way every other install
+     * step trusts the session holder — install-optimize.php is a
+     * standalone, session-less script, so there's no stronger check
+     * available here, and whoever holds this session can already do
+     * anything the installer can do.
+     */
+    private function taskOptimizeConfirm(): void
+    {
         $_SESSION['installer']['install_complete'] = true;
     }
 

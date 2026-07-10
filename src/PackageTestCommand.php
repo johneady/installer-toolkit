@@ -341,12 +341,42 @@ abstract class PackageTestCommand extends Command
 
         if (array_key_exists($originalTask, self::CLEAN_PROCESS_TASKS)) {
             $commands = self::CLEAN_PROCESS_TASKS[$originalTask];
+            $optimizeDone = false;
 
-            $response = $client->get("/{$this->slug}/public/install-optimize.php?commands=".urlencode($commands).'&token='.urlencode($optimizeToken));
+            // install-optimize.php runs one command per request (mirroring
+            // migrate/seed batching) and reports 'done' once every command
+            // in the list has succeeded — poll it the same way extract/
+            // migrate/seed are polled above, driven by the server-reported
+            // 'done' flag rather than a locally precomputed command count,
+            // so this test actually exercises the same termination
+            // condition the real browser JS relies on.
+            for ($index = 0; $index < $maxIterations; $index++) {
+                $response = $client->get("/{$this->slug}/public/install-optimize.php?commands=".urlencode($commands).'&index='.$index.'&token='.urlencode($optimizeToken));
+                $json = $response->json();
+
+                if ($json === null || ! ($json['success'] ?? false)) {
+                    throw new RuntimeException("Optimize step '{$commands}' failed: ".($json['message'] ?? "HTTP {$response->status()}"));
+                }
+
+                if (($json['done'] ?? true) === true) {
+                    $optimizeDone = true;
+
+                    break;
+                }
+            }
+
+            if (! $optimizeDone) {
+                throw new RuntimeException("Optimize step '{$commands}' did not complete after {$maxIterations} polling attempts.");
+            }
+
+            // Only after every optimize command has succeeded does the
+            // browser (here, the test client) confirm completion — this is
+            // what actually flips install_complete server-side.
+            $response = $client->post("/install.php?step=7&task={$originalTask}_confirm");
             $json = $response->json();
 
             if ($json === null || ! ($json['success'] ?? false)) {
-                throw new RuntimeException("Optimize step '{$commands}' failed: ".($json['message'] ?? "HTTP {$response->status()}"));
+                throw new RuntimeException("Task '{$originalTask}_confirm' failed: ".($json['message'] ?? "HTTP {$response->status()}"));
             }
         }
     }
