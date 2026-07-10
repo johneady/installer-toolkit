@@ -17,6 +17,7 @@ function renderFatalErrorPage(Throwable $e): void
     }
 
     $version = defined('INSTALLER_VERSION') ? htmlspecialchars(INSTALLER_VERSION) : 'unknown';
+    $productName = defined('APP_NAME') ? htmlspecialchars(APP_NAME) : '';
     $phpVersion = htmlspecialchars(PHP_VERSION);
     $timestamp = date('Y-m-d H:i:s T');
     $url = htmlspecialchars($_SERVER['REQUEST_URI'] ?? '');
@@ -305,7 +306,10 @@ function renderFatalErrorPage(Throwable $e): void
             </div>
         </div>
 
-        <div class="footer">Application Installer v{$version} &mdash; <a href="https://support.powerphpscripts.com" target="_blank" rel="noopener noreferrer" style="color:#334155;">support.powerphpscripts.com</a></div>
+        <div class="footer">
+            <div style="font-size:.82rem; font-weight:700; color:#475569;">{$productName}</div>
+            <div>Application Installer v{$version} &mdash; <a href="https://support.powerphpscripts.com" target="_blank" rel="noopener noreferrer" style="color:#334155;">support.powerphpscripts.com</a></div>
+        </div>
     </div>
 
     <script>

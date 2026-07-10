@@ -66,6 +66,7 @@ $installerVersion = trim(file_get_contents($toolkitDir.'/VERSION'));
 $configBlock = implode("\n", [
     "define('ZIP_FILENAME', '{$zipFilename}');",
     "define('APP_FOLDER', '{$slug}');",
+    "define('APP_NAME', '".addslashes($config['name'])."');",
     "define('MIN_PHP_VERSION', '{$config['min_php_version']}');",
     "define('INSTALLER_VERSION', '{$installerVersion}');",
 ]);

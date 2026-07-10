@@ -263,6 +263,9 @@ trait HandlesRequests
         $db = $this->readDatabaseInput();
 
         if ($db['host'] === '' || $db['name'] === '' || $db['user'] === '') {
+            // Persist the submitted values so the form repopulates instead of
+            // blanking out — the suggested defaults only fill truly empty fields.
+            $_SESSION['installer']['db'] = $db;
             $this->errors[] = 'Please fill in all required database fields.';
             $this->renderStep(3);
 
@@ -272,6 +275,7 @@ trait HandlesRequests
         try {
             $this->connectToDatabase($db);
         } catch (PDOException $e) {
+            $_SESSION['installer']['db'] = $db;
             $this->errors[] = 'Database connection failed: '.$e->getMessage();
             $this->renderStep(3);
 

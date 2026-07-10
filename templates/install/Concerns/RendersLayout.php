@@ -123,6 +123,7 @@ trait RendersLayout
     private function renderLayout(string $title, string $content, int $currentStep): void
     {
         $headerStrip = $this->renderHeaderStrip($title, $currentStep);
+        $productName = htmlspecialchars(APP_NAME);
         $version = INSTALLER_VERSION;
 
         // Exposed globally so per-step inline scripts (DB/mail connection
@@ -238,7 +239,10 @@ trait RendersLayout
             {$content}
         </div>
 
-        <div class="h-footer">Application Installer v{$version}</div>
+        <div class="h-footer">
+            <div style="font-size:.82rem; font-weight:700; color:var(--h-ink);">{$productName}</div>
+            <div>Application Installer v{$version}</div>
+        </div>
     </div>
 
     <!-- Page Transition Overlay -->

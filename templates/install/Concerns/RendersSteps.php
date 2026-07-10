@@ -44,19 +44,24 @@ trait RendersSteps
 
     private function renderWelcome(): void
     {
-        $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
+        $appName = htmlspecialchars(APP_NAME);
+        $version = htmlspecialchars(INSTALLER_VERSION);
 
         $content = <<<HTML
-        <!-- Welcome Icon -->
-        <div style="display:flex; justify-content:center;">
-            <div class="h-success-icon" style="background:var(--h-accent); box-shadow:0 12px 30px -10px rgba(var(--h-shadow-accent), .5);">
-                <span style="font-size:32px;">🎉</span>
+        <!-- Welcome Hero -->
+        <div style="text-align:center;">
+            <div style="display:flex; justify-content:center;">
+                <div class="h-success-icon" style="background:var(--h-accent); box-shadow:0 12px 30px -10px rgba(var(--h-shadow-accent), .5);">
+                    <span style="font-size:32px;">🎉</span>
+                </div>
             </div>
+            <h2 style="font-size:2.1rem; font-weight:800; color:var(--h-ink); margin:18px 0 10px; letter-spacing:-0.02em; line-height:1.1;">{$appName}</h2>
+            <span style="display:inline-block; font-size:.74rem; font-weight:800; color:var(--h-accent); background:var(--h-accent-soft); border:1px solid var(--h-accent-soft-border); padding:5px 14px; border-radius:999px; text-transform:uppercase; letter-spacing:.08em;">Version {$version}</span>
         </div>
 
         <!-- Welcome Message -->
         <div class="h-success-head">
-            <h2 style="color:var(--h-ink);">Thank You for Your Purchase!</h2>
+            <h3 style="font-size:1.2rem; font-weight:700; color:var(--h-good); margin:0 0 6px;">Thank You for Your Purchase!</h3>
             <p>We're thrilled to have you on board. Let's get {$appName} up and running on your server.</p>
         </div>
 
@@ -197,10 +202,15 @@ HTML;
         $errors = $this->renderErrors();
         $db = $_SESSION['installer']['db'] ?? [];
 
-        $host = htmlspecialchars($db['host'] ?? 'localhost');
+        // A sanitized slug (MySQL-safe: lowercase, [a-z0-9_]) seeds the
+        // suggested database name and username. Only truly empty fields get
+        // the suggestion, so anything the user typed is preserved.
+        $dbBase = trim(preg_replace('/[^a-z0-9]+/', '_', strtolower(APP_FOLDER)), '_');
+
+        $host = htmlspecialchars(! empty($db['host']) ? $db['host'] : 'localhost');
         $port = htmlspecialchars($db['port'] ?? '3306');
-        $name = htmlspecialchars($db['name'] ?? '');
-        $user = htmlspecialchars($db['user'] ?? '');
+        $name = htmlspecialchars(! empty($db['name']) ? $db['name'] : $dbBase.'_db');
+        $user = htmlspecialchars(! empty($db['user']) ? $db['user'] : $dbBase.'_user');
         $pass = htmlspecialchars($db['pass'] ?? '');
 
         $content = <<<HTML
@@ -229,10 +239,12 @@ HTML;
                         <div class="h-field">
                             <label>Database Name <span class="req">*</span></label>
                             <input type="text" name="db_name" id="db_name" value="{$name}" required>
+                            <p class="hint">Suggested based on your app — change it if your database uses a different name.</p>
                         </div>
                         <div class="h-field">
                             <label>Database Username <span class="req">*</span></label>
                             <input type="text" name="db_user" id="db_user" value="{$user}" required>
+                            <p class="hint">Suggested based on your app — change it if your database user has a different name.</p>
                         </div>
                     </div>
                     <div class="h-field">
