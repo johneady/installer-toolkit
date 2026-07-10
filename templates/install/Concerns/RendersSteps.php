@@ -9,6 +9,9 @@ trait RendersSteps
     private function renderStep(int $step): void
     {
         switch ($step) {
+            case 0:
+                $this->renderWelcome();
+                break;
             case 1:
                 $this->renderEula();
                 break;
@@ -37,6 +40,37 @@ trait RendersSteps
                 $this->renderComplete();
                 break;
         }
+    }
+
+    private function renderWelcome(): void
+    {
+        $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
+
+        $content = <<<HTML
+        <!-- Welcome Icon -->
+        <div style="display:flex; justify-content:center;">
+            <div class="h-success-icon" style="background:var(--h-accent); box-shadow:0 12px 30px -10px rgba(var(--h-shadow-accent), .5);">
+                <span style="font-size:32px;">🎉</span>
+            </div>
+        </div>
+
+        <!-- Welcome Message -->
+        <div class="h-success-head">
+            <h2 style="color:var(--h-ink);">Thank You for Your Purchase!</h2>
+            <p>We're thrilled to have you on board. Let's get {$appName} up and running on your server.</p>
+        </div>
+
+        <p class="h-lede" style="text-align:center; max-width:480px; margin-left:auto; margin-right:auto;">
+            This wizard will walk you through just a few quick steps — reviewing the license, checking your server's requirements, connecting your database, configuring your application, and creating your admin account. It usually takes about 5 minutes.
+        </p>
+
+        <!-- Actions -->
+        <div class="h-actions end" style="border-top:none; padding-top:0;">
+            <a href="install.php?step=1" class="h-btn h-btn-primary">Get Started →</a>
+        </div>
+HTML;
+
+        $this->renderLayout('Welcome', $content, 0);
     }
 
     private function renderEula(): void

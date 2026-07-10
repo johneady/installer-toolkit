@@ -11,8 +11,8 @@ trait HandlesRequests
             $_SESSION['installer'] = [];
         }
 
-        $step = isset($_GET['step']) ? (int) $_GET['step'] : 1;
-        $step = max(1, min($this->totalSteps, $step));
+        $step = isset($_GET['step']) ? (int) $_GET['step'] : 0;
+        $step = max(0, min($this->totalSteps, $step));
 
         // Handle installation task reset (retry from scratch)
         if ($step === 7 && isset($_GET['reset']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
