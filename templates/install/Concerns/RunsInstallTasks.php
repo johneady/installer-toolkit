@@ -577,46 +577,46 @@ ENV;
      * Upper bound on how many migration files to run per HTTP request.
      *
      * Booting the framework — registering and booting every service
-     * provider — is by far the dominant cost of each request, measured at
-     * roughly 5x the cost of actually running one migration. Because every
-     * batched request is a fresh PHP process, bounding a request to only a
-     * few files makes N migrations cost roughly N/size full framework boots
-     * (which is why the wizard's migrate step is dramatically slower than a
-     * one-shot `migrate:fresh`). Amortising one boot across a larger batch
-     * collapses most of that overhead.
+     * provider — is by far the dominant cost of each request. Each batch is
+     * now run as a single `migrate` Artisan call (passing every file in the
+     * batch to `--path` at once, see runMigrateBatch()), so — unlike a naive
+     * one-`migrate`-call-per-file loop — the per-file cost within a batch is
+     * just the migration itself, not a repeated command dispatch. Amortising
+     * one boot *and* one command dispatch across a larger batch is what
+     * keeps the wizard's migrate step close to a one-shot `migrate:fresh`.
      *
-     * This is only a cap: runMigrateBatch() also stops as soon as a request
-     * has spent MAX_REQUEST_SECONDS running migrations, so a schema with a
-     * few slow migrations can never exceed a shared host's gateway timeout
-     * regardless of this value, while a fast schema packs many files into
-     * each (fewer, cheaper) request.
+     * This is only a cap on batch size — see MAX_REQUEST_SECONDS for the
+     * separate wall-clock guard against a batch of unusually slow
+     * migrations blowing a shared host's gateway timeout.
      */
     private const MIGRATIONS_PER_REQUEST = 50;
 
     /**
-     * Maximum wall-clock seconds a single migrate-batch request may spend
-     * (measured from request entry, so it covers the framework boot, the
-     * first request's db:wipe, and the migration loop — the whole request
-     * stays within this budget). Keeps every request well under the
-     * execution-time limit on even restrictive shared hosts, while letting
-     * fast schemas pack as many migrations as fit into the budget per
-     * request. Generous relative to typical 30s+ gateway timeouts to leave
-     * headroom for a slow framework boot.
+     * Maximum wall-clock seconds a single migrate-batch request is expected
+     * to spend, used only to shrink the *next* batch's size when the
+     * previous batch ran close to or over this budget — a single `migrate`
+     * call cannot be interrupted mid-flight once dispatched, so this can no
+     * longer stop a batch partway through the way it did when each file was
+     * its own command call. Generous relative to typical 30s+ gateway
+     * timeouts to leave headroom for a slow framework boot.
      */
     private const MAX_REQUEST_SECONDS = 15;
 
     /**
-     * Run a batch of pending migration files per call, across multiple HTTP
-     * requests, the same way runSeedBatch() steps through seeders. Each
-     * request reuses a single booted framework instance for the whole batch
-     * (see MIGRATIONS_PER_REQUEST) instead of paying one full framework
-     * boot per migration file, and stops early once MAX_REQUEST_SECONDS
-     * elapses so a slow schema can't blow a gateway timeout.
+     * Run a batch of pending migration files in a single `migrate` command
+     * call, across multiple HTTP requests, the same way runSeedBatch() steps
+     * through seeders. Every file in the batch is passed to one `--path`
+     * array so the whole batch pays for exactly one framework boot and one
+     * command dispatch (see MIGRATIONS_PER_REQUEST's docblock) — the
+     * migrator still runs each file in order and records its own batch
+     * number, identically to a plain `migrate`.
      *
      * The $requestStart is captured at request entry by the caller
      * (taskMigrate() passes it so the budget covers its boot + db:wipe too;
      * subsequent taskMigrateBatch() requests capture it here, before the
-     * boot below), so MAX_REQUEST_SECONDS bounds the entire request.
+     * boot below). Because one `migrate` call can't be stopped partway
+     * through, MAX_REQUEST_SECONDS is used to size the *next* batch rather
+     * than to break out of this one.
      */
     private function runMigrateBatch(?object $app = null, ?float $requestStart = null): void
     {
@@ -635,6 +635,7 @@ ENV;
         }
 
         $end = min($index + self::MIGRATIONS_PER_REQUEST, $total);
+        $batch = array_slice($files, $index, $end - $index);
 
         // Time from request entry: provided by taskMigrate() for the first
         // request (so the budget also covers the boot + db:wipe it already
@@ -647,43 +648,22 @@ ENV;
         // and subsequent migrate_batch requests boot exactly once here.
         $app ??= $this->bootLaravelKernel();
 
-        for ($i = $index; $i < $end; $i++) {
-            // Stop the batch early once we've used the per-request time
-            // budget, so a run of slow migrations can't exceed a shared
-            // host's gateway/execution-time limit. The cursor has already
-            // advanced past every file that actually ran, so the next
-            // request resumes exactly here — already-run migrations are
-            // no-ops, this just avoids re-evaluating them.
-            if ($i > $index && microtime(true) - $requestStart > self::MAX_REQUEST_SECONDS) {
-                break;
-            }
+        // Every file is an absolute path (migrations may live outside the
+        // app's own database/migrations — e.g. inside vendor/ for a package
+        // that registers its own migrations), so pass them through as-is
+        // with --realpath rather than reconstructing database/migrations-
+        // relative paths. Laravel's migrator merges and sorts all given
+        // paths and runs them under a single shared batch number, exactly
+        // as a plain `migrate` call would.
+        $this->runArtisanCommand('migrate', [
+            '--force' => true,
+            '--path' => $batch,
+            '--realpath' => true,
+        ], $app);
 
-            $file = $files[$i];
+        $_SESSION['installer']['migrate_index'] = $end;
 
-            // $file is an absolute path (it may live outside the app's own
-            // database/migrations — e.g. inside vendor/ for a package that
-            // registers its own migrations), so pass it through as-is with
-            // --realpath rather than reconstructing a database/migrations-
-            // relative path.
-            $this->runArtisanCommand('migrate', [
-                '--force' => true,
-                '--path' => $file,
-                '--realpath' => true,
-            ], $app);
-
-            // Advance the cursor after each successful file so a mid-batch
-            // failure (or a time-budget break) resumes from the next file
-            // on retry. Already-run migrations are no-ops (the migrator
-            // skips anything present in the migrations repository), so this
-            // is purely to avoid re-evaluating them.
-            $_SESSION['installer']['migrate_index'] = $i + 1;
-        }
-
-        // Derive progress from the cursor rather than the planned $end: a
-        // time-budget break may have processed fewer files than $end, and
-        // the cursor is the source of truth for where to resume.
-        $processedTo = $_SESSION['installer']['migrate_index'];
-        $done = $processedTo >= $total;
+        $done = $end >= $total;
 
         if ($done) {
             unset($_SESSION['installer']['migrate_files'], $_SESSION['installer']['migrate_index']);
@@ -693,7 +673,7 @@ ENV;
         echo json_encode([
             'success' => true,
             'migrate_done' => $done,
-            'message' => 'Migrated '.($index + 1)."-{$processedTo} of {$total}",
+            'message' => 'Migrated '.($index + 1)."-{$end} of {$total}",
         ]);
         exit;
     }
