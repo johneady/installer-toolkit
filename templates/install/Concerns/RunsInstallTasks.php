@@ -60,16 +60,20 @@ trait RunsInstallTasks
                     exit;
             }
 
-            // 'optimize' only reflects real completion once the browser has
+            // Batched tasks (migrate/seed, and mid-batch extract) exit()
+            // from inside their own batch loop before reaching this point,
+            // so they mark themselves complete via markTaskComplete() only
+            // once their final batch actually finishes — see
+            // runMigrateBatch()/runSeedBatch()/taskExtract(). 'optimize'
+            // likewise only reflects real completion once the browser has
             // confirmed every optimize command succeeded (optimize_confirm)
-            // — see taskOptimize()'s docblock. Recording it here instead,
-            // right after ensureOptimizerEndpoint() merely wrote the
-            // endpoint script, would mark the task (and its UI checkmark)
-            // done before any command has actually run.
+            // — see taskOptimize()'s docblock. Everything else that reaches
+            // here (extract's final call, bootstrap_files) completed within
+            // a single request and is recorded now.
             if ($task === 'optimize_confirm') {
-                $_SESSION['installer']['completed_tasks'][] = 'optimize';
-            } elseif ($task !== 'optimize') {
-                $_SESSION['installer']['completed_tasks'][] = $task;
+                $this->markTaskComplete('optimize');
+            } elseif (! in_array($task, ['optimize', 'migrate', 'migrate_batch', 'seed', 'seed_batch'], true)) {
+                $this->markTaskComplete($task);
             }
 
             echo json_encode(['success' => true, 'message' => 'Completed.']);
@@ -78,6 +82,20 @@ trait RunsInstallTasks
         }
 
         exit;
+    }
+
+    /**
+     * Record a task as completed, guarding against duplicate entries since
+     * some tasks (extract, migrate, seed) can reach this from more than
+     * one call path across their batched requests.
+     */
+    private function markTaskComplete(string $task): void
+    {
+        $completed = $_SESSION['installer']['completed_tasks'] ?? [];
+        if (! in_array($task, $completed, true)) {
+            $completed[] = $task;
+        }
+        $_SESSION['installer']['completed_tasks'] = $completed;
     }
 
     /**
@@ -301,7 +319,7 @@ APP_NAME="{$this->escapeEnvValue($settings['app_name'])}"
 APP_ENV=production
 APP_KEY={$appKey}
 APP_DEBUG=false
-APP_URL={$settings['app_url']}
+APP_URL="{$this->escapeEnvValue($settings['app_url'])}"
 
 LOG_CHANNEL=stack
 LOG_STACK=single
@@ -383,25 +401,38 @@ ENV;
     }
 
     /**
-     * Run an Artisan command safely, capturing output and preventing
-     * Laravel's exception handler from rendering HTML error pages.
+     * Boot Laravel and run its kernel bootstrap (registering + booting all
+     * service providers) exactly once, returning the booted app so callers
+     * that need more than one Artisan command in the same request (e.g.
+     * taskMigrate() wiping then enumerating migration paths) don't each pay
+     * for a separate full framework boot.
      */
-    private function runArtisanCommand(string $command, array $params = []): string
+    private function bootLaravelKernel(): object
     {
         $app = $this->bootstrapLaravel();
-        $kernel = $app->make(Kernel::class);
 
-        // Force the app to boot (registering + booting all service providers)
-        // now, rather than lazily on Kernel::call(). Consuming apps commonly
-        // guard destructive Artisan commands with
+        // Force the app to boot now, rather than lazily on Kernel::call().
+        // Consuming apps commonly guard destructive Artisan commands with
         // DB::prohibitDestructiveCommands(app()->isProduction()) from their
         // own AppServiceProvider::boot(). .env is deliberately written with
         // APP_ENV=production for a real deployment, so that guard becomes
         // active as soon as providers boot. The installer legitimately needs
         // to run db:wipe/migrate once here, before any real data exists, so
-        // lift the prohibition after boot but before the command runs.
-        $kernel->bootstrap();
+        // lift the prohibition after boot but before any command runs.
+        $app->make(Kernel::class)->bootstrap();
         DB::prohibitDestructiveCommands(false);
+
+        return $app;
+    }
+
+    /**
+     * Run an Artisan command safely, capturing output and preventing
+     * Laravel's exception handler from rendering HTML error pages.
+     */
+    private function runArtisanCommand(string $command, array $params = [], ?object $app = null): string
+    {
+        $app ??= $this->bootLaravelKernel();
+        $kernel = $app->make(Kernel::class);
 
         $output = new BufferedOutput;
 
@@ -428,26 +459,73 @@ ENV;
     }
 
     /**
-     * Prefix a raw task failure with a plain-English hint for the common
-     * failure classes an installer hits on shared hosting (bad DB
-     * credentials, missing extensions, permissions). The raw detail is
-     * always kept below the hint so a support ticket still has everything
-     * needed to diagnose anything this doesn't recognize. Called once, from
-     * handleInstallTask()'s catch block, so every task benefits regardless
-     * of which task method actually threw.
+     * Plain-English hints for the common failure classes an installer hits
+     * on shared hosting (bad DB credentials, missing extensions,
+     * permissions), keyed by the raw exception text patterns that indicate
+     * each cause. A rule matches when the raw message contains every
+     * pattern in its list (one pattern for a simple substring match; two
+     * for an AND-style compound match like the "Class ... not found" rule).
+     *
+     * This is the single authored copy — ensureOptimizerEndpoint() exports
+     * this same array into the generated install-optimize.php so the
+     * standalone optimizer process (which has no access to this trait, see
+     * its class docblock) shows identical hints instead of a hand-kept
+     * second copy that can drift out of sync.
+     *
+     * @var list<array{patterns: list<string>, hint: string}>
+     */
+    private const FAILURE_HINTS = [
+        ['patterns' => ['SQLSTATE[HY000] [2002]'], 'hint' => 'Could not reach the database server. Double-check the database host and port, and make sure the database server is running and accessible from this server.'],
+        ['patterns' => ['Connection refused'], 'hint' => 'Could not reach the database server. Double-check the database host and port, and make sure the database server is running and accessible from this server.'],
+        ['patterns' => ['SQLSTATE[HY000] [1045]'], 'hint' => 'The database username or password was rejected. Double-check the database credentials.'],
+        ['patterns' => ['Access denied for user'], 'hint' => 'The database username or password was rejected. Double-check the database credentials.'],
+        ['patterns' => ['SQLSTATE[HY000] [1049]'], 'hint' => 'The database name does not exist on the server. Create the database first, or check for a typo in the database name.'],
+        ['patterns' => ['Unknown database'], 'hint' => 'The database name does not exist on the server. Create the database first, or check for a typo in the database name.'],
+        ['patterns' => ['Permission denied'], 'hint' => 'The web server does not have permission to read or write a required file or directory. Check file ownership and permissions.'],
+        ['patterns' => ['failed to open stream'], 'hint' => 'The web server does not have permission to read or write a required file or directory. Check file ownership and permissions.'],
+        ['patterns' => ['Class', 'not found'], 'hint' => 'A required PHP class is missing, which usually means a Composer dependency did not get uploaded correctly. Try re-uploading the application package.'],
+    ];
+
+    /**
+     * Prefix a raw task failure with its FAILURE_HINTS hint, if any
+     * pattern matches. The raw detail is always kept below the hint so a
+     * support ticket still has everything needed to diagnose anything this
+     * doesn't recognize. Called once, from handleInstallTask()'s catch
+     * block, so every task benefits regardless of which task method
+     * actually threw.
      */
     private function describeTaskFailure(string $task, string $rawMessage): string
     {
-        $hint = match (true) {
-            str_contains($rawMessage, 'SQLSTATE[HY000] [2002]'), str_contains($rawMessage, 'Connection refused') => 'Could not reach the database server. Double-check the database host and port, and make sure the database server is running and accessible from this server.',
-            str_contains($rawMessage, 'SQLSTATE[HY000] [1045]'), str_contains($rawMessage, 'Access denied for user') => 'The database username or password was rejected. Double-check the database credentials.',
-            str_contains($rawMessage, 'SQLSTATE[HY000] [1049]'), str_contains($rawMessage, 'Unknown database') => 'The database name does not exist on the server. Create the database first, or check for a typo in the database name.',
-            str_contains($rawMessage, 'Permission denied'), str_contains($rawMessage, 'failed to open stream') => 'The web server does not have permission to read or write a required file or directory. Check file ownership and permissions.',
-            str_contains($rawMessage, 'Class') && str_contains($rawMessage, 'not found') => 'A required PHP class is missing, which usually means a Composer dependency did not get uploaded correctly. Try re-uploading the application package.',
-            default => null,
-        };
+        $hint = self::matchFailureHint($rawMessage, self::FAILURE_HINTS);
 
         return $hint !== null ? "{$hint} ({$rawMessage})" : $rawMessage;
+    }
+
+    /**
+     * Shared matcher for FAILURE_HINTS, used by describeTaskFailure() here
+     * and by the generated install-optimize.php's own copy of this method
+     * (see ensureOptimizerEndpoint()) — kept as a small, static, dependency-
+     * free function so it can be embedded verbatim in that standalone
+     * script without duplicating any matching logic, only this one call.
+     *
+     * @param  list<array{patterns: list<string>, hint: string}>  $hints
+     */
+    private static function matchFailureHint(string $rawMessage, array $hints): ?string
+    {
+        foreach ($hints as $rule) {
+            $allPatternsPresent = true;
+            foreach ($rule['patterns'] as $pattern) {
+                if (! str_contains($rawMessage, $pattern)) {
+                    $allPatternsPresent = false;
+                    break;
+                }
+            }
+            if ($allPatternsPresent) {
+                return $rule['hint'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -460,7 +538,13 @@ ENV;
      */
     private function taskMigrate(): void
     {
-        $this->runArtisanCommand('db:wipe', ['--force' => true]);
+        // Boot Laravel once and reuse it for db:wipe, migrator path
+        // enumeration, and the first migration below — each is a separate
+        // Artisan call, but they don't each need their own full framework
+        // boot (provider registration is the expensive part).
+        $app = $this->bootLaravelKernel();
+
+        $this->runArtisanCommand('db:wipe', ['--force' => true], $app);
 
         // Ask Laravel's own migrator for the full set of migration paths
         // rather than glob()'ing the app's database/migrations directory
@@ -469,8 +553,6 @@ ENV;
         // in a service provider — those live outside database/migrations
         // and a plain glob() would silently skip them, exactly the set
         // migrate:fresh used to pick up automatically.
-        $app = $this->bootstrapLaravel();
-        $app->make(Kernel::class)->bootstrap();
         $migrator = $app->make('migrator');
         $paths = array_merge($migrator->paths(), [__DIR__.'/'.APP_FOLDER.'/database/migrations']);
         $files = array_values($migrator->getMigrationFiles($paths));
@@ -478,7 +560,7 @@ ENV;
         $_SESSION['installer']['migrate_files'] = $files;
         $_SESSION['installer']['migrate_index'] = 0;
 
-        $this->runMigrateBatch();
+        $this->runMigrateBatch($app);
     }
 
     private function taskMigrateBatch(): void
@@ -490,13 +572,14 @@ ENV;
      * Run a single pending migration file per call, across multiple HTTP
      * requests, the same way runSeedBatch() steps through seeders.
      */
-    private function runMigrateBatch(): void
+    private function runMigrateBatch(?object $app = null): void
     {
         $files = $_SESSION['installer']['migrate_files'] ?? [];
         $index = $_SESSION['installer']['migrate_index'] ?? 0;
         $total = count($files);
 
         if ($index >= $total) {
+            $this->markTaskComplete('migrate');
             echo json_encode([
                 'success' => true,
                 'migrate_done' => true,
@@ -517,13 +600,14 @@ ENV;
             '--force' => true,
             '--path' => $file,
             '--realpath' => true,
-        ]);
+        ], $app);
 
         $_SESSION['installer']['migrate_index'] = $index + 1;
         $done = ($index + 1) >= $total;
 
         if ($done) {
             unset($_SESSION['installer']['migrate_files'], $_SESSION['installer']['migrate_index']);
+            $this->markTaskComplete('migrate');
         }
 
         echo json_encode([
@@ -599,6 +683,7 @@ ENV;
         $total = count($seedClasses);
 
         if ($seedIndex >= $total) {
+            $this->markTaskComplete('seed');
             echo json_encode([
                 'success' => true,
                 'seed_done' => true,
@@ -618,6 +703,10 @@ ENV;
 
         $_SESSION['installer']['seed_index'] = $seedIndex + 1;
         $done = ($seedIndex + 1) >= $total;
+
+        if ($done) {
+            $this->markTaskComplete('seed');
+        }
 
         echo json_encode([
             'success' => true,
@@ -649,6 +738,11 @@ ENV;
 
         $optimizerPath = __DIR__.'/'.APP_FOLDER.'/public/install-optimize.php';
         $token = $_SESSION['installer']['optimize_token'];
+
+        // Exported from the single authored copy (self::FAILURE_HINTS) so
+        // the standalone optimizer process below shows identical failure
+        // hints without a hand-kept second copy of the match logic.
+        $failureHintsExport = var_export(self::FAILURE_HINTS, true);
 
         $script = <<<OPTIMIZER_PHP
 <?php
@@ -695,19 +789,37 @@ if (\$index < 0 || \$index >= count(\$commands)) {
 
 \$command = \$commands[\$index];
 
-// Mirrors RunsInstallTasks::describeTaskFailure() — duplicated here because
-// this script runs as its own standalone PHP process (see the class
-// docblock above) with no access to the installer class's methods.
+// This hint table and matching logic are exported verbatim from
+// RunsInstallTasks::FAILURE_HINTS / matchFailureHint() at generation time
+// (see ensureOptimizerEndpoint()) — there is exactly one authored copy of
+// the rules; this standalone process (see the class docblock above) has no
+// access to the installer class's methods, so it gets a data copy instead
+// of a hand-kept second copy of the match logic.
+\$failureHints = {$failureHintsExport};
+
+function matchFailureHint(string \$rawMessage, array \$hints): ?string
+{
+    foreach (\$hints as \$rule) {
+        \$allPatternsPresent = true;
+        foreach (\$rule['patterns'] as \$pattern) {
+            if (! str_contains(\$rawMessage, \$pattern)) {
+                \$allPatternsPresent = false;
+                break;
+            }
+        }
+        if (\$allPatternsPresent) {
+            return \$rule['hint'];
+        }
+    }
+
+    return null;
+}
+
 function describeOptimizeFailure(string \$command, string \$rawMessage, ?int \$exitCode = null): string
 {
-    \$hint = match (true) {
-        str_contains(\$rawMessage, 'SQLSTATE[HY000] [2002]'), str_contains(\$rawMessage, 'Connection refused') => 'Could not reach the database server. Double-check the database host and port, and make sure the database server is running and accessible from this server.',
-        str_contains(\$rawMessage, 'SQLSTATE[HY000] [1045]'), str_contains(\$rawMessage, 'Access denied for user') => 'The database username or password was rejected. Double-check the database credentials.',
-        str_contains(\$rawMessage, 'SQLSTATE[HY000] [1049]'), str_contains(\$rawMessage, 'Unknown database') => 'The database name does not exist on the server. Create the database first, or check for a typo in the database name.',
-        str_contains(\$rawMessage, 'Permission denied'), str_contains(\$rawMessage, 'failed to open stream') => 'The web server does not have permission to read or write a required file or directory. Check file ownership and permissions.',
-        str_contains(\$rawMessage, 'Class') && str_contains(\$rawMessage, 'not found') => 'A required PHP class is missing, which usually means a Composer dependency did not get uploaded correctly. Try re-uploading the application package.',
-        default => null,
-    };
+    global \$failureHints;
+
+    \$hint = matchFailureHint(\$rawMessage, \$failureHints);
 
     \$detail = \$exitCode !== null
         ? "{\$command} failed (exit code {\$exitCode}): ".substr(\$rawMessage, 0, 500)

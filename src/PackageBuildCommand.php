@@ -86,7 +86,7 @@ abstract class PackageBuildCommand extends Command
         $this->newLine();
 
         $basePath = base_path();
-        $outputDir = base_path($this->option('output'));
+        $outputDir = $this->resolveOutputDir($this->option('output'));
         $stagingDir = storage_path('app/package-build-'.uniqid());
         $demoConfig = $this->config['demo'] ?? null;
 
@@ -501,9 +501,13 @@ abstract class PackageBuildCommand extends Command
 
     protected function formatBytes(int $bytes): string
     {
-        $units = ['B', 'KB', 'MB', 'GB'];
-        $factor = floor((strlen((string) $bytes) - 1) / 3);
+        if ($bytes <= 0) {
+            return '0.00 B';
+        }
 
-        return sprintf('%.2f %s', $bytes / pow(1024, $factor), $units[$factor] ?? 'TB');
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $factor = min((int) floor(log($bytes, 1024)), count($units) - 1);
+
+        return sprintf('%.2f %s', $bytes / pow(1024, $factor), $units[$factor]);
     }
 }

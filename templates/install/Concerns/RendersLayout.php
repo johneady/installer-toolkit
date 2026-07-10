@@ -158,6 +158,76 @@ trait RendersLayout
             var isDark = stored ? stored === 'dark' : prefersDark;
             document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         })();
+
+        // Shared "copy to clipboard" behavior for the app-key and cron-command
+        // copy buttons (cron and complete steps) — one definition so both stay
+        // in lockstep instead of carrying their own copies.
+        function initCopyButton(buttonId, sourceId) {
+            var btn = document.getElementById(buttonId);
+            var codeEl = document.getElementById(sourceId);
+            var originalLabel = btn.textContent;
+
+            function showCopied() {
+                btn.textContent = '✓ Copied!';
+                setTimeout(function() { btn.textContent = originalLabel; }, 2000);
+            }
+
+            function selectFallback() {
+                var range = document.createRange();
+                range.selectNodeContents(codeEl);
+                var selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                btn.textContent = 'Press Ctrl+C / Cmd+C to copy';
+                setTimeout(function() { btn.textContent = originalLabel; }, 3000);
+            }
+
+            btn.addEventListener('click', function() {
+                if (!navigator.clipboard) {
+                    selectFallback();
+                    return;
+                }
+                navigator.clipboard.writeText(codeEl.textContent).then(showCopied).catch(selectFallback);
+            });
+        }
+
+        // Shared "Test Connection" AJAX handler for the database (step 3)
+        // and mail (step 5) steps — identical request/response contract
+        // (POST the form to `${step}&action=test`, expect {success, message}),
+        // differing only in which form/button/result element and endpoint
+        // to use, and the fallback error copy.
+        function initTestConnectionButton(options) {
+            var btn = document.getElementById(options.buttonId);
+            var resultDiv = document.getElementById(options.resultId);
+            var form = document.getElementById(options.formId);
+            var originalLabel = btn.innerHTML;
+
+            btn.addEventListener('click', function() {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="h-spin">⏳</span> Testing...';
+                resultDiv.classList.add('h-hidden');
+
+                var formData = new FormData(form);
+
+                fetch(options.endpoint, { method: 'POST', body: formData })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        resultDiv.classList.remove('h-hidden');
+                        resultDiv.className = data.success ? 'h-alert h-alert-good' : 'h-alert h-alert-bad';
+                        resultDiv.innerHTML = '<div class="icon">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
+                            '<div><p class="t">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="d">' + data.message + '</p></div>';
+                        btn.disabled = false;
+                        btn.innerHTML = originalLabel;
+                    })
+                    .catch(function() {
+                        resultDiv.classList.remove('h-hidden');
+                        resultDiv.className = 'h-alert h-alert-bad';
+                        resultDiv.innerHTML = '<div class="icon">' + window.INSTALLER_ICONS.x + '</div><div><p class="t">Error</p><p class="d">' + options.errorMessage + '</p></div>';
+                        btn.disabled = false;
+                        btn.innerHTML = originalLabel;
+                    });
+            });
+        }
     </script>
 </head>
 <body class="h-body">

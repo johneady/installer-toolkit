@@ -17,13 +17,6 @@ class Installer
 
     private array $settingsSubSteps = [3, 4, 5, 6];
 
-    private array $settingsSubStepNames = [
-        3 => 'Database',
-        4 => 'Application',
-        5 => 'Email',
-        6 => 'Admin Account',
-    ];
-
     // [[INSTALLER_TRAITS]]
     // [[/INSTALLER_TRAITS]]
 }

@@ -70,10 +70,11 @@ $configBlock = implode("\n", [
     "define('INSTALLER_VERSION', '{$installerVersion}');",
 ]);
 
-$template = preg_replace(
+$template = replaceMarkerOrFail(
     '/\/\/ \[\[INSTALLER_CONFIG\]\].*?\/\/ \[\[\/INSTALLER_CONFIG\]\]/s',
     $configBlock,
-    $template
+    $template,
+    '[[INSTALLER_CONFIG]] marker in class.php'
 );
 
 $installerCssPath = $toolkitDir.'/templates/install/installer.css';
@@ -98,6 +99,8 @@ if ($cssReplaced !== 1) {
     echo "Error: Failed to substitute [[INSTALLER_CSS]] marker in Concerns/RendersLayout.php\n";
     exit(1);
 }
+// (preg_replace_callback has no direct equivalent in replaceMarkerOrFail's
+// preg_replace signature, so this one substitution stays inline.)
 
 $essentialSeeders = $config['essential_seeders'] ?? [];
 $sampleSeeders = $config['sample_seeders'] ?? [];
@@ -105,16 +108,18 @@ $sampleSeeders = $config['sample_seeders'] ?? [];
 $essentialArray = buildSeederArray($essentialSeeders);
 $sampleArray = buildSeederArray($sampleSeeders);
 
-$template = preg_replace(
+$template = replaceMarkerOrFail(
     '/private const ESSENTIAL_SEED_CLASSES = \[.*?\];/s',
     "private const ESSENTIAL_SEED_CLASSES = {$essentialArray};",
-    $template
+    $template,
+    'ESSENTIAL_SEED_CLASSES in Concerns/RunsInstallTasks.php'
 );
 
-$template = preg_replace(
+$template = replaceMarkerOrFail(
     '/private const SAMPLE_SEED_CLASSES = \[.*?\];/s',
     "private const SAMPLE_SEED_CLASSES = {$sampleArray};",
-    $template
+    $template,
+    'SAMPLE_SEED_CLASSES in Concerns/RunsInstallTasks.php'
 );
 
 file_put_contents($packageDir.'/install.php', $template);
@@ -135,6 +140,23 @@ echo "  Files generated in: {$packageDir}\n\n";
 echo "Next steps:\n";
 echo "  1. Run 'php artisan package:build' to create the distributable zip\n";
 echo "  2. Copy install.php + the zip to your distribution channel\n";
+
+/**
+ * Substitute a single marker/placeholder in $subject and fail loudly (rather
+ * than silently shipping a broken installer) if the pattern doesn't match
+ * exactly once.
+ */
+function replaceMarkerOrFail(string $pattern, string $replacement, string $subject, string $errorLabel): string
+{
+    $result = preg_replace($pattern, $replacement, $subject, 1, $count);
+
+    if ($count !== 1) {
+        echo "Error: Failed to substitute {$errorLabel}\n";
+        exit(1);
+    }
+
+    return $result;
+}
 
 function buildSeederArray(array $seeders): string
 {

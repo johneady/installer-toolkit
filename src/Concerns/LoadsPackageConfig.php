@@ -33,4 +33,15 @@ trait LoadsPackageConfig
 
         return null;
     }
+
+    /**
+     * Resolve an --output option value to an absolute directory: absolute
+     * paths pass through untouched (used by package:test to redirect the
+     * build into an isolated temp dir), relative paths resolve against the
+     * app's base path.
+     */
+    protected function resolveOutputDir(string $output): string
+    {
+        return str_starts_with($output, DIRECTORY_SEPARATOR) ? $output : base_path($output);
+    }
 }

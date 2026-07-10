@@ -27,14 +27,24 @@ trait ProvisionsSandboxEnvironment
     protected function locateFullZip(): string
     {
         $version = config('app.version');
-        $packagesDir = base_path($this->option('output')).'/packages';
-        $zipPath = "{$packagesDir}/{$this->slug}-v{$version}-full.zip";
+        $zipPath = "{$this->packagesDir()}/{$this->slug}-v{$version}-full.zip";
 
         if (! file_exists($zipPath)) {
             throw new RuntimeException("Expected built package not found: {$zipPath}. {$this->buildHint()}");
         }
 
         return $zipPath;
+    }
+
+    /**
+     * Directory the built zips are looked up in. Override in the concrete
+     * command to point elsewhere (package:test redirects a fresh build into
+     * an isolated temp dir). Relies on resolveOutputDir() from
+     * LoadsPackageConfig, which every command using this trait also uses.
+     */
+    protected function packagesDir(): string
+    {
+        return $this->resolveOutputDir($this->option('output')).'/packages';
     }
 
     /**

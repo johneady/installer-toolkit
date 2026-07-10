@@ -14,41 +14,31 @@ trait HandlesRequests
         $step = isset($_GET['step']) ? (int) $_GET['step'] : 0;
         $step = max(0, min($this->totalSteps, $step));
 
-        // Handle installation task reset (retry from scratch)
-        if ($step === 7 && isset($_GET['reset']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $_SESSION['installer']['completed_tasks'] = [];
-            unset($_SESSION['installer']['extract_offset']);
-            @unlink(__DIR__.'/.install-working.zip');
-            @unlink(__DIR__.'/'.APP_FOLDER.'/public/install-optimize.php');
-            echo json_encode(['success' => true]);
-            exit;
-        }
-
-        // Handle AJAX requests for step 7
-        if ($step === 7 && isset($_GET['task']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->handleInstallTask($_GET['task']);
+        // AJAX sub-actions are routed by name, not by which step they
+        // happen to live on — a step reorder must not silently break a
+        // test button or the install-task runner (see class docblock note
+        // on why the render/validate/post switches below are still keyed
+        // by step number: those genuinely are per-step).
+        if (isset($_GET['ajax']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->handleAjax($_GET['ajax']);
 
             return;
         }
 
-        // Handle AJAX database test
-        if ($step === 3 && isset($_GET['action']) && $_GET['action'] === 'test' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->handleDatabaseTest();
-
-            return;
-        }
-
-        // Handle AJAX mail test
-        if ($step === 5 && isset($_GET['action']) && $_GET['action'] === 'test' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->handleMailTest();
-
-            return;
-        }
-
-        // Already-installed guard — allow steps 7-8 through when the
-        // current session completed the installation (the .env now has an
-        // APP_KEY so isAlreadyInstalled() would trigger prematurely).
-        if ($this->isAlreadyInstalled() && empty($_SESSION['installer']['install_complete'])) {
+        // Already-installed guard — a fresh visitor (no installer progress
+        // in their session) hitting a site that already has an APP_KEY sees
+        // the "already installed" page. A session that reached step 7
+        // (taskGenerateEnv() writes APP_KEY well before install_complete is
+        // set at optimize_confirm) is mid-install, not a stranger arriving
+        // at a finished site, so it must keep passing through — otherwise a
+        // plain page reload during install/optimize traps the user on the
+        // already-installed screen with no way back into their own install.
+        // The install_complete check bounds this to the install run itself:
+        // 'admin' alone can outlive the session GC window on a completed
+        // install, and without it a stale-but-alive session would keep
+        // bypassing the already-installed screen on a live production site.
+        $inProgress = ! empty($_SESSION['installer']['admin']) && empty($_SESSION['installer']['install_complete']);
+        if (! $inProgress && $this->isAlreadyInstalled()) {
             $this->renderAlreadyInstalled();
 
             return;
@@ -69,6 +59,53 @@ trait HandlesRequests
     }
 
     // ========================================================================
+    // AJAX Dispatch
+    // ========================================================================
+
+    /**
+     * Routes AJAX sub-actions by name (?ajax=...) rather than by which step
+     * number they happen to be requested from — see run()'s comment above
+     * this dispatch for why that distinction matters.
+     */
+    private function handleAjax(string $action): void
+    {
+        switch ($action) {
+            case 'install-task':
+                $this->handleInstallTask($_GET['task'] ?? '');
+                break;
+            case 'install-reset':
+                $this->handleInstallReset();
+                break;
+            case 'db-test':
+                $this->handleDatabaseTest();
+                break;
+            case 'mail-test':
+                $this->handleMailTest();
+                break;
+            default:
+                header('Content-Type: application/json');
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Unknown AJAX action.']);
+                exit;
+        }
+    }
+
+    /**
+     * Reset installation task progress (retry from scratch) — clears the
+     * completed-task list and any batch cursors so step 7 restarts every
+     * task from the beginning.
+     */
+    private function handleInstallReset(): void
+    {
+        $_SESSION['installer']['completed_tasks'] = [];
+        unset($_SESSION['installer']['extract_offset']);
+        @unlink(__DIR__.'/.install-working.zip');
+        @unlink(__DIR__.'/'.APP_FOLDER.'/public/install-optimize.php');
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    // ========================================================================
     // Already-Installed Check
     // ========================================================================
 
@@ -81,7 +118,7 @@ trait HandlesRequests
 
         $envContent = file_get_contents($envFile);
 
-        return (bool) preg_match('/APP_KEY=base64:.+/', $envContent);
+        return (bool) preg_match('/^APP_KEY=base64:.+$/m', $envContent);
     }
 
     // ========================================================================
@@ -184,29 +221,50 @@ trait HandlesRequests
         exit;
     }
 
+    /**
+     * @return array{host: string, port: string, name: string, user: string, pass: string}
+     */
+    private function readDatabaseInput(): array
+    {
+        return [
+            'host' => trim($_POST['db_host'] ?? ''),
+            'port' => trim($_POST['db_port'] ?? '3306'),
+            'name' => trim($_POST['db_name'] ?? ''),
+            'user' => trim($_POST['db_user'] ?? ''),
+            'pass' => $_POST['db_pass'] ?? '',
+        ];
+    }
+
+    /**
+     * Open a PDO connection with the settings shared by the step-3 submit
+     * and its "Test Connection" AJAX button, so both validate the database
+     * identically instead of drifting apart.
+     *
+     * @param  array{host: string, port: string, name: string, user: string, pass: string}  $db
+     */
+    private function connectToDatabase(array $db): PDO
+    {
+        return new PDO(
+            "mysql:host={$db['host']};port={$db['port']};dbname={$db['name']}",
+            $db['user'],
+            $db['pass'],
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+        );
+    }
+
     private function handleDatabasePost(): void
     {
-        $host = trim($_POST['db_host'] ?? '');
-        $port = trim($_POST['db_port'] ?? '3306');
-        $name = trim($_POST['db_name'] ?? '');
-        $user = trim($_POST['db_user'] ?? '');
-        $pass = $_POST['db_pass'] ?? '';
+        $db = $this->readDatabaseInput();
 
-        if ($host === '' || $name === '' || $user === '') {
+        if ($db['host'] === '' || $db['name'] === '' || $db['user'] === '') {
             $this->errors[] = 'Please fill in all required database fields.';
             $this->renderStep(3);
 
             return;
         }
 
-        // Test connection
         try {
-            new PDO(
-                "mysql:host={$host};port={$port};dbname={$name}",
-                $user,
-                $pass,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
-            );
+            $this->connectToDatabase($db);
         } catch (PDOException $e) {
             $this->errors[] = 'Database connection failed: '.$e->getMessage();
             $this->renderStep(3);
@@ -214,13 +272,7 @@ trait HandlesRequests
             return;
         }
 
-        $_SESSION['installer']['db'] = [
-            'host' => $host,
-            'port' => $port,
-            'name' => $name,
-            'user' => $user,
-            'pass' => $pass,
-        ];
+        $_SESSION['installer']['db'] = $db;
 
         header('Location: install.php?step=4');
         exit;
@@ -230,24 +282,15 @@ trait HandlesRequests
     {
         header('Content-Type: application/json');
 
-        $host = trim($_POST['db_host'] ?? '');
-        $port = trim($_POST['db_port'] ?? '3306');
-        $name = trim($_POST['db_name'] ?? '');
-        $user = trim($_POST['db_user'] ?? '');
-        $pass = $_POST['db_pass'] ?? '';
+        $db = $this->readDatabaseInput();
 
-        if ($host === '' || $name === '' || $user === '') {
+        if ($db['host'] === '' || $db['name'] === '' || $db['user'] === '') {
             echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
             exit;
         }
 
         try {
-            $pdo = new PDO(
-                "mysql:host={$host};port={$port};dbname={$name}",
-                $user,
-                $pass,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
-            );
+            $pdo = $this->connectToDatabase($db);
             $version = $pdo->getAttribute(PDO::ATTR_SERVER_VERSION);
             echo json_encode(['success' => true, 'message' => "Connected successfully. MySQL version: {$version}"]);
         } catch (PDOException $e) {
@@ -269,6 +312,8 @@ trait HandlesRequests
         }
         if ($appUrl === '') {
             $this->errors[] = 'Application URL is required.';
+        } elseif (! filter_var($appUrl, FILTER_VALIDATE_URL) || ! preg_match('#^https?://#i', $appUrl)) {
+            $this->errors[] = 'Application URL must be a valid http:// or https:// URL.';
         }
         if ($timezone === '') {
             $this->errors[] = 'Timezone is required.';

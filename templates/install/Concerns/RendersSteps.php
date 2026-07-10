@@ -141,7 +141,7 @@ HTML;
                 </div>
                 <div class=\"body\">
                     <p class=\"t\">".count($passed).' requirement'.(count($passed) === 1 ? '' : 's').' met</p>
-                    <p class="d">'.implode(', ', array_map(fn ($r) => $r['name'], $passed)).'</p>
+                    <p class="d">'.htmlspecialchars(implode(', ', array_map(fn ($r) => $r['name'], $passed))).'</p>
                 </div>
                 <span class="badge">Passed</span>
             </div>';
@@ -149,13 +149,15 @@ HTML;
         foreach ($notPassed as $r) {
             $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning', 16);
             $rowClass = $r['critical'] ? 'bad' : 'warn';
+            $name = htmlspecialchars($r['name']);
+            $detail = htmlspecialchars($r['detail']);
             $items .= "<div class=\"h-reqrow {$rowClass}\">
                 <div class=\"icon\">
                     {$icon}
                 </div>
                 <div class=\"body\">
-                    <p class=\"t\">{$r['name']}</p>
-                    <p class=\"d\">{$r['detail']}</p>
+                    <p class=\"t\">{$name}</p>
+                    <p class=\"d\">{$detail}</p>
                 </div>
                 <span class=\"badge\">".($r['critical'] ? 'Critical' : 'Warning').'</span>
             </div>';
@@ -252,35 +254,12 @@ HTML;
             </div>
         </form>
         <script>
-            document.getElementById('test-db-btn').addEventListener('click', function() {
-                var btn = this;
-                var resultDiv = document.getElementById('db-test-result');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="h-spin">⏳</span> Testing...';
-                resultDiv.classList.add('h-hidden');
-
-                var formData = new FormData(document.getElementById('db-form'));
-
-                fetch('install.php?step=3&action=test', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    resultDiv.classList.remove('h-hidden');
-                    resultDiv.className = data.success ? 'h-alert h-alert-good' : 'h-alert h-alert-bad';
-                    resultDiv.innerHTML = '<div class="icon">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
-                        '<div><p class="t">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="d">' + data.message + '</p></div>';
-                    btn.disabled = false;
-                    btn.innerHTML = '<span>🔗</span> Test Connection';
-                })
-                .catch(function(err) {
-                    resultDiv.classList.remove('h-hidden');
-                    resultDiv.className = 'h-alert h-alert-bad';
-                    resultDiv.innerHTML = '<div class="icon">' + window.INSTALLER_ICONS.x + '</div><div><p class="t">Error</p><p class="d">An error occurred while testing the connection.</p></div>';
-                    btn.disabled = false;
-                    btn.innerHTML = '<span>🔗</span> Test Connection';
-                });
+            initTestConnectionButton({
+                buttonId: 'test-db-btn',
+                formId: 'db-form',
+                resultId: 'db-test-result',
+                endpoint: 'install.php?ajax=db-test',
+                errorMessage: 'An error occurred while testing the connection.'
             });
         </script>
 HTML;
@@ -473,35 +452,12 @@ HTML;
                 document.getElementById('mail-test-result').classList.add('h-hidden');
             });
 
-            document.getElementById('test-mail-btn').addEventListener('click', function() {
-                var btn = this;
-                var resultDiv = document.getElementById('mail-test-result');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="h-spin">⏳</span> Testing...';
-                resultDiv.classList.add('h-hidden');
-
-                var formData = new FormData(document.getElementById('mail-form'));
-
-                fetch('install.php?step=5&action=test', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    resultDiv.classList.remove('h-hidden');
-                    resultDiv.className = data.success ? 'h-alert h-alert-good' : 'h-alert h-alert-bad';
-                    resultDiv.innerHTML = '<div class="icon">' + (data.success ? window.INSTALLER_ICONS.check : window.INSTALLER_ICONS.x) + '</div>' +
-                        '<div><p class="t">' + (data.success ? 'Connection Successful' : 'Connection Failed') + '</p><p class="d">' + data.message + '</p></div>';
-                    btn.disabled = false;
-                    btn.innerHTML = '<span>🔗</span> Test Connection';
-                })
-                .catch(function(err) {
-                    resultDiv.classList.remove('h-hidden');
-                    resultDiv.className = 'h-alert h-alert-bad';
-                    resultDiv.innerHTML = '<div class="icon">' + window.INSTALLER_ICONS.x + '</div><div><p class="t">Error</p><p class="d">An error occurred while testing the mail connection.</p></div>';
-                    btn.disabled = false;
-                    btn.innerHTML = '<span>🔗</span> Test Connection';
-                });
+            initTestConnectionButton({
+                buttonId: 'test-mail-btn',
+                formId: 'mail-form',
+                resultId: 'mail-test-result',
+                endpoint: 'install.php?ajax=mail-test',
+                errorMessage: 'An error occurred while testing the mail connection.'
             });
         </script>
 HTML;
@@ -676,9 +632,7 @@ HTML;
 
         $optimizeToken = $_SESSION['installer']['optimize_token'];
 
-        $cleanProcessTasks = json_encode([
-            'optimize' => 'config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize',
-        ]);
+        $optimizeCommands = json_encode('config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize');
 
         $appFolder = APP_FOLDER;
         $xIcon = $this->statusIcon('x');
@@ -732,7 +686,7 @@ HTML;
         </div>
         <script>
             var tasks = {$tasksJson};
-            var cleanProcessTasks = {$cleanProcessTasks};
+            var optimizeCommands = {$optimizeCommands};
             var optimizeToken = '{$optimizeToken}';
             var currentTaskIndex = 0;
 
@@ -777,7 +731,7 @@ HTML;
                         setTaskState(el, 'pending');
                     });
                     updateProgress(0);
-                    fetch('install.php?step=7&reset=1', { method: 'POST' }).then(function() { runNextTask(); });
+                    fetch('install.php?ajax=install-reset', { method: 'POST' }).then(function() { runNextTask(); });
                 } else {
                     document.querySelectorAll('.task-item').forEach(function(el) {
                         if (el.dataset.status !== 'done') {
@@ -788,33 +742,17 @@ HTML;
                 }
             }
 
-            function runSeedBatch(el) {
+            // Shared driver for the migrate/seed "one unit of work per
+            // request" batch loops — they differ only in which AJAX task
+            // to call next and which JSON flag signals completion.
+            function runTaskBatch(el, batchTask, doneKey) {
                 setTaskState(el, 'active');
-                fetch('install.php?step=7&task=seed_batch', { method: 'POST' })
+                fetch('install.php?ajax=install-task&task=' + batchTask, { method: 'POST' })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        if (data.success && data.seed_done === false) {
+                        if (data.success && data[doneKey] === false) {
                             setTaskState(el, 'active', data.message);
-                            runSeedBatch(el);
-                        } else if (data.success) {
-                            handleTaskSuccess(el);
-                        } else {
-                            throw new Error(data.message);
-                        }
-                    })
-                    .catch(function(err) {
-                        handleTaskError(el, err.message);
-                    });
-            }
-
-            function runMigrateBatch(el) {
-                setTaskState(el, 'active');
-                fetch('install.php?step=7&task=migrate_batch', { method: 'POST' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        if (data.success && data.migrate_done === false) {
-                            setTaskState(el, 'active', data.message);
-                            runMigrateBatch(el);
+                            runTaskBatch(el, batchTask, doneKey);
                         } else if (data.success) {
                             handleTaskSuccess(el);
                         } else {
@@ -846,7 +784,7 @@ HTML;
                             runOptimizeBatch(el, commands, index + 1);
                             return;
                         }
-                        return fetch('install.php?step=7&task=optimize_confirm', { method: 'POST' }).then(parseJsonResponse);
+                        return fetch('install.php?ajax=install-task&task=optimize_confirm', { method: 'POST' }).then(parseJsonResponse);
                     })
                     .then(function(data) {
                         if (!data) {
@@ -899,14 +837,14 @@ HTML;
                 var el = document.querySelector('.task-item[data-task="' + task + '"]');
                 setTaskState(el, 'active');
 
-                if (cleanProcessTasks.hasOwnProperty(task)) {
-                    fetch('install.php?step=7&task=' + task, { method: 'POST' })
+                if (task === 'optimize') {
+                    fetch('install.php?ajax=install-task&task=' + task, { method: 'POST' })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) {
                                 throw new Error(data.message);
                             }
-                            runOptimizeBatch(el, cleanProcessTasks[task], 0);
+                            runOptimizeBatch(el, optimizeCommands, 0);
                         })
                         .catch(function(err) {
                             handleTaskError(el, err.message);
@@ -914,7 +852,7 @@ HTML;
                     return;
                 }
 
-                fetch('install.php?step=7&task=' + task, { method: 'POST' })
+                fetch('install.php?ajax=install-task&task=' + task, { method: 'POST' })
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (data.success && data.extract_done === false) {
@@ -923,10 +861,10 @@ HTML;
                             runNextTask();
                         } else if (data.success && data.seed_done === false) {
                             setTaskState(el, 'active', data.message);
-                            runSeedBatch(el);
+                            runTaskBatch(el, 'seed_batch', 'seed_done');
                         } else if (data.success && data.migrate_done === false) {
                             setTaskState(el, 'active', data.message);
-                            runMigrateBatch(el);
+                            runTaskBatch(el, 'migrate_batch', 'migrate_done');
                         } else if (data.success) {
                             handleTaskSuccess(el);
                         } else {
@@ -980,35 +918,6 @@ HTML;
             </div>
         </div>
         <script>
-            function initCopyButton(buttonId, sourceId) {
-                var btn = document.getElementById(buttonId);
-                var codeEl = document.getElementById(sourceId);
-                var originalLabel = btn.textContent;
-
-                function showCopied() {
-                    btn.textContent = '✓ Copied!';
-                    setTimeout(function() { btn.textContent = originalLabel; }, 2000);
-                }
-
-                function selectFallback() {
-                    var range = document.createRange();
-                    range.selectNodeContents(codeEl);
-                    var selection = window.getSelection();
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    btn.textContent = 'Press Ctrl+C / Cmd+C to copy';
-                    setTimeout(function() { btn.textContent = originalLabel; }, 3000);
-                }
-
-                btn.addEventListener('click', function() {
-                    if (!navigator.clipboard) {
-                        selectFallback();
-                        return;
-                    }
-                    navigator.clipboard.writeText(codeEl.textContent).then(showCopied).catch(selectFallback);
-                });
-            }
-
             initCopyButton('copy-cron-btn', 'cron-command');
         </script>
 
@@ -1099,11 +1008,13 @@ HTML;
 
         $selfDeleteScript = __DIR__.'/_cleanup.php';
         $loginUrl = rtrim($appUrl, '/').'/login';
-        file_put_contents($selfDeleteScript, '<?php @unlink(__DIR__ . "/install.php"); @unlink(__DIR__ . "/'.APP_FOLDER.'/public/install-optimize.php"); @unlink(__FILE__); header("Location: '.$loginUrl.'"); exit;');
+        $loginUrlLiteral = var_export($loginUrl, true);
+        file_put_contents($selfDeleteScript, '<?php @unlink(__DIR__ . "/install.php"); @unlink(__DIR__ . "/'.APP_FOLDER.'/public/install-optimize.php"); @unlink(__FILE__); header("Location: " . '.$loginUrlLiteral.'); exit;');
 
         $cleanupUrl = htmlspecialchars(dirname($_SERVER['SCRIPT_NAME']).'/_cleanup.php');
         $cleanupUrl = str_replace('//', '/', $cleanupUrl);
 
+        $appUrlDisplay = htmlspecialchars($appUrl);
         $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
         $bigCheckIcon = $this->statusIcon('check', 32);
 
@@ -1130,7 +1041,7 @@ HTML;
                 <span class="icon">🔗</span>
                 <div>
                     <p class="t">Admin Login</p>
-                    <a href="{$cleanupUrl}">{$appUrl}/login</a>
+                    <a href="{$cleanupUrl}">{$appUrlDisplay}/login</a>
                 </div>
             </div>
             <div class="row">
@@ -1166,35 +1077,6 @@ HTML;
             </div>
         </div>
         <script>
-            function initCopyButton(buttonId, sourceId) {
-                var btn = document.getElementById(buttonId);
-                var codeEl = document.getElementById(sourceId);
-                var originalLabel = btn.textContent;
-
-                function showCopied() {
-                    btn.textContent = '✓ Copied!';
-                    setTimeout(function() { btn.textContent = originalLabel; }, 2000);
-                }
-
-                function selectFallback() {
-                    var range = document.createRange();
-                    range.selectNodeContents(codeEl);
-                    var selection = window.getSelection();
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    btn.textContent = 'Press Ctrl+C / Cmd+C to copy';
-                    setTimeout(function() { btn.textContent = originalLabel; }, 3000);
-                }
-
-                btn.addEventListener('click', function() {
-                    if (!navigator.clipboard) {
-                        selectFallback();
-                        return;
-                    }
-                    navigator.clipboard.writeText(codeEl.textContent).then(showCopied).catch(selectFallback);
-                });
-            }
-
             initCopyButton('copy-key-btn', 'app-key-value');
         </script>
 

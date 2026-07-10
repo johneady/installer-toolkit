@@ -5,6 +5,7 @@ namespace InstallerToolkit;
 use GuzzleHttp\Cookie\CookieJar;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use InstallerToolkit\Concerns\LoadsPackageConfig;
 use InstallerToolkit\Concerns\ProvisionsSandboxEnvironment;
@@ -17,7 +18,7 @@ abstract class PackageTestCommand extends Command
     use ProvisionsSandboxEnvironment;
 
     protected $signature = 'package:test
-        {--output=package : Output directory package:build wrote packages/ into}
+        {--output=package : Directory whose packages/ holds the prebuilt zip when --skip-build is used (a normal run builds into an isolated temp dir instead)}
         {--toolkit=~/php/installer-toolkit : Path to the installer-toolkit directory}
         {--keep : Leave the temp server dir and Docker container running for debugging}
         {--skip-build : Skip running package:build; reuse the most recent packages/*-full.zip}
@@ -41,7 +42,7 @@ abstract class PackageTestCommand extends Command
      * Tasks that run via the standalone install-optimize.php endpoint,
      * mapped to the comma-separated Artisan command list it invokes. Must be
      * kept in sync with templates/install/Concerns/RendersSteps.php's
-     * $cleanProcessTasks array.
+     * $optimizeCommands string.
      */
     protected const CLEAN_PROCESS_TASKS = [
         'optimize' => 'config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize',
@@ -50,6 +51,13 @@ abstract class PackageTestCommand extends Command
     protected string $slug;
 
     protected array $config;
+
+    /**
+     * Where this run's package:build writes its zips — an isolated temp dir,
+     * so a test run never overwrites the real distributables in the
+     * --output directory. Null until handle() assigns it.
+     */
+    protected ?string $buildOutputDir = null;
 
     protected string $testAdminEmail = 'test-admin@example.test';
 
@@ -68,6 +76,7 @@ abstract class PackageTestCommand extends Command
         $runId = uniqid();
         $this->mysqlContainerName = "installer-toolkit-test-{$this->slug}-{$runId}";
         $this->tempDir = storage_path("app/package-test-{$runId}");
+        $this->buildOutputDir = storage_path("app/package-test-{$runId}-build");
 
         try {
             $this->runBuild();
@@ -98,6 +107,9 @@ abstract class PackageTestCommand extends Command
 
             return self::SUCCESS;
         } catch (Throwable $e) {
+            // A task progress line may still be open (dots, no trailing
+            // newline) — terminate it so the error starts on its own line.
+            $this->newLine();
             $this->error('package:test failed: '.$e->getMessage());
 
             return self::FAILURE;
@@ -114,9 +126,9 @@ abstract class PackageTestCommand extends Command
             return;
         }
 
-        $this->info('Building package via package:build...');
+        $this->info("Building package via package:build (isolated output: {$this->buildOutputDir})...");
         $exitCode = $this->call('package:build', [
-            '--output' => $this->option('output'),
+            '--output' => $this->buildOutputDir,
             '--toolkit' => $this->option('toolkit'),
         ]);
 
@@ -128,6 +140,20 @@ abstract class PackageTestCommand extends Command
     protected function buildHint(): string
     {
         return 'Run package:build first, or omit --skip-build.';
+    }
+
+    /**
+     * A normal run looks up the zip in this run's isolated build dir, so the
+     * real distributables under --output are never touched; --skip-build
+     * deliberately reuses the prebuilt zip from --output instead.
+     */
+    protected function packagesDir(): string
+    {
+        if ($this->option('skip-build')) {
+            return $this->resolveOutputDir($this->option('output')).'/packages';
+        }
+
+        return $this->buildOutputDir.'/packages';
     }
 
     protected function mysqlCredentials(): array
@@ -145,6 +171,10 @@ abstract class PackageTestCommand extends Command
         $deadline = microtime(true) + 10;
 
         while (microtime(true) < $deadline) {
+            if (! $this->serverProcess?->isRunning()) {
+                throw new RuntimeException('PHP built-in server failed to start: '.$this->serverProcess?->getErrorOutput());
+            }
+
             try {
                 $client->get('/install.php');
 
@@ -162,10 +192,13 @@ abstract class PackageTestCommand extends Command
      */
     protected function runWizard(PendingRequest $client, array $mysql, string $baseUri): void
     {
+        $this->line('  Step 1/6: accepting EULA');
         $this->postStep($client, 1, ['accept_eula' => '1'], 2);
 
+        $this->line('  Step 2/6: checking server requirements');
         $this->postStep($client, 2, [], 3);
 
+        $this->line('  Step 3/6: configuring database connection');
         $this->postStep($client, 3, [
             'db_host' => $mysql['host'],
             'db_port' => (string) $mysql['port'],
@@ -174,6 +207,7 @@ abstract class PackageTestCommand extends Command
             'db_pass' => $mysql['pass'],
         ], 4);
 
+        $this->line('  Step 4/6: setting application options');
         $this->postStep($client, 4, [
             'app_name' => $this->config['name'],
             'app_url' => $baseUri,
@@ -181,10 +215,12 @@ abstract class PackageTestCommand extends Command
             'sample_data' => $this->sampleDataMode,
         ], 5);
 
+        $this->line('  Step 5/6: configuring mail');
         $this->postStep($client, 5, [
             'mail_mailer' => 'log',
         ], 6);
 
+        $this->line('  Step 6/6: creating admin account');
         $this->postStep($client, 6, [
             'admin_first_name' => 'Test',
             'admin_last_name' => 'Admin',
@@ -195,16 +231,19 @@ abstract class PackageTestCommand extends Command
 
         $this->runInstallTasks($client);
 
+        $this->line('  Step 8: verifying cron setup page');
         $response = $client->get('/install.php?step=8');
         if ($response->status() !== 200) {
             throw new RuntimeException("Expected step 8 (cron) to return 200, got {$response->status()}.");
         }
 
+        $this->line('  Step 9: verifying completion page');
         $response = $client->get('/install.php?step=9');
         if ($response->status() !== 200) {
             throw new RuntimeException("Expected step 9 (complete) to return 200, got {$response->status()}.");
         }
 
+        $this->line('  Verifying installer self-cleanup');
         $zipFilename = "{$this->slug}.zip";
         if (file_exists($this->tempDir.'/'.$zipFilename)) {
             throw new RuntimeException('install.php did not clean up the application zip after completion.');
@@ -236,7 +275,7 @@ abstract class PackageTestCommand extends Command
         if ($step === 2) {
             $body = $client->get("/install.php?step={$step}")->body();
 
-            if (preg_match_all('/<h4[^>]*>([^<]+)<\/h4>\s*<p[^>]*>([^<]+)<\/p>\s*<span[^>]*>(Critical|Warning)<\/span>/', $body, $matches, PREG_SET_ORDER)) {
+            if (preg_match_all('/<p class="t">([^<]+)<\/p>\s*<p class="d">([^<]+)<\/p>\s*<span class="badge">(Critical|Warning)<\/span>/', $body, $matches, PREG_SET_ORDER)) {
                 $failing = array_filter($matches, fn ($m) => $m[3] === 'Critical');
 
                 if (! empty($failing)) {
@@ -259,6 +298,8 @@ abstract class PackageTestCommand extends Command
         }
 
         $optimizeToken = $matches[1];
+
+        $this->line('  Step 7: running install tasks');
 
         foreach (self::TASK_SEQUENCE as $task) {
             $this->runInstallTask($client, $task, $optimizeToken);
@@ -288,6 +329,10 @@ abstract class PackageTestCommand extends Command
         $maxIterations = 500;
         $originalTask = $task;
         $completed = false;
+        $startedAt = microtime(true);
+        $requestCount = 0;
+
+        $this->output->write("    {$originalTask} ");
 
         for ($i = 0; $i < $maxIterations; $i++) {
             // Install tasks run real Artisan commands (migrate, db:seed,
@@ -296,7 +341,9 @@ abstract class PackageTestCommand extends Command
             // here rather than raising it for the whole client. Apps with a
             // large migration count (200+) can take several minutes to
             // migrate in total.
-            $response = $client->timeout(300)->post("/install.php?step=7&task={$task}");
+            $response = $client->timeout(300)->post("/install.php?ajax=install-task&task={$task}");
+            $requestCount++;
+            $this->output->write('.');
             $json = $response->json();
 
             if ($json === null) {
@@ -352,6 +399,8 @@ abstract class PackageTestCommand extends Command
             // condition the real browser JS relies on.
             for ($index = 0; $index < $maxIterations; $index++) {
                 $response = $client->get("/{$this->slug}/public/install-optimize.php?commands=".urlencode($commands).'&index='.$index.'&token='.urlencode($optimizeToken));
+                $requestCount++;
+                $this->output->write('.');
                 $json = $response->json();
 
                 if ($json === null || ! ($json['success'] ?? false)) {
@@ -372,13 +421,21 @@ abstract class PackageTestCommand extends Command
             // Only after every optimize command has succeeded does the
             // browser (here, the test client) confirm completion — this is
             // what actually flips install_complete server-side.
-            $response = $client->post("/install.php?step=7&task={$originalTask}_confirm");
+            $response = $client->post("/install.php?ajax=install-task&task={$originalTask}_confirm");
+            $requestCount++;
             $json = $response->json();
 
             if ($json === null || ! ($json['success'] ?? false)) {
                 throw new RuntimeException("Task '{$originalTask}_confirm' failed: ".($json['message'] ?? "HTTP {$response->status()}"));
             }
         }
+
+        $this->output->writeln(sprintf(
+            ' done (%d request%s, %.1fs)',
+            $requestCount,
+            $requestCount === 1 ? '' : 's',
+            microtime(true) - $startedAt,
+        ));
     }
 
     /**
@@ -438,11 +495,16 @@ abstract class PackageTestCommand extends Command
 
         if ($this->option('keep')) {
             $this->warn("Kept temp install dir for debugging: {$this->tempDir}");
+            $this->warn("Kept isolated build dir for debugging: {$this->buildOutputDir}");
             $this->warn("MySQL container left running: {$this->mysqlContainerName} (docker stop {$this->mysqlContainerName} when done)");
 
             return;
         }
 
         $this->teardownSandboxEnvironment();
+
+        if ($this->buildOutputDir !== null && is_dir($this->buildOutputDir)) {
+            File::deleteDirectory($this->buildOutputDir);
+        }
     }
 }

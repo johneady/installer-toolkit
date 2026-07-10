@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use InstallerToolkit\PackageTestCommand;
 use InstallerToolkit\Tests\Fixtures\FakePackageTestCommand;
 use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\NullOutput;
 
 function fakeTestCommand(array $config = []): FakePackageTestCommand
@@ -72,6 +73,51 @@ test('findFreePort returns distinct ports across calls', function () {
     ];
 
     expect(array_unique($ports))->toHaveCount(3);
+});
+
+test('runBuild builds into the isolated temp dir, not the real --output dir', function () {
+    $command = fakeTestCommand()->withInput()->withBuildOutputDir('/tmp/fake-isolated-build');
+
+    $command->callProtected('runBuild');
+
+    expect($command->recordedCalls)->toHaveCount(1)
+        ->and($command->recordedCalls[0][0])->toBe('package:build')
+        ->and($command->recordedCalls[0][1]['--output'])->toBe('/tmp/fake-isolated-build');
+});
+
+test('locateFullZip reads from the isolated build dir on a normal run', function () {
+    config(['app.version' => '9.9.9']);
+    $buildDir = storage_path('app/isolated-build-'.uniqid());
+    File::ensureDirectoryExists($buildDir.'/packages');
+    touch($buildDir.'/packages/fake-app-v9.9.9-full.zip');
+
+    $command = fakeTestCommand()->withInput()->withBuildOutputDir($buildDir);
+
+    expect($command->callProtected('locateFullZip'))
+        ->toBe($buildDir.'/packages/fake-app-v9.9.9-full.zip');
+});
+
+test('locateFullZip reads from --output when --skip-build is used', function () {
+    config(['app.version' => '9.9.9']);
+    File::ensureDirectoryExists(base_path('package/packages'));
+    touch(base_path('package/packages/fake-app-v9.9.9-full.zip'));
+
+    $command = fakeTestCommand()->withInput(['--skip-build' => true]);
+
+    expect($command->callProtected('locateFullZip'))
+        ->toBe(base_path('package').'/packages/fake-app-v9.9.9-full.zip');
+
+    File::deleteDirectory(base_path('package/packages'));
+});
+
+test('teardown deletes the isolated build dir', function () {
+    $buildDir = storage_path('app/isolated-build-'.uniqid());
+    File::ensureDirectoryExists($buildDir);
+
+    $command = fakeTestCommand()->withInput()->withBuildOutputDir($buildDir);
+    $command->callProtected('teardown');
+
+    expect(is_dir($buildDir))->toBeFalse();
 });
 
 test('TASK_SEQUENCE matches the task list install.php drives', function () {
@@ -147,6 +193,24 @@ test('runInstallTask switches to seed_batch after the first seed response', func
         ->and($requestedUrls[0])->not->toContain('task=seed_batch')
         ->and($requestedUrls[1])->toContain('task=seed_batch')
         ->and($requestedUrls[2])->toContain('task=seed_batch');
+});
+
+test('runInstallTask reports task progress with one dot per request and a summary line', function () {
+    Http::fake([
+        '*/install.php*' => Http::sequence()
+            ->push(['success' => true, 'extract_done' => false, 'message' => '50%'])
+            ->push(['success' => true, 'extract_done' => false, 'message' => '90%'])
+            ->push(['success' => true, 'extract_done' => true, 'message' => 'done']),
+    ]);
+
+    $buffer = new BufferedOutput;
+    $command = (new FakePackageTestCommand)->withConfig([]);
+    $command->setOutput(new OutputStyle(new ArrayInput([]), $buffer));
+
+    $client = Http::baseUrl('http://127.0.0.1:0');
+    $command->callProtected('runInstallTask', $client, 'extract', 'deadbeef');
+
+    expect($buffer->fetch())->toMatch('/extract \.\.\. done \(3 requests, \d+\.\ds\)/');
 });
 
 test('runInstallTask throws with the server message when a task fails', function () {
