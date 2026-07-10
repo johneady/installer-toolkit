@@ -88,6 +88,9 @@ trait HandlesRequests
             case 'mail-test':
                 $this->handleMailTest();
                 break;
+            case 'mod-rewrite':
+                $this->handleModRewriteCheck();
+                break;
             default:
                 header('Content-Type: application/json');
                 http_response_code(400);
@@ -224,6 +227,31 @@ trait HandlesRequests
 
         $_SESSION['installer']['requirements_passed'] = true;
         header('Location: install.php?step=3');
+        exit;
+    }
+
+    /**
+     * Async counterpart to the requirements screen's mod_rewrite row: runs
+     * the (potentially slow) self-HTTP rewrite probe in the background and
+     * returns the rendered row, so the page can load instantly and fill the
+     * result in once it resolves. See renderRequirements() / checkModRewrite().
+     */
+    private function handleModRewriteCheck(): void
+    {
+        header('Content-Type: application/json');
+
+        $modRewrite = $this->checkModRewrite();
+
+        echo json_encode([
+            'html' => $this->renderRequirementRow([
+                'name' => 'Apache mod_rewrite',
+                'detail' => $modRewrite['passed']
+                    ? $modRewrite['detail']
+                    : $modRewrite['detail'].' If enabled: clean, SEO-friendly URLs without index.php in the path.',
+                'passed' => $modRewrite['passed'],
+                'critical' => false,
+            ]),
+        ]);
         exit;
     }
 

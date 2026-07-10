@@ -59,7 +59,11 @@ test('bin/build injects the app name and produces a syntactically valid install.
         ->and($source)->toContain("\$dbBase.'_user'")
         // The footer leads with the product name, installer version beneath.
         ->and($source)->toContain('{$productName}')
-        ->and($source)->toContain('Application Installer v{$version}');
+        ->and($source)->toContain('Application Installer v{$version}')
+        // mod_rewrite is checked asynchronously, so the checking row and its
+        // AJAX endpoint must both be present in the assembled installer.
+        ->and($source)->toContain('id="mod-rewrite-row"')
+        ->and($source)->toContain('ajax=mod-rewrite');
 
     File::deleteDirectory($projectDir);
 });

@@ -57,16 +57,11 @@ trait ChecksRequirements
             'critical' => true,
         ];
 
-        // mod_rewrite check
-        $modRewrite = $this->checkModRewrite();
-        $results[] = [
-            'name' => 'Apache mod_rewrite',
-            'detail' => $modRewrite['passed']
-                ? $modRewrite['detail']
-                : $modRewrite['detail'].' If enabled: clean, SEO-friendly URLs without index.php in the path.',
-            'passed' => $modRewrite['passed'],
-            'critical' => false, // warning only
-        ];
+        // mod_rewrite is intentionally NOT checked here: on PHP-FPM/CGI hosts
+        // (where apache_get_modules() is unavailable) its self-HTTP probe can
+        // take several seconds, which would block the whole requirements page.
+        // It is verified asynchronously instead — see renderRequirements() and
+        // the ?ajax=mod-rewrite endpoint. It is non-critical (warning only).
 
         // Writable directory — verified with a real write test, not just
         // is_writable(), which can report false positives on hosts with

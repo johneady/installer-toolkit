@@ -45,7 +45,6 @@ trait RendersSteps
     private function renderWelcome(): void
     {
         $appName = htmlspecialchars(APP_NAME);
-        $version = htmlspecialchars(INSTALLER_VERSION);
 
         $content = <<<HTML
         <!-- Welcome Hero -->
@@ -56,12 +55,11 @@ trait RendersSteps
                 </div>
             </div>
             <h2 style="font-size:2.1rem; font-weight:800; color:var(--h-ink); margin:18px 0 10px; letter-spacing:-0.02em; line-height:1.1;">{$appName}</h2>
-            <span style="display:inline-block; font-size:.74rem; font-weight:800; color:var(--h-accent); background:var(--h-accent-soft); border:1px solid var(--h-accent-soft-border); padding:5px 14px; border-radius:999px; text-transform:uppercase; letter-spacing:.08em;">Version {$version}</span>
         </div>
 
         <!-- Welcome Message -->
         <div class="h-success-head">
-            <h3 style="font-size:1.2rem; font-weight:700; color:var(--h-good); margin:0 0 6px;">Thank You for Your Purchase!</h3>
+            <h3 style="font-size:1.2rem; font-weight:700; color:var(--h-good); margin:0 0 6px;">Thank You for Your Support!</h3>
             <p>We're thrilled to have you on board. Let's get {$appName} up and running on your server.</p>
         </div>
 
@@ -152,21 +150,24 @@ HTML;
             </div>';
         }
         foreach ($notPassed as $r) {
-            $icon = $this->statusIcon($r['critical'] ? 'x' : 'warning', 16);
-            $rowClass = $r['critical'] ? 'bad' : 'warn';
-            $name = htmlspecialchars($r['name']);
-            $detail = htmlspecialchars($r['detail']);
-            $items .= "<div class=\"h-reqrow {$rowClass}\">
-                <div class=\"icon\">
-                    {$icon}
-                </div>
-                <div class=\"body\">
-                    <p class=\"t\">{$name}</p>
-                    <p class=\"d\">{$detail}</p>
-                </div>
-                <span class=\"badge\">".($r['critical'] ? 'Critical' : 'Warning').'</span>
-            </div>';
+            $items .= $this->renderRequirementRow($r);
         }
+
+        // mod_rewrite is verified with a self-HTTP-request that can take
+        // several seconds on PHP-FPM hosts (where apache_get_modules() is
+        // unavailable), so it is checked asynchronously after the page
+        // loads rather than blocking the whole requirements screen. It is
+        // non-critical, so the Continue button does not wait on it.
+        $items .= <<<'HTML'
+        <div class="h-reqrow" id="mod-rewrite-row">
+            <div class="icon"><span class="h-spin">⏳</span></div>
+            <div class="body">
+                <p class="t">Apache mod_rewrite</p>
+                <p class="d">Checking…</p>
+            </div>
+            <span class="badge">Checking</span>
+        </div>
+        HTML;
 
         $disabled = $allCriticalPassed ? '' : 'disabled';
         $retestButton = $allCriticalPassed ? '' : '<button type="button" class="h-btn h-btn-tint" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
@@ -192,9 +193,53 @@ HTML;
             </div>
         </div>
         </form>
+        <script>
+            (function() {
+                var row = document.getElementById('mod-rewrite-row');
+                if (!row) return;
+                fetch('install.php?ajax=mod-rewrite', { method: 'POST' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data && data.html) {
+                            row.outerHTML = data.html;
+                        }
+                    })
+                    .catch(function() {
+                        var detail = row.querySelector('.d');
+                        var badge = row.querySelector('.badge');
+                        if (detail) detail.textContent = 'Could not verify automatically.';
+                        if (badge) badge.textContent = 'Warning';
+                    });
+            })();
+        </script>
 HTML;
 
         $this->renderLayout('Server Requirements', $content, 2);
+    }
+
+    /**
+     * A single requirement result row, shared by renderRequirements() and the
+     * async ?ajax=mod-rewrite endpoint so the markup can't drift between the
+     * synchronous render and the background-checked row.
+     */
+    private function renderRequirementRow(array $r): string
+    {
+        $icon = $this->statusIcon($r['passed'] ? 'check' : ($r['critical'] ? 'x' : 'warning'), 16);
+        $rowClass = $r['passed'] ? 'good' : ($r['critical'] ? 'bad' : 'warn');
+        $badge = $r['passed'] ? 'Passed' : ($r['critical'] ? 'Critical' : 'Warning');
+        $name = htmlspecialchars($r['name']);
+        $detail = htmlspecialchars($r['detail']);
+
+        return <<<HTML
+        <div class="h-reqrow {$rowClass}">
+            <div class="icon">{$icon}</div>
+            <div class="body">
+                <p class="t">{$name}</p>
+                <p class="d">{$detail}</p>
+            </div>
+            <span class="badge">{$badge}</span>
+        </div>
+        HTML;
     }
 
     private function renderDatabase(): void
