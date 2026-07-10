@@ -538,6 +538,11 @@ ENV;
      */
     private function taskMigrate(): void
     {
+        // Start the per-request time budget here, before the boot and
+        // db:wipe below, so MAX_REQUEST_SECONDS bounds the whole request
+        // (not just the migration loop). Passed into runMigrateBatch().
+        $requestStart = microtime(true);
+
         // Boot Laravel once and reuse it for db:wipe, migrator path
         // enumeration, and the first migration below — each is a separate
         // Artisan call, but they don't each need their own full framework
@@ -560,7 +565,7 @@ ENV;
         $_SESSION['installer']['migrate_files'] = $files;
         $_SESSION['installer']['migrate_index'] = 0;
 
-        $this->runMigrateBatch($app);
+        $this->runMigrateBatch($app, $requestStart);
     }
 
     private function taskMigrateBatch(): void
@@ -590,12 +595,13 @@ ENV;
 
     /**
      * Maximum wall-clock seconds a single migrate-batch request may spend
-     * running migrations (measured across the framework boot + migration
-     * loop, so the whole request stays within this budget). Keeps every
-     * request well under the execution-time limit on even restrictive shared
-     * hosts, while letting fast schemas pack as many migrations as fit into
-     * the budget per request. Generous relative to typical 30s+ gateway
-     * timeouts to leave headroom for a slow framework boot.
+     * (measured from request entry, so it covers the framework boot, the
+     * first request's db:wipe, and the migration loop — the whole request
+     * stays within this budget). Keeps every request well under the
+     * execution-time limit on even restrictive shared hosts, while letting
+     * fast schemas pack as many migrations as fit into the budget per
+     * request. Generous relative to typical 30s+ gateway timeouts to leave
+     * headroom for a slow framework boot.
      */
     private const MAX_REQUEST_SECONDS = 15;
 
@@ -606,8 +612,13 @@ ENV;
      * (see MIGRATIONS_PER_REQUEST) instead of paying one full framework
      * boot per migration file, and stops early once MAX_REQUEST_SECONDS
      * elapses so a slow schema can't blow a gateway timeout.
+     *
+     * The $requestStart is captured at request entry by the caller
+     * (taskMigrate() passes it so the budget covers its boot + db:wipe too;
+     * subsequent taskMigrateBatch() requests capture it here, before the
+     * boot below), so MAX_REQUEST_SECONDS bounds the entire request.
      */
-    private function runMigrateBatch(?object $app = null): void
+    private function runMigrateBatch(?object $app = null, ?float $requestStart = null): void
     {
         $files = $_SESSION['installer']['migrate_files'] ?? [];
         $index = $_SESSION['installer']['migrate_index'] ?? 0;
@@ -625,9 +636,10 @@ ENV;
 
         $end = min($index + self::MIGRATIONS_PER_REQUEST, $total);
 
-        // Time the whole request from the start so the budget also covers
-        // the framework boot below (the dominant per-request cost).
-        $requestStart = microtime(true);
+        // Time from request entry: provided by taskMigrate() for the first
+        // request (so the budget also covers the boot + db:wipe it already
+        // did), otherwise captured here before the boot below.
+        $requestStart ??= microtime(true);
 
         // Reuse one booted framework instance for the entire batch rather
         // than letting runArtisanCommand() boot a fresh one per file: the
