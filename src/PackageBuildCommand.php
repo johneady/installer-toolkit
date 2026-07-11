@@ -98,10 +98,11 @@ abstract class PackageBuildCommand extends Command
         $basePath = base_path();
         $outputDir = $this->resolveOutputDir($this->option('output'));
         $stagingDir = storage_path('app/package-build-'.uniqid());
+        $toolkitOutputDir = storage_path('app/package-toolkit-'.uniqid());
         $demoConfig = $this->config['demo'] ?? null;
 
         try {
-            $this->runToolkit($basePath);
+            $this->runToolkit($basePath, $toolkitOutputDir);
 
             $this->buildFrontend($basePath);
 
@@ -140,12 +141,11 @@ abstract class PackageBuildCommand extends Command
 
             $manifestPath = $this->generateManifest($stagingDir, $updateZipPath, $version);
 
-            $this->assembleOutput($basePath, $zipPath, $demoZipPath, $manifestPath, $outputDir, $version, $updateZipPath);
+            $this->assembleOutput($toolkitOutputDir, $zipPath, $demoZipPath, $manifestPath, $outputDir, $version, $updateZipPath);
 
             $this->info('Cleaning up staging directory...');
             File::deleteDirectory($stagingDir);
-
-            $this->cleanupToolkitFiles($basePath);
+            File::deleteDirectory($toolkitOutputDir);
 
             $this->newLine();
             $this->info('Package built successfully!');
@@ -160,11 +160,15 @@ abstract class PackageBuildCommand extends Command
                 File::deleteDirectory($stagingDir);
             }
 
+            if (is_dir($toolkitOutputDir)) {
+                File::deleteDirectory($toolkitOutputDir);
+            }
+
             return self::FAILURE;
         }
     }
 
-    protected function runToolkit(string $basePath): void
+    protected function runToolkit(string $basePath, string $toolkitOutputDir): void
     {
         $toolkitOption = $this->option('toolkit');
 
@@ -186,7 +190,7 @@ abstract class PackageBuildCommand extends Command
 
         $this->info('Running installer toolkit...');
 
-        $process = new Process(['php', $buildScript, $basePath], $basePath);
+        $process = new Process(['php', $buildScript, $basePath, $toolkitOutputDir], $basePath);
         $process->setTimeout(60);
         $process->run(function ($type, $buffer): void {
             if ($type === Process::OUT) {
@@ -196,22 +200,6 @@ abstract class PackageBuildCommand extends Command
 
         if (! $process->isSuccessful()) {
             throw new \RuntimeException('Installer toolkit failed: '.$process->getErrorOutput());
-        }
-    }
-
-    protected function cleanupToolkitFiles(string $basePath): void
-    {
-        $this->info('Cleaning up toolkit files...');
-
-        $files = [
-            $basePath.'/package/install.php',
-            $basePath.'/package/readme.html',
-        ];
-
-        foreach ($files as $file) {
-            if (file_exists($file)) {
-                File::delete($file);
-            }
         }
     }
 
@@ -385,22 +373,22 @@ abstract class PackageBuildCommand extends Command
         $this->info("Zip created: {$fileCount} files, {$size}");
     }
 
-    protected function assembleOutput(string $basePath, string $zipPath, ?string $demoZipPath, string $manifestPath, string $outputDir, string $version, string $updateZipPath): void
+    protected function assembleOutput(string $toolkitOutputDir, string $zipPath, ?string $demoZipPath, string $manifestPath, string $outputDir, string $version, string $updateZipPath): void
     {
         $this->info('Assembling output...');
 
         $packagesDir = $outputDir.'/packages';
         File::ensureDirectoryExists($packagesDir);
 
-        $installFile = $basePath.'/package/install.php';
-        $readmeFile = $basePath.'/package/readme.html';
+        $installFile = $toolkitOutputDir.'/install.php';
+        $readmeFile = $toolkitOutputDir.'/readme.html';
 
         if (! file_exists($installFile)) {
-            throw new \RuntimeException('install.php not found in package/. Toolkit build may have failed.');
+            throw new \RuntimeException('install.php not found. Toolkit build may have failed.');
         }
 
         if (! file_exists($readmeFile)) {
-            throw new \RuntimeException('readme.html not found in package/. Toolkit build may have failed.');
+            throw new \RuntimeException('readme.html not found. Toolkit build may have failed.');
         }
 
         $fullZipPath = $packagesDir.'/'.$this->slug.'-v'.$version.'-full.zip';

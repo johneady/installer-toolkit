@@ -3,16 +3,21 @@
 /**
  * Installer Toolkit - Build Command
  *
- * Generates a /package folder for any Laravel project from a shared template.
- * Each project only needs a package-config.php in its root.
+ * Generates install.php + readme.html for any Laravel project from a shared
+ * template. Each project only needs a package-config.php in package/.
+ *
+ * Output is written outside the project (a system temp dir by default) so
+ * running this never leaves untracked artifacts in the project tree.
  *
  * Usage:
- *   php ~/php/installer-toolkit/bin/build                    # Run from project root
- *   php ~/php/installer-toolkit/bin/build /path/to/project   # Or specify path
+ *   php ~/php/installer-toolkit/bin/build                              # Run from project root, temp output dir
+ *   php ~/php/installer-toolkit/bin/build /path/to/project              # Specify project path, temp output dir
+ *   php ~/php/installer-toolkit/bin/build /path/to/project /output/dir  # Specify both
  */
 
 $toolkitDir = dirname(__DIR__);
 $projectDir = isset($argv[1]) ? $argv[1] : getcwd();
+$packageDir = isset($argv[2]) ? $argv[2] : sys_get_temp_dir().'/installer-toolkit-build-'.uniqid();
 
 if (! is_dir($projectDir)) {
     echo "Error: Project directory not found: {$projectDir}\n";
@@ -45,15 +50,13 @@ foreach ($required as $key) {
 
 $slug = $config['slug'];
 $zipFilename = $config['slug'].'.zip';
-$packageDir = $projectDir.'/package';
-$packagesDir = $packageDir.'/packages';
 
 echo "Building package for: {$config['name']}\n";
 echo "Output: {$packageDir}\n\n";
 
 // ─── Create directory structure ───────────────────────────────────────────────
-if (! is_dir($packagesDir)) {
-    mkdir($packagesDir, 0755, true);
+if (! is_dir($packageDir)) {
+    mkdir($packageDir, 0755, true);
     echo "  Created directory structure\n";
 }
 
@@ -141,11 +144,6 @@ if ($readmeMarkers < 1) {
 }
 
 file_put_contents($packageDir.'/readme.html', $readmeVersioned);
-echo " done\n";
-
-// ─── 3. Generate packages/.gitignore ──────────────────────────────────────────
-echo "  Generating packages/.gitignore...";
-file_put_contents($packagesDir.'/.gitignore', "*.zip\n*.update\n");
 echo " done\n";
 
 echo "\n\033[32m✔ Package built successfully for {$config['name']}\033[0m\n";

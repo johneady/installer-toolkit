@@ -195,13 +195,13 @@ test('generateManifest creates a valid manifest using config min_php_version', f
 });
 
 test('assembleOutput produces only the full zip and update package when demo is not configured', function () {
-    $fakeBasePath = storage_path('app/test-assemble-base-'.uniqid());
+    $toolkitOutputDir = storage_path('app/test-assemble-toolkit-'.uniqid());
     $stagingDir = storage_path('app/test-assemble-'.uniqid());
     $outputDir = storage_path('app/test-assemble-output-'.uniqid());
 
-    File::ensureDirectoryExists($fakeBasePath.'/package');
-    file_put_contents($fakeBasePath.'/package/install.php', '<?php // fake installer');
-    file_put_contents($fakeBasePath.'/package/readme.html', '<html>fake readme</html>');
+    File::ensureDirectoryExists($toolkitOutputDir);
+    file_put_contents($toolkitOutputDir.'/install.php', '<?php // fake installer');
+    file_put_contents($toolkitOutputDir.'/readme.html', '<html>fake readme</html>');
 
     File::ensureDirectoryExists($stagingDir);
     $innerZipPath = $stagingDir.'/fake-app.zip';
@@ -214,7 +214,7 @@ test('assembleOutput produces only the full zip and update package when demo is 
     $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.2.0');
 
     // No demo zip: assembleOutput's $demoZipPath is null, updateZipPath equals the full zip.
-    $command->callProtected('assembleOutput', $fakeBasePath, $innerZipPath, null, $manifestPath, $outputDir, '1.2.0', $innerZipPath);
+    $command->callProtected('assembleOutput', $toolkitOutputDir, $innerZipPath, null, $manifestPath, $outputDir, '1.2.0', $innerZipPath);
 
     expect(file_exists($outputDir.'/packages/fake-app-v1.2.0-full.zip'))->toBeTrue()
         ->and(file_exists($outputDir.'/packages/fake-app-v1.2.0-demo.zip'))->toBeFalse()
@@ -222,13 +222,13 @@ test('assembleOutput produces only the full zip and update package when demo is 
 });
 
 test('assembleOutput produces a demo zip when a demo zip path is given', function () {
-    $fakeBasePath = storage_path('app/test-assemble-demo-base-'.uniqid());
+    $toolkitOutputDir = storage_path('app/test-assemble-demo-toolkit-'.uniqid());
     $stagingDir = storage_path('app/test-assemble-demo-'.uniqid());
     $outputDir = storage_path('app/test-assemble-demo-output-'.uniqid());
 
-    File::ensureDirectoryExists($fakeBasePath.'/package');
-    file_put_contents($fakeBasePath.'/package/install.php', '<?php // fake installer');
-    file_put_contents($fakeBasePath.'/package/readme.html', '<html>fake readme</html>');
+    File::ensureDirectoryExists($toolkitOutputDir);
+    file_put_contents($toolkitOutputDir.'/install.php', '<?php // fake installer');
+    file_put_contents($toolkitOutputDir.'/readme.html', '<html>fake readme</html>');
 
     File::ensureDirectoryExists($stagingDir);
 
@@ -247,7 +247,7 @@ test('assembleOutput produces a demo zip when a demo zip path is given', functio
     $command = fakeCommand();
     $manifestPath = $command->callProtected('generateManifest', $stagingDir, $demoZipPath, '1.2.0');
 
-    $command->callProtected('assembleOutput', $fakeBasePath, $innerZipPath, $demoZipPath, $manifestPath, $outputDir, '1.2.0', $demoZipPath);
+    $command->callProtected('assembleOutput', $toolkitOutputDir, $innerZipPath, $demoZipPath, $manifestPath, $outputDir, '1.2.0', $demoZipPath);
 
     expect(file_exists($outputDir.'/packages/fake-app-v1.2.0-full.zip'))->toBeTrue()
         ->and(file_exists($outputDir.'/packages/fake-app-v1.2.0-demo.zip'))->toBeTrue()

@@ -19,6 +19,7 @@ afterEach(function () {
 
 test('bin/build injects the app name and produces a syntactically valid install.php', function () {
     $projectDir = storage_path('app/build-test-'.uniqid());
+    $outputDir = storage_path('app/build-test-output-'.uniqid());
     File::ensureDirectoryExists($projectDir.'/package');
 
     // The apostrophe in the name exercises single-quote escaping in the
@@ -35,10 +36,10 @@ test('bin/build injects the app name and produces a syntactically valid install.
         '<?php return '.var_export($config, true).';'
     );
 
-    $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir]);
+    $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]);
     $build->mustRun();
 
-    $installPhp = $projectDir.'/package/install.php';
+    $installPhp = $outputDir.'/install.php';
     expect(file_exists($installPhp))->toBeTrue();
 
     $source = file_get_contents($installPhp);
@@ -68,9 +69,10 @@ test('bin/build injects the app name and produces a syntactically valid install.
     // readme.html is templated too: the quoted PHP version must come from
     // the app's min_php_version ('8.3.0' displayed as '8.3+'), never a
     // hardcoded default, and no marker may survive substitution.
-    $readme = file_get_contents($projectDir.'/package/readme.html');
+    $readme = file_get_contents($outputDir.'/readme.html');
     expect($readme)->toContain('PHP 8.3+')
         ->and($readme)->not->toContain('[[MIN_PHP_VERSION]]');
 
     File::deleteDirectory($projectDir);
+    File::deleteDirectory($outputDir);
 });
