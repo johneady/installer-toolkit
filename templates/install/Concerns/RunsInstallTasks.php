@@ -1116,6 +1116,12 @@ OPTIMIZER_PHP;
                   .'<p style="margin:0 0 28px;"><a href="'.$loginUrlEsc.'" style="color:#c4602f;font-weight:700;text-decoration:none;">'.$loginUrlEsc.'</a></p>'
                 : '';
 
+            $cronNotice = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;background:#fbeee0;border:1px solid #ecd9c2;border-radius:12px;">'
+                .'<tr><td style="padding:16px 20px;">'
+                .'<p style="margin:0 0 4px;color:#8a5a1f;font-weight:700;font-size:.9rem;">⏰ Don\'t forget the cron job</p>'
+                .'<p style="margin:0;color:#4b3f33;font-size:.9rem;line-height:1.6;">A scheduled cron task is critical for '.$appNameEsc.' to function correctly — it powers background processes like sending emails, cleaning up expired data, and running health checks. If you haven\'t set it up yet, please do so as soon as possible.</p>'
+                .'</td></tr></table>';
+
             $subject = "Your {$appName} installation is complete";
 
             $html = <<<EMAIL
@@ -1138,6 +1144,7 @@ OPTIMIZER_PHP;
                                     <p style="margin:0 0 16px;color:#4b3f33;line-height:1.7;">{$greeting}</p>
                                     <p style="margin:0 0 16px;color:#4b3f33;line-height:1.7;">Congratulations — your installation finished successfully. Everything is set up and waiting for you.</p>
                                     {$loginBlock}
+                                    {$cronNotice}
                                     <p style="margin:0 0 8px;color:#4b3f33;line-height:1.7;">If you have any questions, our support team is happy to help.</p>
                                     <p style="margin:0;color:#8a7b6c;font-size:.85rem;line-height:1.6;">— The {$appNameEsc} Team</p>
                                 </td>

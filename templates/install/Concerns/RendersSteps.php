@@ -47,11 +47,15 @@ trait RendersSteps
         $appName = htmlspecialchars(APP_NAME);
         $checkIcon = $this->statusIcon('check', 16);
 
+        $protocol = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $detectedUrl = htmlspecialchars($protocol.'://'.$host);
+
         $checklistItems = [
             'Database credentials' => 'Database name, username &amp; password — from cPanel, Plesk, or your host.',
             'Email (SMTP) settings' => 'Optional — you can configure email now or skip and set it up later.',
             'Admin account details' => 'A name, email address, and a password for your administrator login.',
-            'Your site\'s domain / URL' => 'The web address where this application will live (e.g. https://example.com).',
+            'Your site\'s domain / URL' => "The web address where this application will live — we've detected <strong>{$detectedUrl}</strong>, which you can change later in this step.",
         ];
 
         $checklistHtml = '';
@@ -85,7 +89,7 @@ trait RendersSteps
         </div>
 
         <p class="h-lede" style="text-align:center; max-width:480px; margin-left:auto; margin-right:auto;">
-            This wizard will walk you through just a few quick steps — reviewing the license, checking your server's requirements, connecting your database, configuring your application, and creating your admin account. It usually takes about 5 minutes.
+            This wizard will guide you through a few quick setup steps. It usually takes about 5 minutes.
         </p>
 
         <!-- Before You Begin Checklist -->
@@ -1155,12 +1159,15 @@ HTML;
         $this->cleanupOptimizerEndpoint();
 
         $selfDeleteScript = __DIR__.'/_cleanup.php';
+        $rootUrl = rtrim($appUrl, '/').'/';
         $loginUrl = rtrim($appUrl, '/').'/login';
+        $rootUrlLiteral = var_export($rootUrl, true);
         $loginUrlLiteral = var_export($loginUrl, true);
-        file_put_contents($selfDeleteScript, '<?php @unlink(__DIR__ . "/install.php"); @unlink(__DIR__ . "/'.APP_FOLDER.'/public/install-optimize.php"); @unlink(__FILE__); header("Location: " . '.$loginUrlLiteral.'); exit;');
+        file_put_contents($selfDeleteScript, '<?php @unlink(__DIR__ . "/install.php"); @unlink(__DIR__ . "/'.APP_FOLDER.'/public/install-optimize.php"); @unlink(__FILE__); $__dest = (isset($_GET["to"]) && $_GET["to"] === "login") ? '.$loginUrlLiteral.' : '.$rootUrlLiteral.'; header("Location: " . $__dest); exit;');
 
         $cleanupUrl = htmlspecialchars(dirname($_SERVER['SCRIPT_NAME']).'/_cleanup.php');
         $cleanupUrl = str_replace('//', '/', $cleanupUrl);
+        $cleanupLoginUrl = $cleanupUrl.'?to=login';
 
         $appUrlDisplay = htmlspecialchars($appUrl);
         $appName = ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
@@ -1191,7 +1198,7 @@ HTML;
                 <span class="icon">🔗</span>
                 <div>
                     <p class="t">Admin Login</p>
-                    <a href="{$cleanupUrl}">{$appUrlDisplay}/login</a>
+                    <a href="{$cleanupLoginUrl}">{$appUrlDisplay}/login</a>
                 </div>
             </div>
             <div class="row">
