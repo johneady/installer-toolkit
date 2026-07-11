@@ -492,15 +492,54 @@ abstract class PackageBuildCommand extends Command
             return [];
         }
 
-        $privateKey = (string) env('UPDATE_SIGNING_KEY', '');
+        $privateKey = $this->resolveSigningKey();
 
         if ($privateKey === '') {
-            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but the UPDATE_SIGNING_KEY environment variable is not set. Set it (from your CI secret) or remove signing_key_id to build unsigned.");
+            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but the UPDATE_SIGNING_KEY environment variable is not set. Set it (from your CI secret), point UPDATE_SIGNING_KEY_FILE at a key file, or remove signing_key_id to build unsigned.");
         }
 
         $this->info("Signing manifest with key '{$keyId}'...");
 
         return UpdateSignature::sign($this->slug, $version, $minimumVersion, $checksum, $keyId, $privateKey);
+    }
+
+    /**
+     * The private key comes from UPDATE_SIGNING_KEY directly (CI secret), or
+     * from the file UPDATE_SIGNING_KEY_FILE points at (local dev, where the
+     * key lives outside every distributed project). The file may be a dotenv
+     * file containing an UPDATE_SIGNING_KEY= line or hold the bare key. A
+     * configured-but-unreadable file fails the build rather than falling
+     * through to unsigned.
+     */
+    protected function resolveSigningKey(): string
+    {
+        $privateKey = (string) env('UPDATE_SIGNING_KEY', '');
+
+        if ($privateKey !== '') {
+            return $privateKey;
+        }
+
+        $keyFile = (string) env('UPDATE_SIGNING_KEY_FILE', '');
+
+        if ($keyFile === '') {
+            return '';
+        }
+
+        if (! is_readable($keyFile)) {
+            throw new \RuntimeException("UPDATE_SIGNING_KEY_FILE points to '{$keyFile}' but the file does not exist or is not readable.");
+        }
+
+        $contents = trim((string) file_get_contents($keyFile));
+
+        if (preg_match('/^UPDATE_SIGNING_KEY=(.+)$/m', $contents, $matches) === 1) {
+            return trim($matches[1], " \t\"'");
+        }
+
+        if (preg_match('/^[A-Za-z0-9+\/]+={0,2}$/', $contents) === 1) {
+            return $contents;
+        }
+
+        throw new \RuntimeException("UPDATE_SIGNING_KEY_FILE '{$keyFile}' does not contain an UPDATE_SIGNING_KEY entry or a bare key.");
     }
 
     protected function createUpdateZip(string $updateZipPath, string $innerZipPath, string $manifestPath): void
