@@ -157,7 +157,9 @@ HTML;
         // several seconds on PHP-FPM hosts (where apache_get_modules() is
         // unavailable), so it is checked asynchronously after the page
         // loads rather than blocking the whole requirements screen. It is
-        // non-critical, so the Continue button does not wait on it.
+        // non-critical, but the Continue button stays disabled until this
+        // check resolves so users can't advance mid-check; the JS below
+        // re-enables it once the probe settles (as long as criticals pass).
         $items .= <<<'HTML'
         <div class="h-reqrow" id="mod-rewrite-row">
             <div class="icon"><span class="h-spin">⏳</span></div>
@@ -169,7 +171,10 @@ HTML;
         </div>
         HTML;
 
-        $disabled = $allCriticalPassed ? '' : 'disabled';
+        // Continue always starts disabled (waiting on the async mod_rewrite
+        // probe). $criticalsPassedFlag tells the JS whether it may re-enable
+        // the button once that probe settles.
+        $criticalsPassedFlag = $allCriticalPassed ? '1' : '0';
         $retestButton = $allCriticalPassed ? '' : '<button type="button" class="h-btn h-btn-tint" onclick="window.location.href=\'install.php?step=2\'">Re-Test</button>';
         $warning = $allCriticalPassed ? '' : '<div class="h-alert h-alert-bad">
             <div class="icon">
@@ -189,14 +194,26 @@ HTML;
             <a href="install.php?step=1" class="h-btn h-btn-ghost">← Back</a>
             <div class="h-actions-group">
                 {$retestButton}
-                <button type="submit" class="h-btn h-btn-primary" {$disabled}>Continue →</button>
+                <button type="submit" class="h-btn h-btn-primary" id="req-continue-btn" data-criticals-passed="{$criticalsPassedFlag}" disabled>Continue →</button>
             </div>
         </div>
         </form>
         <script>
             (function() {
                 var row = document.getElementById('mod-rewrite-row');
-                if (!row) return;
+                var btn = document.getElementById('req-continue-btn');
+                var criticalsPassed = btn && btn.dataset.criticalsPassed === '1';
+
+                function enableContinueIfReady() {
+                    if (criticalsPassed && btn) { btn.disabled = false; }
+                }
+
+                if (!row) {
+                    // No async check to wait for — enable immediately when criticals passed.
+                    enableContinueIfReady();
+                    return;
+                }
+
                 fetch('install.php?ajax=mod-rewrite', { method: 'POST' })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
@@ -209,7 +226,8 @@ HTML;
                         var badge = row.querySelector('.badge');
                         if (detail) detail.textContent = 'Could not verify automatically.';
                         if (badge) badge.textContent = 'Warning';
-                    });
+                    })
+                    .finally(enableContinueIfReady);
             })();
         </script>
 HTML;
@@ -697,7 +715,7 @@ HTML;
         $xIconJson = json_encode($this->statusIcon('x'));
 
         $content = <<<HTML
-        <p class="h-lede">Installing your application. <strong>Please do not close this page.</strong></p>
+        <p class="h-lede">Installing your application. <strong>Please do not close or refresh this page.</strong></p>
 
         <!-- Progress Card -->
         <div class="h-progress-card">

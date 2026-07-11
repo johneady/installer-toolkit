@@ -300,7 +300,7 @@ body.h-body {
 .h-task .label { flex: 1; font-size: .85rem; font-weight: 600; color: var(--h-ink); }
 .h-task .msg { font-size: .72rem; color: var(--h-bad); text-align: right; font-weight: 600; max-width: 45%; }
 .h-task.active { background: var(--h-accent-soft); border-color: var(--h-accent-soft-border); }
-.h-task.active .icon { background: var(--h-accent-soft-border); color: var(--h-accent); }
+.h-task.active .icon { background: var(--h-accent-soft-border); color: var(--h-accent); animation: h-pulse 1.4s ease-in-out infinite; }
 .h-task.active .label { color: var(--h-accent); }
 .h-task.done .icon { background: var(--h-good-soft); color: var(--h-good); }
 .h-task.done .label { color: var(--h-good); }
@@ -314,6 +314,10 @@ body.h-body {
 .h-bounce { animation: h-bounce 1.6s ease-in-out infinite; }
 @keyframes h-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .h-bounce { animation: none; } }
+
+.h-pulse { animation: h-pulse 1.4s ease-in-out infinite; }
+@keyframes h-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .h-pulse { animation: none; } }
 
 .h-code-block {
     background: var(--h-ink); color: #f3ece3; border-radius: 14px; padding: 16px 18px;
