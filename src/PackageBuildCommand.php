@@ -314,6 +314,12 @@ abstract class PackageBuildCommand extends Command
     {
         $this->info('Installing production dependencies (this may take a minute)...');
 
+        // Path repositories in the staged lock use relative urls (e.g.
+        // ../update-toolkit) that don't resolve from the staging directory.
+        // composer install fetches path-repo packages from the lock's dist.url,
+        // so rewrite those to absolute paths before installing.
+        $this->rewritePathDistsInLock($directory.'/composer.lock');
+
         $process = new Process(
             ['composer', 'install', '--no-dev', '--no-scripts', '--optimize-autoloader', '--no-interaction'],
             $directory
@@ -329,7 +335,153 @@ abstract class PackageBuildCommand extends Command
             throw new \RuntimeException('composer install failed: '.$process->getErrorOutput());
         }
 
+        // composer installs path repositories as symlinks by default; the zip
+        // archiver does not follow symlinks, so replace any symlinked vendor
+        // directories with real copies so the distributable ships real files.
+        $this->materializeSymlinkedVendors($directory);
+
         $this->info('Production dependencies installed.');
+    }
+
+    /**
+     * Replace symlinked vendor directories with real copies.
+     *
+     * composer installs `path` repositories as symlinks by default, but the zip
+     * archiver uses RecursiveDirectoryIterator without FOLLOW_SYMLINKS, so a
+     * symlinked vendor package would be archived as an empty directory and the
+     * distributable would ship without its files. Materializing the symlinks
+     * guarantees real files in the built package.
+     */
+    protected function materializeSymlinkedVendors(string $directory): void
+    {
+        $vendorPath = $directory.'/vendor';
+
+        if (! is_dir($vendorPath)) {
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($vendorPath, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        $symlinks = [];
+
+        foreach ($iterator as $item) {
+            if ($item->isLink() && $item->isDir()) {
+                $symlinks[] = $item->getPathname();
+            }
+        }
+
+        foreach ($symlinks as $link) {
+            $target = realpath($link);
+
+            if ($target === false || $target === $link) {
+                continue;
+            }
+
+            // Remove the symlink (not its target) and copy the real files in.
+            @unlink($link);
+
+            if (! file_exists($link)) {
+                $this->copyPackageSource($target, $link);
+            }
+        }
+    }
+
+    /**
+     * Copy a path-repo package into vendor, excluding its own dev artifacts.
+     *
+     * A path repository points at a working checkout that contains its own
+     * vendor/, tests/, and .git/ — none of which belong in a distributable.
+     * vendor/ would bloat the package (and may duplicate dependencies), and
+     * .env may hold secrets such as the update signing key. Only the package
+     * source is copied.
+     */
+    protected function copyPackageSource(string $source, string $destination): void
+    {
+        $exclude = ['vendor', 'tests', 'Tests', '.git', 'node_modules'];
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            $relative = substr($item->getPathname(), strlen($source) + 1);
+            $topSegment = explode('/', $relative)[0];
+
+            if (in_array($topSegment, $exclude, true)) {
+                continue;
+            }
+
+            if ($relative === '.env') {
+                continue;
+            }
+
+            $dest = $destination.'/'.$relative;
+
+            if ($item->isDir()) {
+                File::ensureDirectoryExists($dest);
+            } else {
+                File::ensureDirectoryExists(dirname($dest));
+                copy($item->getPathname(), $dest);
+            }
+        }
+    }
+
+    /**
+     * Rewrite relative `path` dist urls in composer.lock to absolute paths.
+     */
+    protected function rewritePathDistsInLock(string $lockPath): void
+    {
+        if (! file_exists($lockPath)) {
+            return;
+        }
+
+        $lock = json_decode((string) file_get_contents($lockPath), true);
+
+        if (! is_array($lock)) {
+            return;
+        }
+
+        $changed = false;
+
+        foreach (['packages', 'packages-dev'] as $section) {
+            if (! isset($lock[$section])) {
+                continue;
+            }
+
+            foreach ($lock[$section] as &$package) {
+                if (($package['dist']['type'] ?? '') !== 'path') {
+                    continue;
+                }
+
+                $url = (string) ($package['dist']['url'] ?? '');
+
+                if ($url === '' || str_starts_with($url, '/') || parse_url($url, PHP_URL_SCHEME) !== null) {
+                    continue;
+                }
+
+                $absolute = realpath(base_path().'/'.$url);
+
+                if ($absolute === false) {
+                    continue;
+                }
+
+                $package['dist']['url'] = $absolute;
+                $changed = true;
+            }
+
+            unset($package);
+        }
+
+        if ($changed) {
+            file_put_contents(
+                $lockPath,
+                json_encode($lock, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n"
+            );
+        }
     }
 
     /**
