@@ -41,8 +41,8 @@ trait RendersLayout
 
     /**
      * Per-step icon and description. The "Step X of N" label is derived
-     * separately in getStepLabel() from $stepNames/$settingsSubSteps so
-     * it can never drift out of sync with the visual stepper.
+     * separately in getStepLabel() so it can never drift out of sync with
+     * the visual stepper.
      */
     private function getSidebarInfo(int $step): array
     {
@@ -88,12 +88,13 @@ trait RendersLayout
     }
 
     /**
-     * Computes "X of N" against the top-level journey (License,
-     * Requirements, Settings, Install, Cron, Complete) directly from
-     * $stepNames — the same data renderHeaderStrip() iterates — so the
-     * label can't drift out of sync with the dot row. No sub-step name
-     * suffix: the strip's own title (e.g. "Database Configuration")
-     * already says which Settings sub-step this is.
+     * The "X of N" label beside the step-dot row. The dots are rendered
+     * one-per-screen — the Settings group expands to its own four dots in
+     * renderHeaderStrip() — so there are exactly $totalSteps (9) dots, and
+     * each screen's step number already equals its position in that row.
+     * The label therefore mirrors the dots 1:1 (step 1 is "1 of 9", step 4
+     * is "4 of 9", …) so the number shown can never disagree with the dot
+     * the user is on.
      */
     private function getStepLabel(int $step): string
     {
@@ -101,23 +102,7 @@ trait RendersLayout
             return '';
         }
 
-        $total = count($this->stepNames);
-        $visualNum = 0;
-        $matchedNum = null;
-
-        foreach ($this->stepNames as $num => $name) {
-            $visualNum++;
-            if ($num === $step || ($num === 3 && in_array($step, $this->settingsSubSteps))) {
-                $matchedNum = $visualNum;
-                break;
-            }
-        }
-
-        if ($matchedNum === null) {
-            return '';
-        }
-
-        return "{$matchedNum} of {$total}";
+        return "{$step} of {$this->totalSteps}";
     }
 
     private function renderLayout(string $title, string $content, int $currentStep): void

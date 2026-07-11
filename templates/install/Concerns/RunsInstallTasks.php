@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Symfony\Component\Console\Output\BufferedOutput;
 
 trait RunsInstallTasks
@@ -1049,6 +1050,90 @@ OPTIMIZER_PHP;
 
         if (file_exists($optimizerPath)) {
             @unlink($optimizerPath);
+        }
+    }
+
+    /**
+     * Send a one-off "installation complete" email to the administrator.
+     *
+     * Best-effort by design: it boots the freshly-installed application so
+     * the mailer uses the SMTP settings the user just configured on step 5,
+     * and never throws — a failure returns a result the caller can surface
+     * as a small, non-blocking notice on the success screen rather than
+     * blocking completion. A "log" mail driver won't throw (it just logs),
+     * so no notice is shown in that case — the user opted out of real mail.
+     *
+     * @return array{sent: bool, message?: string}
+     */
+    private function sendCongratulationEmail(): array
+    {
+        $admin = $_SESSION['installer']['admin'] ?? [];
+        $settings = $_SESSION['installer']['settings'] ?? [];
+
+        $email = trim($admin['email'] ?? '');
+        $firstName = trim($admin['first_name'] ?? '');
+        $appName = $settings['app_name'] ?? ucwords(str_replace(['-', '_'], ' ', APP_FOLDER));
+        $appUrl = rtrim($settings['app_url'] ?? '', '/');
+
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['sent' => false, 'message' => 'No valid administrator email address was provided.'];
+        }
+
+        try {
+            $app = $this->bootstrapLaravel();
+            $app->make(Kernel::class)->bootstrap();
+
+            $greeting = $firstName !== '' ? "Hi {$firstName}," : 'Welcome,';
+            $loginUrl = $appUrl !== '' ? $appUrl.'/login' : '';
+            $appNameEsc = htmlspecialchars($appName);
+            $loginUrlEsc = htmlspecialchars($loginUrl);
+
+            $loginBlock = $loginUrl !== ''
+                ? '<p style="margin:0 0 8px;color:#4b3f33;line-height:1.7;">You can sign in to your dashboard at:</p>'
+                  .'<p style="margin:0 0 28px;"><a href="'.$loginUrlEsc.'" style="color:#c4602f;font-weight:700;text-decoration:none;">'.$loginUrlEsc.'</a></p>'
+                : '';
+
+            $subject = "Your {$appName} installation is complete";
+
+            $html = <<<EMAIL
+            <!DOCTYPE html>
+            <html lang="en">
+            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+            <body style="margin:0;padding:0;background:#faf6f1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf6f1;padding:32px 16px;">
+                    <tr><td align="center">
+                        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e8ddd0;border-radius:20px;overflow:hidden;">
+                            <tr>
+                                <td style="padding:40px 40px 8px;text-align:center;">
+                                    <div style="width:64px;height:64px;margin:0 auto 20px;border-radius:50%;background:#f3e2d3;display:flex;align-items:center;justify-content:center;font-size:30px;line-height:1;">🎉</div>
+                                    <h1 style="margin:0 0 8px;font-size:1.6rem;font-weight:800;color:#2b2420;letter-spacing:-0.02em;line-height:1.2;">Installation Complete!</h1>
+                                    <p style="margin:0;color:#8a7b6c;font-size:1rem;">{$appNameEsc} is ready to go.</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:24px 40px 40px;">
+                                    <p style="margin:0 0 16px;color:#4b3f33;line-height:1.7;">{$greeting}</p>
+                                    <p style="margin:0 0 16px;color:#4b3f33;line-height:1.7;">Congratulations — your installation finished successfully. Everything is set up and waiting for you.</p>
+                                    {$loginBlock}
+                                    <p style="margin:0 0 8px;color:#4b3f33;line-height:1.7;">If you have any questions, our support team is happy to help.</p>
+                                    <p style="margin:0;color:#8a7b6c;font-size:.85rem;line-height:1.6;">— The {$appNameEsc} Team</p>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:24px 0 0;color:#a1917e;font-size:.75rem;">You're receiving this because an installation was just completed for this email address.</p>
+                    </td></tr>
+                </table>
+            </body>
+            </html>
+            EMAIL;
+
+            Mail::html($html, function ($message) use ($email, $subject): void {
+                $message->to($email)->subject($subject);
+            });
+
+            return ['sent' => true];
+        } catch (Throwable $e) {
+            return ['sent' => false, 'message' => $e->getMessage()];
         }
     }
 }

@@ -45,6 +45,27 @@ trait RendersSteps
     private function renderWelcome(): void
     {
         $appName = htmlspecialchars(APP_NAME);
+        $checkIcon = $this->statusIcon('check', 16);
+
+        $checklistItems = [
+            'Database credentials' => 'Database name, username &amp; password — from cPanel, Plesk, or your host.',
+            'Email (SMTP) settings' => 'Optional — you can configure email now or skip and set it up later.',
+            'Admin account details' => 'A name, email address, and a password for your administrator login.',
+            'Your site\'s domain / URL' => 'The web address where this application will live (e.g. https://example.com).',
+        ];
+
+        $checklistHtml = '';
+        foreach ($checklistItems as $title => $detail) {
+            $checklistHtml .= <<<HTML
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+                <span style="color:var(--h-good); flex-shrink:0; margin-top:2px; line-height:0;">{$checkIcon}</span>
+                <div>
+                    <span style="font-weight:700; color:var(--h-ink); display:block; line-height:1.3;">{$title}</span>
+                    <span style="font-size:.85rem; color:var(--h-mute); line-height:1.5;">{$detail}</span>
+                </div>
+            </div>
+            HTML;
+        }
 
         $content = <<<HTML
         <!-- Welcome Hero -->
@@ -58,7 +79,7 @@ trait RendersSteps
         </div>
 
         <!-- Welcome Message -->
-        <div class="h-success-head">
+        <div class="h-success-head" style="margin-bottom:32px;">
             <h3 style="font-size:1.2rem; font-weight:700; color:var(--h-good); margin:0 0 6px;">Thank You for Your Support!</h3>
             <p>We're thrilled to have you on board. Let's get {$appName} up and running on your server.</p>
         </div>
@@ -67,8 +88,16 @@ trait RendersSteps
             This wizard will walk you through just a few quick steps — reviewing the license, checking your server's requirements, connecting your database, configuring your application, and creating your admin account. It usually takes about 5 minutes.
         </p>
 
+        <!-- Before You Begin Checklist -->
+        <div style="max-width:480px; margin:32px auto 0; text-align:left;">
+            <h3 class="h-section-title" style="justify-content:center; text-align:center;"><span class="bump"></span>Before You Begin</h3>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                {$checklistHtml}
+            </div>
+        </div>
+
         <!-- Actions -->
-        <div class="h-actions end" style="border-top:none; padding-top:0;">
+        <div class="h-actions end" style="border-top:none; padding-top:0; margin-top:36px;">
             <a href="install.php?step=1" class="h-btn h-btn-primary">Get Started →</a>
         </div>
 HTML;
@@ -353,7 +382,9 @@ HTML;
 
         $appName = htmlspecialchars($s['app_name'] ?? ucwords(str_replace(['-', '_'], ' ', APP_FOLDER)));
         $appUrl = htmlspecialchars($s['app_url'] ?? $defaultUrl);
-        $timezone = $s['timezone'] ?? 'America/Toronto';
+        $hasSessionTimezone = isset($s['timezone']);
+        $hasSessionTimezoneJs = $hasSessionTimezone ? 'true' : 'false';
+        $timezone = $s['timezone'] ?? 'UTC';
         $sampleData = $s['sample_data'] ?? 'essential';
         $essentialChecked = $sampleData === 'essential' ? ' checked' : '';
         $fullChecked = $sampleData === 'full' ? ' checked' : '';
@@ -377,8 +408,12 @@ HTML;
                         <input type="text" name="app_name" id="app_name" value="{$appName}" required>
                     </div>
                     <div class="h-field">
-                        <label>Application URL <span class="req">*</span></label>
-                        <input type="url" name="app_url" id="app_url" value="{$appUrl}" required>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                            <label style="margin:0;">Application URL <span class="req">*</span></label>
+                            <button type="button" id="edit-app-url" class="h-btn h-btn-ghost" style="padding:4px 12px; font-size:.8rem; font-weight:600;">Edit</button>
+                        </div>
+                        <input type="url" name="app_url" id="app_url" value="{$appUrl}" required readonly>
+                        <p class="hint" id="app-url-hint">Auto-detected from your browser. Use “Edit” only if installing via a temporary address, IP, subdirectory, or behind a proxy.</p>
                     </div>
                 </div>
                 <div class="h-field">
@@ -395,14 +430,14 @@ HTML;
                     <input type="radio" name="sample_data" value="essential"{$essentialChecked}>
                     <div>
                         <span class="t">Essentials only</span>
-                        <p class="d">Sets up core configuration, menus, and pages — a clean slate ready for your own affiliates and content.</p>
+                        <p class="d">Sets up core configuration, menus, and required settings — a clean slate ready for your own content.</p>
                     </div>
                 </label>
                 <label class="h-radio">
                     <input type="radio" name="sample_data" value="full"{$fullChecked}>
                     <div>
                         <span class="t">Full demonstration data</span>
-                        <p class="d">Includes sample affiliates, applications, blog posts, and more — ideal for exploring all features before going live.</p>
+                        <p class="d">Includes sample content and demonstration records — ideal for exploring all features before going live.</p>
                     </div>
                 </label>
             </div>
@@ -413,6 +448,37 @@ HTML;
                 <button type="submit" class="h-btn h-btn-primary">Continue →</button>
             </div>
         </form>
+        <script>
+            (function() {
+                // Application URL is auto-detected and locked by default; the
+                // "Edit" button unlocks it for the edge cases noted in the hint.
+                var editBtn = document.getElementById('edit-app-url');
+                var urlInput = document.getElementById('app_url');
+                var urlHint = document.getElementById('app-url-hint');
+                editBtn.addEventListener('click', function() {
+                    urlInput.removeAttribute('readonly');
+                    urlInput.focus();
+                    urlInput.select();
+                    editBtn.style.display = 'none';
+                    urlHint.textContent = 'Enter the full URL where this application will be accessed (e.g. https://example.com).';
+                });
+
+                // Default the timezone to the visitor's browser-detected zone,
+                // but only on first visit — once they've saved a choice, respect it.
+                if (!{$hasSessionTimezoneJs}) {
+                    try {
+                        var browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        var tzSelect = document.getElementById('timezone');
+                        var isKnown = browserTz && Array.prototype.some.call(tzSelect.options, function(o) {
+                            return o.value === browserTz;
+                        });
+                        if (isKnown) {
+                            tzSelect.value = browserTz;
+                        }
+                    } catch (e) { /* fall back to the selected default */ }
+                }
+            })();
+        </script>
 HTML;
 
         $this->renderLayout('Application Settings', $content, 4);
@@ -713,6 +779,7 @@ HTML;
         $xIcon = $this->statusIcon('x');
         $checkIconJson = json_encode($this->statusIcon('check'));
         $xIconJson = json_encode($this->statusIcon('x'));
+        $installStepLabel = $this->getStepLabel(7);
 
         $content = <<<HTML
         <p class="h-lede">Installing your application. <strong>Please do not close or refresh this page.</strong></p>
@@ -724,7 +791,7 @@ HTML;
                     <div class="icn">⚡</div>
                     <div>
                         <h3>Installation Progress</h3>
-                        <p class="sub">Step 7 of 9</p>
+                        <p class="sub">Step {$installStepLabel}</p>
                     </div>
                 </div>
                 <div>
@@ -1042,6 +1109,20 @@ HTML;
         $appUrl = $_SESSION['installer']['settings']['app_url'] ?? '';
         $adminEmail = htmlspecialchars($_SESSION['installer']['admin']['email'] ?? '');
 
+        $emailResult = $this->sendCongratulationEmail();
+        $emailNotice = '';
+        if (! $emailResult['sent']) {
+            $emailNotice = '<div class="h-alert h-alert-warn">
+                <div class="icon">
+                    '.$this->statusIcon('warning', 16).'
+                </div>
+                <div>
+                    <p class="t">Confirmation Email Not Sent</p>
+                    <p class="d">We couldn\'t send a confirmation email to <strong>'.$adminEmail.'</strong>. Your installation is still complete — you can review your email settings after logging in.</p>
+                </div>
+            </div>';
+        }
+
         $appDir = __DIR__.'/'.APP_FOLDER;
         $envPath = $appDir.'/.env';
 
@@ -1108,6 +1189,8 @@ HTML;
         </div>
 
         {$deletionMessages}
+
+        {$emailNotice}
 
         <!-- Admin Credentials -->
         <div class="h-credentials">
