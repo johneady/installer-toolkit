@@ -179,7 +179,7 @@ trait RendersLayout
 
         // Shared "Test Connection" AJAX handler for the database (step 3)
         // and mail (step 5) steps — identical request/response contract
-        // (POST the form to `${step}&action=test`, expect {success, message}),
+        // (POST the form to the step's ?ajax=... endpoint, expect {success, message}),
         // differing only in which form/button/result element and endpoint
         // to use, and the fallback error copy.
         function initTestConnectionButton(options) {

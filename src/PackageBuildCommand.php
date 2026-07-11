@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use InstallerToolkit\Concerns\LoadsPackageConfig;
 use Symfony\Component\Process\Process;
+use UpdateToolkit\UpdateSignature;
 use ZipArchive;
 
 abstract class PackageBuildCommand extends Command
@@ -442,15 +443,19 @@ abstract class PackageBuildCommand extends Command
             $zip->close();
         }
 
+        $minimumVersion = '1.0.0';
+
         $manifest = [
             'type' => 'update',
             'version' => $version,
-            'minimum_version' => '1.0.0',
+            'minimum_version' => $minimumVersion,
             'minimum_php' => $this->config['min_php_version'] ?? '8.3.0',
             'checksum' => $checksum,
             'built_at' => now()->toIso8601String(),
             'files_count' => $filesCount,
         ];
+
+        $manifest = array_merge($manifest, $this->signManifest($version, $minimumVersion, $checksum));
 
         $manifestPath = $stagingDir.'/manifest.json';
         file_put_contents($manifestPath, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -458,6 +463,35 @@ abstract class PackageBuildCommand extends Command
         $this->info('Manifest generated.');
 
         return $manifestPath;
+    }
+
+    /**
+     * Sign the manifest when the app opts into signing via package-config's
+     * `signing_key_id`. Fails the build (never silently ships unsigned) if a
+     * key_id is configured but UPDATE_SIGNING_KEY is missing or invalid — a
+     * broken CI secret must not quietly downgrade a signed release to
+     * unsigned. Apps that haven't set `signing_key_id` build unsigned, same
+     * as before this feature existed.
+     *
+     * @return array{key_id?: string, signature?: string, signature_algorithm?: string}
+     */
+    protected function signManifest(string $version, string $minimumVersion, string $checksum): array
+    {
+        $keyId = $this->config['signing_key_id'] ?? null;
+
+        if ($keyId === null) {
+            return [];
+        }
+
+        $privateKey = (string) env('UPDATE_SIGNING_KEY', '');
+
+        if ($privateKey === '') {
+            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but the UPDATE_SIGNING_KEY environment variable is not set. Set it (from your CI secret) or remove signing_key_id to build unsigned.");
+        }
+
+        $this->info("Signing manifest with key '{$keyId}'...");
+
+        return UpdateSignature::sign($this->slug, $version, $minimumVersion, $checksum, $keyId, $privateKey);
     }
 
     protected function createUpdateZip(string $updateZipPath, string $innerZipPath, string $manifestPath): void
