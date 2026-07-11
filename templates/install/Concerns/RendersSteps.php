@@ -1137,16 +1137,8 @@ HTML;
 
         $deletionMessages = '';
         $zipPath = __DIR__.'/'.ZIP_FILENAME;
-        $installPath = __DIR__.'/install.php';
 
-        $zipDeleted = false;
-        $installDeleted = false;
-
-        if (file_exists($zipPath)) {
-            $zipDeleted = @unlink($zipPath);
-        } else {
-            $zipDeleted = true;
-        }
+        $zipDeleted = ! file_exists($zipPath) || @unlink($zipPath);
 
         if (! $zipDeleted) {
             $deletionMessages .= '<div class="h-alert h-alert-warn">

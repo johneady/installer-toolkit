@@ -315,6 +315,19 @@ HTACCESS;
         $appKey = 'base64:'.base64_encode(random_bytes(32));
         $_SESSION['installer']['app_key'] = $appKey;
 
+        // The mail step runs before the admin step, so a from-address left
+        // blank there could not fall back to the admin email at submit time
+        // — resolve it here instead, when both are known.
+        $mailFromAddress = trim($mail['mail_from_address'] ?? '');
+        if ($mailFromAddress === '') {
+            $mailFromAddress = $admin['email'];
+        }
+
+        // UPDATE_SLUG must match the inner-zip name inside .update packages
+        // ({slug}.zip) — update-toolkit's UpdateService reads it via
+        // config('updates.slug'). APP_FOLDER is that same build-time slug.
+        $updateSlug = APP_FOLDER;
+
         $env = <<<ENV
 APP_NAME="{$this->escapeEnvValue($settings['app_name'])}"
 APP_ENV=production
@@ -322,16 +335,18 @@ APP_KEY={$appKey}
 APP_DEBUG=false
 APP_URL="{$this->escapeEnvValue($settings['app_url'])}"
 
+UPDATE_SLUG={$updateSlug}
+
 LOG_CHANNEL=stack
 LOG_STACK=single
 LOG_DEPRECATIONS_CHANNEL=null
 LOG_LEVEL=error
 
 DB_CONNECTION=mysql
-DB_HOST={$db['host']}
+DB_HOST="{$this->escapeEnvValue($db['host'])}"
 DB_PORT={$db['port']}
-DB_DATABASE={$db['name']}
-DB_USERNAME={$db['user']}
+DB_DATABASE="{$this->escapeEnvValue($db['name'])}"
+DB_USERNAME="{$this->escapeEnvValue($db['user'])}"
 DB_PASSWORD="{$this->escapeEnvValue($db['pass'])}"
 
 SESSION_DRIVER=database
@@ -348,19 +363,19 @@ CACHE_STORE=database
 
 MAIL_MAILER={$mail['mail_mailer']}
 MAIL_SCHEME=null
-MAIL_HOST={$mail['mail_host']}
+MAIL_HOST="{$this->escapeEnvValue($mail['mail_host'])}"
 MAIL_PORT={$mail['mail_port']}
-MAIL_USERNAME={$mail['mail_username']}
+MAIL_USERNAME="{$this->escapeEnvValue($mail['mail_username'])}"
 MAIL_PASSWORD="{$this->escapeEnvValue($mail['mail_password'])}"
-MAIL_FROM_ADDRESS="{$mail['mail_from_address']}"
+MAIL_FROM_ADDRESS="{$this->escapeEnvValue($mailFromAddress)}"
 MAIL_FROM_NAME="{$this->escapeEnvValue($mail['mail_from_name'])}"
 
-FIRST_USER_EMAIL={$admin['email']}
+FIRST_USER_EMAIL="{$this->escapeEnvValue($admin['email'])}"
 FIRST_USER_FIRST_NAME="{$this->escapeEnvValue($admin['first_name'])}"
 FIRST_USER_LAST_NAME="{$this->escapeEnvValue($admin['last_name'])}"
 FIRST_USER_PASSWORD="{$this->escapeEnvValue($admin['password'])}"
 
-HEALTH_MAIL_TO_ADDRESS={$admin['email']}
+HEALTH_MAIL_TO_ADDRESS="{$this->escapeEnvValue($admin['email'])}"
 ENV;
 
         $envPath = __DIR__.'/'.APP_FOLDER.'/.env';
@@ -369,9 +384,17 @@ ENV;
         }
     }
 
+    /**
+     * Escape a value for a double-quoted .env entry. Backslash must be
+     * escaped before the quote: a password ending in `\` would otherwise
+     * produce `\"` at the closing quote and corrupt the whole file.
+     * (Dotenv's `${VAR}` interpolation inside double quotes is a remaining
+     * theoretical edge — a literal `${` in a value — that has no portable
+     * escape, so it is deliberately left alone.)
+     */
     private function escapeEnvValue(string $value): string
     {
-        return str_replace('"', '\\"', $value);
+        return str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
     }
 
     private function bootstrapLaravel(): object

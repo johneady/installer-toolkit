@@ -387,10 +387,9 @@ trait HandlesRequests
         $mailFromAddress = trim($_POST['mail_from_address'] ?? '');
         $mailFromName = trim($_POST['mail_from_name'] ?? '');
 
-        // Fall back to admin email when using log driver and no from address is provided
-        if ($mailFromAddress === '') {
-            $mailFromAddress = $_SESSION['installer']['admin']['email'] ?? 'noreply@example.com';
-        }
+        // A blank from-address is resolved at env-generation time (step 7),
+        // where the admin email — collected on the *next* step — is known.
+        // Resolving here could only ever see a stale value from a back-nav.
 
         if ($mailFromName === '') {
             $mailFromName = $_SESSION['installer']['settings']['app_name'] ?? ucwords(str_replace('-', ' ', APP_FOLDER));

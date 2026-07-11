@@ -59,8 +59,17 @@ abstract class PackageBuildCommand extends Command
         '.env.install',
     ];
 
+    /**
+     * update.php and the shared_* helpers are operator tools published from
+     * update-toolkit's stubs (or their legacy per-app equivalents). They run
+     * privileged Artisan commands, so they must never ship inside a customer
+     * package — the operator uploads them explicitly when needed.
+     */
     protected array $excludePublicFiles = [
         'hot',
+        'update.php',
+        'shared_update.php',
+        'shared_install.php',
     ];
 
     protected string $slug;

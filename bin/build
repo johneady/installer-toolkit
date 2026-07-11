@@ -126,9 +126,21 @@ $template = replaceMarkerOrFail(
 file_put_contents($packageDir.'/install.php', $template);
 echo " done\n";
 
-// ─── 2. Copy readme.html ─────────────────────────────────────────────────────
-echo "  Copying readme.html...";
-copy($toolkitDir.'/readme.html', $packageDir.'/readme.html');
+// ─── 2. Generate readme.html ─────────────────────────────────────────────────
+// The readme is templated (not copied verbatim) so the PHP version it quotes
+// always matches the app's own min_php_version instead of a hardcoded one.
+echo "  Generating readme.html...";
+$readme = file_get_contents($toolkitDir.'/readme.html');
+// '8.3.0' reads awkwardly as "PHP 8.3.0+" — display it as "PHP 8.3+".
+$minPhpDisplay = preg_replace('/\.0$/', '', $config['min_php_version']);
+$readmeVersioned = str_replace('[[MIN_PHP_VERSION]]', $minPhpDisplay, $readme, $readmeMarkers);
+
+if ($readmeMarkers < 1) {
+    echo "Error: Failed to substitute [[MIN_PHP_VERSION]] marker in readme.html\n";
+    exit(1);
+}
+
+file_put_contents($packageDir.'/readme.html', $readmeVersioned);
 echo " done\n";
 
 // ─── 3. Generate packages/.gitignore ──────────────────────────────────────────

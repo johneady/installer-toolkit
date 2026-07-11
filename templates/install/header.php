@@ -16,8 +16,9 @@
 
 // The values below are placeholders. bin/build replaces this entire block
 // with real values from the consuming app's package/package-config.php
-// (zip filename, app folder, app name, min_php_version) every time it generates that
-// app's install.php — editing them here has no effect on any deployed app.
+// (zip filename, app folder, app name, min_php_version) plus the toolkit's
+// own INSTALLER_VERSION every time it generates that app's install.php —
+// editing them here has no effect on any deployed app.
 // [[INSTALLER_CONFIG]]
 define('ZIP_FILENAME', 'Generated at build time');
 define('APP_FOLDER', 'Generated at build time');

@@ -65,5 +65,12 @@ test('bin/build injects the app name and produces a syntactically valid install.
         ->and($source)->toContain('id="mod-rewrite-row"')
         ->and($source)->toContain('ajax=mod-rewrite');
 
+    // readme.html is templated too: the quoted PHP version must come from
+    // the app's min_php_version ('8.3.0' displayed as '8.3+'), never a
+    // hardcoded default, and no marker may survive substitution.
+    $readme = file_get_contents($projectDir.'/package/readme.html');
+    expect($readme)->toContain('PHP 8.3+')
+        ->and($readme)->not->toContain('[[MIN_PHP_VERSION]]');
+
     File::deleteDirectory($projectDir);
 });
