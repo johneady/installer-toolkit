@@ -10,7 +10,7 @@ use InstallerToolkit\Update\Console\Commands\PruneUpdateArtifacts;
 use InstallerToolkit\Update\Console\Commands\UpdateHistoryCommand;
 use InstallerToolkit\Update\Console\Commands\UpdateKeygenCommand;
 use InstallerToolkit\Update\Console\Commands\UpdateRollbackCommand;
-use InstallerToolkit\Update\Http\ChunkedUploadController;
+use InstallerToolkit\Update\Http\LaunchUpdaterController;
 
 class UpdateServiceProvider extends ServiceProvider
 {
@@ -36,25 +36,21 @@ class UpdateServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
 
-        if (config('updates.routes.enabled', true)) {
+        if (config('updates.updater.enabled', true)) {
             $this->registerRoutes();
         }
     }
 
     protected function registerRoutes(): void
     {
-        $config = config('updates.routes', []);
+        $config = config('updates.updater', []);
 
-        Route::group([
-            'prefix' => $config['prefix'] ?? 'system-update/upload',
-            'middleware' => $config['middleware'] ?? ['web', 'auth'],
-        ], function (): void {
-            $name = (string) (config('updates.routes.name') ?? 'chunked-upload');
-
-            Route::post('initialize', [ChunkedUploadController::class, 'initialize'])->name($name.'.initialize');
-            Route::post('chunk', [ChunkedUploadController::class, 'chunk'])->name($name.'.chunk');
-            Route::post('assemble', [ChunkedUploadController::class, 'assemble'])->name($name.'.assemble');
-        });
+        Route::post(
+            (string) ($config['launch_path'] ?? 'system-update/launch'),
+            [LaunchUpdaterController::class, '__invoke'],
+        )
+            ->middleware((array) ($config['middleware'] ?? ['web', 'auth']))
+            ->name('updater.launch');
     }
 
     protected function offerPublishing(): void
@@ -69,30 +65,14 @@ class UpdateServiceProvider extends ServiceProvider
 
         $this->publishes([
             __DIR__.'/../../stubs/Filament/Pages/SystemUpdate.php' => $this->app->path('Filament/Pages/SystemUpdate.php'),
-            __DIR__.'/../../stubs/Filament/Pages/UpdateHistory.php' => $this->app->path('Filament/Pages/UpdateHistory.php'),
             __DIR__.'/../../stubs/views/filament/pages/system-update.blade.php' => $this->app->resourcePath('views/filament/pages/system-update.blade.php'),
-            __DIR__.'/../../stubs/views/filament/pages/update-history.blade.php' => $this->app->resourcePath('views/filament/pages/update-history.blade.php'),
         ], 'update-filament');
-
-        $this->publishes([
-            __DIR__.'/../../stubs/routes/updates.php' => $this->app->basePath('routes/updates.php'),
-        ], 'update-routes');
-
-        $this->publishes([
-            __DIR__.'/../../stubs/public/update.php' => $this->app->publicPath('update.php'),
-            __DIR__.'/../../stubs/public/shared_update.php' => $this->app->publicPath('shared_update.php'),
-        ], 'update-shared-hosting');
 
         $this->publishes([
             __DIR__.'/../../config/updates.php' => $this->app->configPath('updates.php'),
             __DIR__.'/../../database/migrations/2024_01_01_000000_create_update_history_table.php' => $this->app->databasePath('migrations/2024_01_01_000000_create_update_history_table.php'),
             __DIR__.'/../../stubs/Filament/Pages/SystemUpdate.php' => $this->app->path('Filament/Pages/SystemUpdate.php'),
-            __DIR__.'/../../stubs/Filament/Pages/UpdateHistory.php' => $this->app->path('Filament/Pages/UpdateHistory.php'),
             __DIR__.'/../../stubs/views/filament/pages/system-update.blade.php' => $this->app->resourcePath('views/filament/pages/system-update.blade.php'),
-            __DIR__.'/../../stubs/views/filament/pages/update-history.blade.php' => $this->app->resourcePath('views/filament/pages/update-history.blade.php'),
-            __DIR__.'/../../stubs/routes/updates.php' => $this->app->basePath('routes/updates.php'),
-            __DIR__.'/../../stubs/public/update.php' => $this->app->publicPath('update.php'),
-            __DIR__.'/../../stubs/public/shared_update.php' => $this->app->publicPath('shared_update.php'),
         ], 'update-toolkit');
     }
 }

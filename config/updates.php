@@ -58,13 +58,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Upload Authorization
+    | Updater Authorization
     |--------------------------------------------------------------------------
     |
-    | Controls who may upload a .update package. A callable (Closure,
-    | [Class, method] string array, or "Class@method") that receives the
-    | incoming Illuminate\Http\Request and returns true to authorize the
-    | upload. When null, the default guard requires an authenticated user
+    | Controls who may launch the standalone updater — i.e. who may mint a
+    | handoff token and be redirected to public/updater.php. A callable
+    | (Closure, [Class, method] array, or "Class@method") invoked through the
+    | container with the incoming Illuminate\Http\Request, returning true to
+    | authorize. When null, the default guard requires an authenticated user
     | whose `is_admin` flag is truthy.
     |
     */
@@ -73,21 +74,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Routes
+    | Standalone Updater
     |--------------------------------------------------------------------------
     |
-    | The toolkit registers its own chunked-upload routes. Disable them here
-    | (and publish the routes stub) if you need full control over middleware,
-    | prefix, or naming. Route names are always `<name>.{initialize,chunk,
-    | assemble}` so the Blade view can resolve them.
+    | The self-update engine lives in public/updater.php — a framework-free
+    | script assembled from templates/update and shipped inside every .update
+    | package. This block configures how the application hands an admin off
+    | to it.
+    |
+    |   path           — the public file the updater is served from.
+    |   storage_dir    — where the updater keeps its handoff token, backups,
+    |                    and results, relative to the project root. The
+    |                    framework-free updater reads the same value, so this
+    |                    is the single source of truth for that location.
+    |   handoff_ttl    — seconds a minted launch token stays valid. 0 disables
+    |                    expiry (still single-use: the updater deletes the
+    |                    token file the moment it authorizes a session).
+    |   launch_path    — the URI the package registers that mints a token and
+    |                    redirects to the updater. Named route: updater.launch.
+    |   middleware     — middleware on the launch route. Override to use a
+    |                    non-default guard, e.g. ['web', 'auth:admin'].
+    |   recent_results — how many recent outcomes the launch page renders.
     |
     */
 
-    'routes' => [
+    'updater' => [
         'enabled' => true,
-        'prefix' => 'system-update/upload',
+        'path' => 'updater.php',
+        'storage_dir' => 'storage/app/updater',
+        'handoff_ttl' => 300,
+        'launch_path' => 'system-update/launch',
         'middleware' => ['web', 'auth'],
-        'name' => 'chunked-upload',
+        'recent_results' => 5,
     ],
 
     /*

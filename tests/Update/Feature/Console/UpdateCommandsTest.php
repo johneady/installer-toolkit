@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\File;
 use InstallerToolkit\Update\Models\UpdateHistory;
 use InstallerToolkit\Update\UpdateService;
 
@@ -30,6 +31,10 @@ it('informs when no history exists', function (): void {
 
 it('prunes stale upload artifacts', function (): void {
     $stale = storage_path('app/pending-update-aaaabbbbccccddddeeee000011112222.update');
+    // storage/app is not guaranteed to exist in the testbench skeleton, so the
+    // test must create its own target directory rather than rely on another
+    // test's side effect.
+    File::ensureDirectoryExists(dirname($stale));
     file_put_contents($stale, 'old');
     touch($stale, time() - (48 * 3600));
 

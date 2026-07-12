@@ -14,7 +14,12 @@ trait BootsUpdaterEnvironment
 
     private function updaterStorageDir(): string
     {
-        return $this->appRoot().'/storage/app/updater';
+        // Same value the Laravel package reads (config/updates.php
+        // updater.storage_dir), so the handoff token and results are always
+        // written and read from the one location both sides agree on.
+        $dir = (string) ($this->updatesConfig()['updater']['storage_dir'] ?? 'storage/app/updater');
+
+        return $this->appRoot().'/'.ltrim($dir, '/');
     }
 
     private function backupsDir(): string
@@ -96,6 +101,7 @@ trait BootsUpdaterEnvironment
 
         $defaults = [
             'slug' => env('UPDATE_SLUG', APP_FOLDER),
+            'updater' => ['storage_dir' => 'storage/app/updater'],
             'protected_paths' => [
                 '.env',
                 'storage/app/license.key',

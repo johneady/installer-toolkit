@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace InstallerToolkit\Update;
 
-use Livewire\Wireable;
-
 /**
  * Result of validating an uploaded .update package.
+ *
+ * Returned by UpdateService::validateUpdateZip(). The standalone updater
+ * reimplements validation framework-free (templates/update), so this DTO only
+ * needs to travel within the booted application — it no longer implements
+ * Wireable now that the Livewire-driven upload page is gone.
  */
-class UpdateValidationResult implements Wireable
+class UpdateValidationResult
 {
     public function __construct(
         public bool $valid,
@@ -19,34 +22,4 @@ class UpdateValidationResult implements Wireable
         public ?int $filesCount = null,
         public ?string $minimumPhp = null,
     ) {}
-
-    /**
-     * @return array{valid: bool, version: string, currentVersion: string, error: ?string, filesCount: ?int, minimumPhp: ?string}
-     */
-    public function toLivewire(): array
-    {
-        return [
-            'valid' => $this->valid,
-            'version' => $this->version,
-            'currentVersion' => $this->currentVersion,
-            'error' => $this->error,
-            'filesCount' => $this->filesCount,
-            'minimumPhp' => $this->minimumPhp,
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $value
-     */
-    public static function fromLivewire($value): static
-    {
-        return new static(
-            valid: (bool) ($value['valid'] ?? false),
-            version: (string) ($value['version'] ?? ''),
-            currentVersion: (string) ($value['currentVersion'] ?? ''),
-            error: $value['error'] ?? null,
-            filesCount: isset($value['filesCount']) ? (int) $value['filesCount'] : null,
-            minimumPhp: $value['minimumPhp'] ?? null,
-        );
-    }
 }
