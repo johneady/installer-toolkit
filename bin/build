@@ -3,8 +3,9 @@
 /**
  * Installer Toolkit - Build Command
  *
- * Generates install.php + readme.html for any Laravel project from a shared
- * template. Each project only needs a package-config.php in package/.
+ * Generates install.php + updater.php + post_update.php + readme.html for any
+ * Laravel project from shared templates. Each project only needs a
+ * package-config.php in package/.
  *
  * Output is written outside the project (a system temp dir by default) so
  * running this never leaves untracked artifacts in the project tree.
@@ -60,27 +61,9 @@ if (! is_dir($packageDir)) {
     echo "  Created directory structure\n";
 }
 
-// ─── 1. Generate install.php ──────────────────────────────────────────────────
-echo "  Generating install.php...";
-$template = buildInstallerTemplate($toolkitDir.'/templates/install');
+$toolkitVersion = trim(file_get_contents($toolkitDir.'/VERSION'));
 
-$installerVersion = trim(file_get_contents($toolkitDir.'/VERSION'));
-
-$configBlock = implode("\n", [
-    "define('ZIP_FILENAME', '{$zipFilename}');",
-    "define('APP_FOLDER', '{$slug}');",
-    "define('APP_NAME', '".addslashes($config['name'])."');",
-    "define('MIN_PHP_VERSION', '{$config['min_php_version']}');",
-    "define('INSTALLER_VERSION', '{$installerVersion}');",
-]);
-
-$template = replaceMarkerOrFail(
-    '/\/\/ \[\[INSTALLER_CONFIG\]\].*?\/\/ \[\[\/INSTALLER_CONFIG\]\]/s',
-    $configBlock,
-    $template,
-    '[[INSTALLER_CONFIG]] marker in class.php'
-);
-
+// The compiled stylesheet is injected into both generated tools.
 $installerCssPath = $toolkitDir.'/templates/install/installer.css';
 if (! file_exists($installerCssPath)) {
     echo "Error: {$installerCssPath} not found. Run build-tools/compile-css.sh in the toolkit repo first.\n";
@@ -88,23 +71,26 @@ if (! file_exists($installerCssPath)) {
 }
 $installerCss = trim(file_get_contents($installerCssPath));
 
-// preg_replace_callback (not preg_replace) so the compiled CSS is inserted
-// literally — preg_replace would interpret \1/$1-style sequences in the CSS
-// as backreferences and silently corrupt the output.
-$template = preg_replace_callback(
-    '/\/\* \[\[INSTALLER_CSS\]\] \*\/.*?\/\* \[\[\/INSTALLER_CSS\]\] \*\//s',
-    fn () => $installerCss,
+// ─── 1. Generate install.php ──────────────────────────────────────────────────
+echo "  Generating install.php...";
+$template = buildToolTemplate($toolkitDir, 'install');
+
+$configBlock = implode("\n", [
+    "define('ZIP_FILENAME', '{$zipFilename}');",
+    "define('APP_FOLDER', '{$slug}');",
+    "define('APP_NAME', '".addslashes($config['name'])."');",
+    "define('MIN_PHP_VERSION', '{$config['min_php_version']}');",
+    "define('INSTALLER_VERSION', '{$toolkitVersion}');",
+]);
+
+$template = replaceMarkerOrFail(
+    '/\/\/ \[\[INSTALLER_CONFIG\]\].*?\/\/ \[\[\/INSTALLER_CONFIG\]\]/s',
+    $configBlock,
     $template,
-    1,
-    $cssReplaced
+    '[[INSTALLER_CONFIG]] marker in install header.php'
 );
 
-if ($cssReplaced !== 1) {
-    echo "Error: Failed to substitute [[INSTALLER_CSS]] marker in Concerns/RendersLayout.php\n";
-    exit(1);
-}
-// (preg_replace_callback has no direct equivalent in replaceMarkerOrFail's
-// preg_replace signature, so this one substitution stays inline.)
+$template = injectCss($template, $installerCss, 'install.php');
 
 $essentialSeeders = $config['essential_seeders'] ?? [];
 $sampleSeeders = $config['sample_seeders'] ?? [];
@@ -129,7 +115,43 @@ $template = replaceMarkerOrFail(
 file_put_contents($packageDir.'/install.php', $template);
 echo " done\n";
 
-// ─── 2. Generate readme.html ─────────────────────────────────────────────────
+// ─── 2. Generate updater.php ─────────────────────────────────────────────────
+echo "  Generating updater.php...";
+$updaterTemplate = buildToolTemplate($toolkitDir, 'update');
+
+$updaterConfigBlock = implode("\n", [
+    "define('APP_FOLDER', '{$slug}');",
+    "define('APP_NAME', '".addslashes($config['name'])."');",
+    "define('MIN_PHP_VERSION', '{$config['min_php_version']}');",
+    "define('UPDATER_VERSION', '{$toolkitVersion}');",
+]);
+
+$updaterTemplate = replaceMarkerOrFail(
+    '/\/\/ \[\[INSTALLER_CONFIG\]\].*?\/\/ \[\[\/INSTALLER_CONFIG\]\]/s',
+    $updaterConfigBlock,
+    $updaterTemplate,
+    '[[INSTALLER_CONFIG]] marker in update header.php'
+);
+
+$updaterTemplate = injectCss($updaterTemplate, $installerCss, 'updater.php');
+
+file_put_contents($packageDir.'/updater.php', $updaterTemplate);
+echo " done\n";
+
+// ─── 3. Copy the post-update hook stub ───────────────────────────────────────
+// Shipped inside the signed inner zip at {slug}/.updater/post_update.php by
+// package:build; the updater includes it after extraction to run migrations
+// and cache commands against the freshly-updated code.
+echo "  Copying post_update.php...";
+$hookSource = $toolkitDir.'/templates/update/post_update.stub.php';
+if (! file_exists($hookSource)) {
+    echo "Error: {$hookSource} not found.\n";
+    exit(1);
+}
+copy($hookSource, $packageDir.'/post_update.php');
+echo " done\n";
+
+// ─── 4. Generate readme.html ─────────────────────────────────────────────────
 // The readme is templated (not copied verbatim) so the PHP version it quotes
 // always matches the app's own min_php_version instead of a hardcoded one.
 echo "  Generating readme.html...";
@@ -169,6 +191,31 @@ function replaceMarkerOrFail(string $pattern, string $replacement, string $subje
     return $result;
 }
 
+/**
+ * Inject the compiled stylesheet into an assembled tool template.
+ *
+ * preg_replace_callback (not preg_replace) so the compiled CSS is inserted
+ * literally — preg_replace would interpret \1/$1-style sequences in the CSS
+ * as backreferences and silently corrupt the output.
+ */
+function injectCss(string $template, string $css, string $toolLabel): string
+{
+    $result = preg_replace_callback(
+        '/\/\* \[\[INSTALLER_CSS\]\] \*\/.*?\/\* \[\[\/INSTALLER_CSS\]\] \*\//s',
+        fn () => $css,
+        $template,
+        1,
+        $cssReplaced
+    );
+
+    if ($cssReplaced !== 1) {
+        echo "Error: Failed to substitute [[INSTALLER_CSS]] marker for {$toolLabel}\n";
+        exit(1);
+    }
+
+    return $result;
+}
+
 function buildSeederArray(array $seeders): string
 {
     if (empty($seeders)) {
@@ -185,29 +232,44 @@ function buildSeederArray(array $seeders): string
 }
 
 /**
- * Assemble the single-file install.php from its source pieces under
- * templates/install/. The shipped installer must remain one standalone
- * file (customers upload it with no autoloader available), so the
- * traits are inlined here in dependency order: definitions before the
- * class that uses them.
+ * Assemble a single-file tool (install.php or updater.php) from its source
+ * pieces under templates/{product}/, plus the shared pieces under
+ * templates/shared/. The shipped tools must remain one standalone file
+ * (customers upload them with no autoloader available), so everything is
+ * inlined here in dependency order: definitions before the class that uses
+ * them.
  *
- * Trait files are discovered from templates/install/Concerns/ rather
- * than hardcoded, so adding/removing a trait file is the only edit
- * needed — the `use` statements in class.php's [[INSTALLER_TRAITS]]
- * block are generated from the same directory listing.
+ * Trait files are discovered from templates/shared/Concerns/ and
+ * templates/{product}/Concerns/ rather than hardcoded, so adding/removing a
+ * trait file is the only edit needed — the `use` statements in class.php's
+ * [[INSTALLER_TRAITS]] block are generated from the same directory listings.
  */
-function buildInstallerTemplate(string $installDir): string
+function buildToolTemplate(string $toolkitDir, string $product): string
 {
-    $parts = [rtrim(file_get_contents("$installDir/header.php"), "\n")];
+    $productDir = $toolkitDir.'/templates/'.$product;
+    $sharedDir = $toolkitDir.'/templates/shared';
 
-    $traitFiles = glob("$installDir/Concerns/*.php");
+    $parts = [rtrim(file_get_contents("$productDir/header.php"), "\n")];
+
+    // Shared plain functions (fatal error page) go right after the header so
+    // they're defined before anything can throw.
+    $parts[] = rtrim(stripPhpOpenTag(file_get_contents("$sharedDir/functions.php"), "$sharedDir/functions.php"), "\n");
+
+    $traitFiles = array_merge(
+        glob("$sharedDir/Concerns/*.php") ?: [],
+        glob("$productDir/Concerns/*.php") ?: []
+    );
     sort($traitFiles);
 
     if (empty($traitFiles)) {
-        throw new \RuntimeException("No trait files found in {$installDir}/Concerns/");
+        throw new \RuntimeException("No trait files found for {$product}");
     }
 
     $traitNames = array_map(fn ($file) => basename($file, '.php'), $traitFiles);
+
+    if (count($traitNames) !== count(array_unique($traitNames))) {
+        throw new \RuntimeException("Duplicate trait names across shared and {$product} Concerns directories.");
+    }
 
     foreach ($traitFiles as $file) {
         $parts[] = rtrim(stripPhpOpenTag(file_get_contents($file), $file), "\n");
@@ -215,7 +277,7 @@ function buildInstallerTemplate(string $installDir): string
 
     $useStatements = implode("\n", array_map(fn ($name) => "    use {$name};", $traitNames));
 
-    $classTemplate = stripPhpOpenTag(file_get_contents("$installDir/class.php"), "$installDir/class.php");
+    $classTemplate = stripPhpOpenTag(file_get_contents("$productDir/class.php"), "$productDir/class.php");
     $classTemplate = preg_replace(
         '/\/\/ \[\[INSTALLER_TRAITS\]\].*?\/\/ \[\[\/INSTALLER_TRAITS\]\]/s',
         $useStatements,
@@ -225,12 +287,12 @@ function buildInstallerTemplate(string $installDir): string
     );
 
     if ($traitsReplaced !== 1) {
-        throw new \RuntimeException("Failed to substitute [[INSTALLER_TRAITS]] marker in {$installDir}/class.php");
+        throw new \RuntimeException("Failed to substitute [[INSTALLER_TRAITS]] marker in {$productDir}/class.php");
     }
 
     $parts[] = rtrim($classTemplate, "\n");
 
-    $parts[] = rtrim(file_get_contents("$installDir/bootstrap.php"), "\n");
+    $parts[] = rtrim(stripPhpOpenTag(file_get_contents("$productDir/bootstrap.php"), "$productDir/bootstrap.php"), "\n");
 
     return implode("\n\n", $parts)."\n";
 }
