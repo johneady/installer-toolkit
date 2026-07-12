@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace InstallerToolkit\Tests\Update\Support;
 
+use Illuminate\Support\Facades\File;
 use InstallerToolkit\Update\UpdateSignature;
 use ZipArchive;
 
@@ -52,6 +53,7 @@ trait BuildsUpdatePackages
         }
 
         $outer = new ZipArchive;
+        File::ensureDirectoryExists(dirname($path));
         $outer->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         $outer->addFromString('manifest.json', json_encode($manifest));
         $outer->addFile($innerPath, $this->testSlug.'.zip');
@@ -119,6 +121,7 @@ trait BuildsUpdatePackages
         ], $manifestOverrides);
 
         $outer = new ZipArchive;
+        File::ensureDirectoryExists(dirname($path));
         $outer->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         $outer->addFromString('manifest.json', json_encode($manifest));
         $outer->addFile($innerPath, $this->testSlug.'.zip');
