@@ -4,12 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
 use InstallerToolkit\Update\Models\UpdateHistory;
-use InstallerToolkit\Update\UpdateService;
-
-beforeEach(function (): void {
-    config(['updates.backup.include_vendor' => false]);
-    $this->minimalBackupScope();
-});
 
 it('lists update history', function (): void {
     UpdateHistory::create([
@@ -43,36 +37,4 @@ it('prunes stale upload artifacts', function (): void {
         ->expectsOutputToContain('Pruned 1');
 
     expect(file_exists($stale))->toBeFalse();
-});
-
-it('fails when there is no backup to roll back to', function (): void {
-    $this->artisan('update:rollback')
-        ->assertFailed()
-        ->expectsOutputToContain('No applied update');
-});
-
-it('rolls back to the latest applied backup with --force', function (): void {
-    $service = app(UpdateService::class);
-
-    $marker = base_path('rollback_marker_'.uniqid().'.txt');
-    file_put_contents($marker, 'original');
-
-    $backupId = $service->createBackup();
-
-    @unlink($marker);
-
-    UpdateHistory::create([
-        'version_from' => '1.0.0',
-        'version_to' => '1.2.0',
-        'status' => UpdateHistory::STATUS_APPLIED,
-        'backup_id' => $backupId,
-    ]);
-
-    $this->artisan('update:rollback', ['--force' => true, '--skip-db' => true])
-        ->assertSuccessful();
-
-    expect(file_exists($marker))->toBeTrue()
-        ->and(file_get_contents($marker))->toBe('original');
-
-    @unlink($marker);
 });

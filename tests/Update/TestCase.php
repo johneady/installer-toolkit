@@ -86,19 +86,6 @@ abstract class TestCase extends BaseTestCase
         $this->artisan('migrate', ['--database' => 'testing'])->run();
     }
 
-    /**
-     * Restrict backups to root-level files only so tests stay fast (the default
-     * behaviour backs up the whole project).
-     */
-    protected function minimalBackupScope(): void
-    {
-        config(['updates.backup.exclude' => [
-            'app', 'config', 'public', 'routes', 'bootstrap', 'resources',
-            'database', 'lang', 'storage', 'tests', 'package', 'docs', 'bin',
-            'vendor', 'node_modules', '.git', '.idea',
-        ]]);
-    }
-
     protected function getPackageProviders($app): array
     {
         return [UpdateServiceProvider::class];

@@ -169,6 +169,54 @@ test('generated router executes a PHP file under public instead of serving its s
     }
 });
 
+test('the assembled updater.php executes rather than being served as source', function () {
+    // Build the REAL standalone updater from templates (the same artifact a
+    // customer install ships in public/updater.php), then serve it through the
+    // sandbox router and confirm it executes. A stub .php proved the router
+    // branch; this proves the assembled updater itself boots and renders —
+    // catching both source-serving regressions and template-assembly fatals.
+    $projectDir = storage_path('app/updater-smoke-build-'.uniqid());
+    $outputDir = storage_path('app/updater-smoke-out-'.uniqid());
+    File::ensureDirectoryExists($projectDir.'/package');
+    file_put_contents($projectDir.'/package/package-config.php', '<?php return '.var_export([
+        'name' => 'Updater Smoke App',
+        'slug' => 'updater-smoke',
+        'min_php_version' => '8.3.0',
+        'essential_seeders' => [],
+        'sample_seeders' => [],
+    ], true).';');
+
+    $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]);
+    $build->mustRun();
+
+    $sandbox = storage_path('app/updater-smoke-sandbox-'.uniqid());
+    File::ensureDirectoryExists($sandbox.'/updater-smoke/public');
+    copy($outputDir.'/updater.php', $sandbox.'/updater-smoke/public/updater.php');
+
+    $command = fakeSandboxCommand(['slug' => 'updater-smoke']);
+    $routerPath = $command->callProtected('generateRouterScript', $sandbox);
+
+    $port = $command->callProtected('findFreePort');
+    $process = new Process(['php', '-S', "127.0.0.1:{$port}", '-t', $sandbox, $routerPath]);
+    $process->start();
+    (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
+
+    try {
+        $command->callProtected('waitForServer', $port);
+
+        // No token → the updater renders its token gate (HTML). It must never
+        // leak raw source or fatal (500).
+        $response = Http::get("http://127.0.0.1:{$port}/updater.php");
+
+        expect($response->status())->toBe(200)
+            ->and($response->header('Content-Type'))->toContain('text/html')
+            ->and($response->body())->not->toContain('<?php') // executed, not source
+            ->and($response->body())->toContain('token'); // the gate rendered
+    } finally {
+        $process->stop(3);
+    }
+});
+
 test('extractOuterPackage throws when install.php is missing from the zip', function () {
     $command = fakeSandboxCommand(['slug' => 'fake-app']);
 

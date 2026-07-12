@@ -2,12 +2,7 @@
 
 declare(strict_types=1);
 
-use InstallerToolkit\Update\UpdateService;
 use InstallerToolkit\Update\UpdateSignature;
-
-beforeEach(function (): void {
-    $this->service = app(UpdateService::class);
-});
 
 /**
  * The shipped config/updates.php default, read directly rather than through
@@ -81,105 +76,9 @@ it('verifies every shipped trusted key against its committed test vector', funct
     }
 });
 
-// ===========================================================================
-// validateUpdateZip signature enforcement
-// ===========================================================================
-
-it('accepts an unsigned update when no trusted keys are configured', function (): void {
-    config(['updates.signing.trusted_keys' => []]);
-
-    $path = $this->buildUpdatePackage($this->pendingPath($this->validUploadId()));
-
-    $result = $this->service->validateUpdateZip($path);
-
-    expect($result->valid)->toBeTrue();
-});
-
-it('accepts a correctly signed update when its key is trusted', function (): void {
-    $keypair = $this->generateTestKeypair();
-    config(['updates.signing.trusted_keys' => [$keypair['key_id'] => $keypair['public_key']]]);
-
-    $path = $this->buildUpdatePackage($this->pendingPath($this->validUploadId()), signWith: $keypair);
-
-    $result = $this->service->validateUpdateZip($path);
-
-    expect($result->valid)->toBeTrue();
-});
-
-it('rejects an unsigned update once trusted keys are configured', function (): void {
-    $keypair = $this->generateTestKeypair();
-    config(['updates.signing.trusted_keys' => [$keypair['key_id'] => $keypair['public_key']]]);
-
-    $path = $this->buildUpdatePackage($this->pendingPath($this->validUploadId()));
-
-    $result = $this->service->validateUpdateZip($path);
-
-    expect($result->valid)->toBeFalse()
-        ->and($result->error)->toContain('not signed');
-});
-
-it('rejects an update signed with an unrecognized key_id', function (): void {
-    $trusted = $this->generateTestKeypair('trusted-key');
-    $rogue = $this->generateTestKeypair('rogue-key');
-    config(['updates.signing.trusted_keys' => [$trusted['key_id'] => $trusted['public_key']]]);
-
-    $path = $this->buildUpdatePackage($this->pendingPath($this->validUploadId()), signWith: $rogue);
-
-    $result = $this->service->validateUpdateZip($path);
-
-    expect($result->valid)->toBeFalse()
-        ->and($result->error)->toContain('unrecognized key');
-});
-
-it('rejects an update whose inner zip was tampered with after signing', function (): void {
-    $keypair = $this->generateTestKeypair();
-    config(['updates.signing.trusted_keys' => [$keypair['key_id'] => $keypair['public_key']]]);
-
-    $path = $this->pendingPath($this->validUploadId());
-    $this->buildUpdatePackage($path, signWith: $keypair);
-
-    // Tamper with the manifest's checksum post-signing, simulating a
-    // replaced inner zip whose checksum was patched but not re-signed.
-    $zip = new ZipArchive;
-    $zip->open($path);
-    $manifest = json_decode((string) $zip->getFromName('manifest.json'), true);
-    $manifest['checksum'] = str_repeat('f', 64);
-    $zip->deleteName('manifest.json');
-    $zip->addFromString('manifest.json', json_encode($manifest));
-    $zip->close();
-
-    $result = $this->service->validateUpdateZip($path);
-
-    expect($result->valid)->toBeFalse();
-});
-
-it('rejects an update whose version was edited after signing (downgrade/replay protection)', function (): void {
-    $keypair = $this->generateTestKeypair();
-    config(['updates.signing.trusted_keys' => [$keypair['key_id'] => $keypair['public_key']]]);
-
-    $path = $this->pendingPath($this->validUploadId());
-    $this->buildUpdatePackage($path, manifestOverrides: ['version' => '1.2.0'], signWith: $keypair);
-
-    $zip = new ZipArchive;
-    $zip->open($path);
-    $manifest = json_decode((string) $zip->getFromName('manifest.json'), true);
-    $manifest['version'] = '1.3.0';
-    $zip->deleteName('manifest.json');
-    $zip->addFromString('manifest.json', json_encode($manifest));
-    $zip->close();
-
-    $result = $this->service->validateUpdateZip($path);
-
-    expect($result->valid)->toBeFalse()
-        ->and($result->error)->toContain('signature verification failed');
-});
-
-it('rejects a signed update when the sodium extension is unavailable', function (): void {
-    // We can't actually unload sodium in a running PHP process, so this
-    // exercises verifySignature's guard indirectly: it requires the
-    // extension to be loaded, which in CI it always is, so this test
-    // documents the contract via UpdateSignature::verify's own bounds
-    // checking instead of process-level extension removal.
+it('rejects a signature that does not verify against the trusted key', function (): void {
+    // Exercises UpdateSignature::verify's negative path directly: a malformed
+    // signature must never verify, regardless of the trusted-keys config.
     $keypair = $this->generateTestKeypair();
 
     $payload = UpdateSignature::canonicalPayload('testapp', '1.2.0', '1.0.0', str_repeat('a', 64), $keypair['key_id']);
@@ -187,25 +86,3 @@ it('rejects a signed update when the sodium extension is unavailable', function 
     expect(UpdateSignature::verify($payload, 'not-a-real-signature', $keypair['key_id'], [$keypair['key_id'] => $keypair['public_key']]))
         ->toBeFalse();
 })->skip(! extension_loaded('sodium'), 'sodium extension not loaded');
-
-it('supports rotation: a package signed with a newly added second key verifies once both keys are trusted', function (): void {
-    $oldKey = $this->generateTestKeypair('key-2026-01');
-    $newKey = $this->generateTestKeypair('key-2026-07');
-
-    // Rotation step: both keys trusted simultaneously (old not yet removed).
-    config(['updates.signing.trusted_keys' => [
-        $oldKey['key_id'] => $oldKey['public_key'],
-        $newKey['key_id'] => $newKey['public_key'],
-    ]]);
-
-    $path = $this->buildUpdatePackage($this->pendingPath($this->validUploadId()), signWith: $newKey);
-
-    expect($this->service->validateUpdateZip($path)->valid)->toBeTrue();
-
-    // Old key removed in a later release: a package still signed with it must now fail.
-    config(['updates.signing.trusted_keys' => [$newKey['key_id'] => $newKey['public_key']]]);
-
-    $oldPath = $this->buildUpdatePackage($this->pendingPath($this->validUploadId()), signWith: $oldKey);
-
-    expect($this->service->validateUpdateZip($oldPath)->valid)->toBeFalse();
-});

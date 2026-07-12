@@ -9,7 +9,6 @@ use Illuminate\Support\ServiceProvider;
 use InstallerToolkit\Update\Console\Commands\PruneUpdateArtifacts;
 use InstallerToolkit\Update\Console\Commands\UpdateHistoryCommand;
 use InstallerToolkit\Update\Console\Commands\UpdateKeygenCommand;
-use InstallerToolkit\Update\Console\Commands\UpdateRollbackCommand;
 use InstallerToolkit\Update\Http\LaunchUpdaterController;
 
 class UpdateServiceProvider extends ServiceProvider
@@ -17,9 +16,6 @@ class UpdateServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../../config/updates.php', 'updates');
-
-        $this->app->singleton(UpdateBackupManager::class);
-        $this->app->singleton(UpdateService::class);
     }
 
     public function boot(): void
@@ -28,7 +24,6 @@ class UpdateServiceProvider extends ServiceProvider
             $this->offerPublishing();
             $this->commands([
                 PruneUpdateArtifacts::class,
-                UpdateRollbackCommand::class,
                 UpdateHistoryCommand::class,
                 UpdateKeygenCommand::class,
             ]);
