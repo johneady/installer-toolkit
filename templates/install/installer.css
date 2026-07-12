@@ -238,32 +238,6 @@ body.h-body {
 .h-reqrow.warn { border-color: var(--h-warn-soft-border); background: var(--h-warn-soft); }
 .h-reqrow.warn .icon { background: var(--h-warn-soft-border); color: var(--h-warn); }
 .h-reqrow.warn .badge { background: var(--h-warn-soft-border); color: var(--h-warn); }
-.h-reqgroup {
-    border-radius: 16px; border: 1.5px solid var(--h-border); background: var(--h-surface);
-    margin-bottom: 10px; overflow: hidden;
-}
-.h-reqgroup-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 10px 16px; border-bottom: 1px solid var(--h-border-soft);
-}
-.h-reqgroup-head .t { font-weight: 700; font-size: .86rem; margin: 0; }
-.h-reqgroup-head .badge { font-size: .68rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; flex-shrink: 0; text-transform: uppercase; letter-spacing: .03em; }
-.h-reqgroup-body { display: flex; flex-direction: column; }
-.h-reqgroup-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
-.h-reqgroup-item + .h-reqgroup-item { border-top: 1px solid var(--h-border-soft); }
-.h-reqgroup-item .icon { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.h-reqgroup-item .body { flex: 1; min-width: 0; }
-.h-reqgroup-item .t { font-weight: 700; font-size: .82rem; margin: 0; }
-.h-reqgroup-item .d { font-size: .74rem; color: var(--h-mute); margin: 2px 0 0; }
-.h-reqgroup.good { border-color: var(--h-good-soft-border); }
-.h-reqgroup.good .h-reqgroup-head .badge { background: var(--h-good-soft); color: var(--h-good); }
-.h-reqgroup.bad { border-color: var(--h-bad-soft-border); }
-.h-reqgroup.bad .h-reqgroup-head .badge { background: var(--h-bad-soft-border); color: var(--h-bad); }
-.h-reqgroup.warn { border-color: var(--h-warn-soft-border); }
-.h-reqgroup.warn .h-reqgroup-head .badge { background: var(--h-warn-soft-border); color: var(--h-warn); }
-.h-reqgroup-item.good .icon { background: var(--h-good-soft); color: var(--h-good); }
-.h-reqgroup-item.bad .icon { background: var(--h-bad-soft-border); color: var(--h-bad); }
-.h-reqgroup-item.warn .icon { background: var(--h-warn-soft-border); color: var(--h-warn); }
 .h-progress-card { border-radius: 22px; overflow: hidden; border: 1px solid var(--h-border); margin-bottom: 20px; background: var(--h-surface); }
 .h-progress-card-head { background: var(--h-accent); padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; color: #fff; }
 .h-progress-card-head .left { display: flex; align-items: center; gap: 12px; }

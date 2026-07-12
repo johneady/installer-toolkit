@@ -99,50 +99,43 @@ trait RendersUpdaterLayout
 
     /**
      * Renders a set of related checks (e.g. all PHP version/extension
-     * checks) as a single bordered box with one summary badge, instead of
-     * one h-reqrow per check.
+     * checks) as a single h-reqrow-sized box, same footprint as any other
+     * check, instead of one row per check.
      */
     private function renderRequirementGroup(string $title, array $items): string
     {
         $anyCritical = false;
         $allPassed = true;
+        $failing = [];
 
-        $rows = '';
         foreach ($items as $r) {
-            $icon = $this->statusIcon($r['passed'] ? 'check' : ($r['critical'] ? 'x' : 'warning'), 14);
-            $rowClass = $r['passed'] ? 'good' : ($r['critical'] ? 'bad' : 'warn');
-            $name = htmlspecialchars($r['name']);
-            $detail = htmlspecialchars($r['detail']);
-
             if (! $r['passed']) {
                 $allPassed = false;
+                $failing[] = $r['name'];
                 if ($r['critical']) {
                     $anyCritical = true;
                 }
             }
-
-            $rows .= <<<HTML
-            <div class="h-reqgroup-item {$rowClass}">
-                <div class="icon">{$icon}</div>
-                <div class="body">
-                    <p class="t">{$name}</p>
-                    <p class="d">{$detail}</p>
-                </div>
-            </div>
-            HTML;
         }
 
-        $groupClass = $allPassed ? 'good' : ($anyCritical ? 'bad' : 'warn');
+        $rowClass = $allPassed ? 'good' : ($anyCritical ? 'bad' : 'warn');
         $badge = $allPassed ? 'Passed' : ($anyCritical ? 'Critical' : 'Warning');
+        $icon = $this->statusIcon($allPassed ? 'check' : ($anyCritical ? 'x' : 'warning'), 16);
+        $count = count($items);
+        $detail = $allPassed
+            ? "All {$count} checks passed."
+            : 'Needs attention: '.implode(', ', $failing);
         $title = htmlspecialchars($title);
+        $detail = htmlspecialchars($detail);
 
         return <<<HTML
-        <div class="h-reqgroup {$groupClass}">
-            <div class="h-reqgroup-head">
+        <div class="h-reqrow {$rowClass}">
+            <div class="icon">{$icon}</div>
+            <div class="body">
                 <p class="t">{$title}</p>
-                <span class="badge">{$badge}</span>
+                <p class="d">{$detail}</p>
             </div>
-            <div class="h-reqgroup-body">{$rows}</div>
+            <span class="badge">{$badge}</span>
         </div>
         HTML;
     }
