@@ -31,7 +31,7 @@ return [
     | Do NOT add 'database/' here: new database/migrations/*.php files must
     | be extracted or the update's migrate step silently applies nothing.
     | SQLite data files under database/ are already protected by a built-in
-    | rule in UpdateService::isProtectedPath().
+    | rule in the updater's RunsUpdateTasks::isProtectedRelativePath().
     |
     */
 
