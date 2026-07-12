@@ -8,7 +8,7 @@
 
             <form method="post" action="{{ $launchUrl }}">
                 @csrf
-                <flux:button variant="primary" type="submit" icon="arrow-path" size="lg">
+                <flux:button variant="primary" type="submit">
                     Launch Updater
                 </flux:button>
             </form>
