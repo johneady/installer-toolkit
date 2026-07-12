@@ -1,6 +1,8 @@
 <?php
 
-uses(InstallerToolkit\Tests\TestCase::class)->in('Installer');
+use InstallerToolkit\Tests\TestCase;
+
+uses(TestCase::class)->in('Installer');
 uses(InstallerToolkit\Tests\Update\TestCase::class)->in('Update');
 
 /**

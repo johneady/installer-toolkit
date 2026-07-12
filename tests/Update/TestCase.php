@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace InstallerToolkit\Tests\Update;
 
 use FilesystemIterator;
+use InstallerToolkit\Tests\Update\Support\BuildsUpdatePackages;
+use InstallerToolkit\Update\UpdateServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use InstallerToolkit\Tests\Update\Support\BuildsUpdatePackages;
-use InstallerToolkit\Update\UpdateServiceProvider;
 
 abstract class TestCase extends BaseTestCase
 {

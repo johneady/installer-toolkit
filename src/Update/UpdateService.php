@@ -9,12 +9,12 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 use InstallerToolkit\Update\Events\UpdateCompleted;
 use InstallerToolkit\Update\Events\UpdateFailed;
 use InstallerToolkit\Update\Events\UpdateRolledBack;
 use InstallerToolkit\Update\Events\UpdateStarted;
 use InstallerToolkit\Update\Models\UpdateHistory;
+use Throwable;
 use ZipArchive;
 
 class UpdateService

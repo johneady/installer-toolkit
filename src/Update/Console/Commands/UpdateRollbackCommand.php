@@ -6,9 +6,9 @@ namespace InstallerToolkit\Update\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 use InstallerToolkit\Update\Models\UpdateHistory;
 use InstallerToolkit\Update\UpdateService;
+use Throwable;
 
 class UpdateRollbackCommand extends Command
 {

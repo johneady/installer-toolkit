@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Contracts\Console\Kernel;
+use Symfony\Component\Console\Output\BufferedOutput;
+
 /**
  * Post-update hook — shipped inside every .update package's signed inner
  * zip at {slug}/.updater/post_update.php and executed by updater.php after
@@ -33,11 +36,11 @@ return (function (): array {
         require $autoload;
         $app = require $appRoot.'/bootstrap/app.php';
 
-        $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+        $kernel = $app->make(Kernel::class);
         $kernel->bootstrap();
 
         $run = function (string $command, array $params = []) use ($kernel, &$log): void {
-            $output = new Symfony\Component\Console\Output\BufferedOutput;
+            $output = new BufferedOutput;
 
             ob_start();
             try {

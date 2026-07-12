@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use InstallerToolkit\Update\Http\ChunkedUploadController;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function controller(): ChunkedUploadController
 {

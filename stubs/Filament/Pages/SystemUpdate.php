@@ -9,10 +9,10 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Livewire\Attributes\Locked;
 use InstallerToolkit\Update\Models\UpdateHistory;
 use InstallerToolkit\Update\UpdateService;
 use InstallerToolkit\Update\UpdateValidationResult;
+use Livewire\Attributes\Locked;
 
 /**
  * Self-update page driven by johneady/installer-toolkit.

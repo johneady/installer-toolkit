@@ -14,9 +14,9 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 use InstallerToolkit\Update\Models\UpdateHistory as UpdateHistoryModel;
 use InstallerToolkit\Update\UpdateService;
+use Throwable;
 
 /**
  * Lists every update the toolkit has applied (or attempted) and exposes a

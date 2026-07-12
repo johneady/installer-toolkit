@@ -5,8 +5,8 @@ namespace InstallerToolkit;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use InstallerToolkit\Concerns\LoadsPackageConfig;
-use Symfony\Component\Process\Process;
 use InstallerToolkit\Update\UpdateSignature;
+use Symfony\Component\Process\Process;
 use ZipArchive;
 
 abstract class PackageBuildCommand extends Command
