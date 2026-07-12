@@ -280,3 +280,57 @@ test('copyProjectFiles skips the staging directory to prevent recursive copying'
     expect(file_exists($destination.'/app/Foo.php'))->toBeTrue()
         ->and(is_dir($destination.'/storage/app/package-build-xyz'))->toBeFalse();
 });
+
+test('generateManifest declares the signature-covered post_update hook', function () {
+    $stagingDir = storage_path('app/test-manifest-hook-'.uniqid());
+    File::ensureDirectoryExists($stagingDir);
+
+    $innerZipPath = $stagingDir.'/fake-app.zip';
+    $innerZip = new ZipArchive;
+    $innerZip->open($innerZipPath, ZipArchive::CREATE);
+    $innerZip->addFromString('fake-app/.updater/post_update.php', '<?php return ["success" => true, "output" => ""];');
+    $innerZip->close();
+
+    $command = fakeCommand();
+    $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0');
+
+    $manifest = json_decode(file_get_contents($manifestPath), true);
+
+    expect($manifest['post_update'])->toBe('.updater/post_update.php');
+});
+
+test('embedTooling stages updater.php and the post-update hook into the app tree', function () {
+    $toolkitOutputDir = storage_path('app/test-embed-toolkit-'.uniqid());
+    $stagedAppDir = storage_path('app/test-embed-app-'.uniqid());
+
+    File::ensureDirectoryExists($toolkitOutputDir);
+    File::ensureDirectoryExists($stagedAppDir);
+    file_put_contents($toolkitOutputDir.'/updater.php', '<?php // fake updater');
+    file_put_contents($toolkitOutputDir.'/post_update.php', '<?php return ["success" => true, "output" => ""];');
+
+    $command = fakeCommand();
+    $command->callProtected('embedTooling', $toolkitOutputDir, $stagedAppDir);
+
+    expect(file_get_contents($stagedAppDir.'/public/updater.php'))->toBe('<?php // fake updater')
+        ->and(file_exists($stagedAppDir.'/.updater/post_update.php'))->toBeTrue();
+});
+
+test('embedTooling fails loudly when the toolkit output is missing the updater', function () {
+    $toolkitOutputDir = storage_path('app/test-embed-missing-'.uniqid());
+    $stagedAppDir = storage_path('app/test-embed-missing-app-'.uniqid());
+
+    File::ensureDirectoryExists($toolkitOutputDir);
+    File::ensureDirectoryExists($stagedAppDir);
+
+    $command = fakeCommand();
+
+    expect(fn () => $command->callProtected('embedTooling', $toolkitOutputDir, $stagedAppDir))
+        ->toThrow(RuntimeException::class, 'updater.php');
+});
+
+test('shouldExclude drops a stale updater.php from the app checkout', function () {
+    $command = fakeCommand();
+
+    expect($command->callProtected('shouldExclude', 'public/updater.php'))->toBeTrue()
+        ->and($command->callProtected('shouldExclude', 'public/index.php'))->toBeFalse();
+});

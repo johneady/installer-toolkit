@@ -61,13 +61,18 @@ abstract class PackageBuildCommand extends Command
 
     /**
      * update.php and the shared_* helpers are operator tools published from
-     * update-toolkit's stubs (or their legacy per-app equivalents). They run
+     * the toolkit's stubs (or their legacy per-app equivalents). They run
      * privileged Artisan commands, so they must never ship inside a customer
      * package — the operator uploads them explicitly when needed.
+     *
+     * updater.php is excluded from the *copy* for a different reason: a
+     * stale copy in the app checkout (e.g. laid down by a local install run)
+     * must never win over the freshly-generated one embedTooling() stages.
      */
     protected array $excludePublicFiles = [
         'hot',
         'update.php',
+        'updater.php',
         'shared_update.php',
         'shared_install.php',
     ];
@@ -112,6 +117,8 @@ abstract class PackageBuildCommand extends Command
             $this->copyProjectFiles($basePath, $stagingDir.'/'.$this->slug, $stagingDir);
 
             $this->installProductionDependencies($stagingDir.'/'.$this->slug);
+
+            $this->embedTooling($toolkitOutputDir, $stagingDir.'/'.$this->slug);
 
             $zipPath = $stagingDir.'/'.$this->slug.'-full.zip';
             $this->createZip($stagingDir, $this->slug, $zipPath);
@@ -485,6 +492,35 @@ abstract class PackageBuildCommand extends Command
     }
 
     /**
+     * Stage the toolkit-generated update tooling into the app tree before
+     * zipping, so it ships inside every package (full, demo, and .update):
+     *
+     *  - public/updater.php — the standalone updater. Fresh installs lay it
+     *    down via extraction; updates refresh it (the running updater swaps
+     *    itself at finalize, since extraction skips the executing file).
+     *  - .updater/post_update.php — the hook updater.php includes after
+     *    extraction to boot the new code once for migrations/caches. Living
+     *    inside the inner zip puts it under the manifest's Ed25519 signature.
+     */
+    protected function embedTooling(string $toolkitOutputDir, string $stagedAppDir): void
+    {
+        $updater = $toolkitOutputDir.'/updater.php';
+        $hook = $toolkitOutputDir.'/post_update.php';
+
+        if (! file_exists($updater) || ! file_exists($hook)) {
+            throw new \RuntimeException('updater.php/post_update.php not found in the toolkit output. Toolkit build may have failed.');
+        }
+
+        File::ensureDirectoryExists($stagedAppDir.'/public');
+        File::ensureDirectoryExists($stagedAppDir.'/.updater');
+
+        copy($updater, $stagedAppDir.'/public/updater.php');
+        copy($hook, $stagedAppDir.'/.updater/post_update.php');
+
+        $this->info('Embedded updater.php and post_update hook.');
+    }
+
+    /**
      * @param  array<string>  $excludeFiles  Files to exclude from the zip, relative to the app folder.
      */
     protected function createZip(string $stagingDir, string $appFolder, string $zipPath, array $excludeFiles = []): void
@@ -602,6 +638,10 @@ abstract class PackageBuildCommand extends Command
             'checksum' => $checksum,
             'built_at' => now()->toIso8601String(),
             'files_count' => $filesCount,
+            // Signature-covered via the inner zip's checksum: the hook lives
+            // inside {slug}/.updater/, so tampering with it breaks the
+            // checksum and therefore the Ed25519 signature.
+            'post_update' => '.updater/post_update.php',
         ];
 
         $manifest = array_merge($manifest, $this->signManifest($version, $minimumVersion, $checksum));
