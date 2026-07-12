@@ -58,12 +58,20 @@ trait RendersUpdaterSteps
         $requirements = $this->checkUpdateRequirements();
         $criticalsPass = true;
 
+        $phpChecks = [];
         $rows = '';
         foreach ($requirements as $r) {
-            $rows .= $this->renderRequirementRow($r);
+            if (($r['group'] ?? null) === 'php') {
+                $phpChecks[] = $r;
+            } else {
+                $rows .= $this->renderRequirementRow($r);
+            }
             if ($r['critical'] && ! $r['passed']) {
                 $criticalsPass = false;
             }
+        }
+        if ($phpChecks !== []) {
+            $rows = $this->renderRequirementGroup('PHP', $phpChecks).$rows;
         }
 
         $versionLabel = $version !== null ? 'v'.htmlspecialchars($version) : 'unknown';

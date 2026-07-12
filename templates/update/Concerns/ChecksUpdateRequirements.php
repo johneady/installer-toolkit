@@ -17,6 +17,7 @@ trait ChecksUpdateRequirements
             'detail' => 'Current: '.PHP_VERSION,
             'passed' => version_compare(PHP_VERSION, MIN_PHP_VERSION, '>='),
             'critical' => true,
+            'group' => 'php',
         ];
 
         foreach (['zip', 'json'] as $ext) {
@@ -25,6 +26,7 @@ trait ChecksUpdateRequirements
                 'detail' => extension_loaded($ext) ? 'Loaded' : 'Not loaded',
                 'passed' => extension_loaded($ext),
                 'critical' => true,
+                'group' => 'php',
             ];
         }
 
@@ -41,6 +43,7 @@ trait ChecksUpdateRequirements
                     : 'Not loaded — update packages will not be signature-verified.'),
             'passed' => extension_loaded('sodium'),
             'critical' => $signatureRequired,
+            'group' => 'php',
         ];
 
         // Writability, verified by real write tests. The app root receives

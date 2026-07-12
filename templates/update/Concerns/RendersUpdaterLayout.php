@@ -96,4 +96,54 @@ trait RendersUpdaterLayout
         </div>
         HTML;
     }
+
+    /**
+     * Renders a set of related checks (e.g. all PHP version/extension
+     * checks) as a single bordered box with one summary badge, instead of
+     * one h-reqrow per check.
+     */
+    private function renderRequirementGroup(string $title, array $items): string
+    {
+        $anyCritical = false;
+        $allPassed = true;
+
+        $rows = '';
+        foreach ($items as $r) {
+            $icon = $this->statusIcon($r['passed'] ? 'check' : ($r['critical'] ? 'x' : 'warning'), 14);
+            $rowClass = $r['passed'] ? 'good' : ($r['critical'] ? 'bad' : 'warn');
+            $name = htmlspecialchars($r['name']);
+            $detail = htmlspecialchars($r['detail']);
+
+            if (! $r['passed']) {
+                $allPassed = false;
+                if ($r['critical']) {
+                    $anyCritical = true;
+                }
+            }
+
+            $rows .= <<<HTML
+            <div class="h-reqgroup-item {$rowClass}">
+                <div class="icon">{$icon}</div>
+                <div class="body">
+                    <p class="t">{$name}</p>
+                    <p class="d">{$detail}</p>
+                </div>
+            </div>
+            HTML;
+        }
+
+        $groupClass = $allPassed ? 'good' : ($anyCritical ? 'bad' : 'warn');
+        $badge = $allPassed ? 'Passed' : ($anyCritical ? 'Critical' : 'Warning');
+        $title = htmlspecialchars($title);
+
+        return <<<HTML
+        <div class="h-reqgroup {$groupClass}">
+            <div class="h-reqgroup-head">
+                <p class="t">{$title}</p>
+                <span class="badge">{$badge}</span>
+            </div>
+            <div class="h-reqgroup-body">{$rows}</div>
+        </div>
+        HTML;
+    }
 }
