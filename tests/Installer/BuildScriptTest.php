@@ -3,16 +3,6 @@
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
 
-/**
- * The repo root the bin/build script reads its templates from. bin/build
- * resolves this itself via dirname(__DIR__), so it is independent of CWD —
- * we only need an absolute path to invoke it.
- */
-function toolkitRoot(): string
-{
-    return realpath(dirname(__DIR__, 2));
-}
-
 afterEach(function () {
     File::deleteDirectory(storage_path('app'));
 });

@@ -20,7 +20,7 @@ beforeEach(function (): void {
  */
 function shippedUpdatesConfig(): array
 {
-    return require __DIR__.'/../../../config/updates.php';
+    return require toolkitRoot().'/config/updates.php';
 }
 
 // ===========================================================================
