@@ -1,1 +1,7 @@
 /vendor/
+
+# Local signing key (and any other local env). Never commit — the build reads
+# the signing key from here via UPDATE_SIGNING_KEY_FILE, and copyPackageSource
+# excludes .env from the vendored package, but it must never reach git either.
+.env
+.env.*
