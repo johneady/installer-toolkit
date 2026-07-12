@@ -6,7 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use InstallerToolkit\Concerns\LoadsPackageConfig;
 use Symfony\Component\Process\Process;
-use UpdateToolkit\UpdateSignature;
+use InstallerToolkit\Update\UpdateSignature;
 use ZipArchive;
 
 abstract class PackageBuildCommand extends Command

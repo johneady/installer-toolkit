@@ -10,7 +10,7 @@ use Symfony\Component\Process\Process;
  */
 function toolkitRoot(): string
 {
-    return realpath(dirname(__DIR__));
+    return realpath(dirname(__DIR__, 2));
 }
 
 afterEach(function () {

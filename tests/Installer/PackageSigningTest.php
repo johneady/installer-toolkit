@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\File;
 use InstallerToolkit\Tests\Fixtures\FakePackageBuildCommand;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
-use UpdateToolkit\UpdateSignature;
+use InstallerToolkit\Update\UpdateSignature;
 
 function signingFakeCommand(array $config = []): FakePackageBuildCommand
 {

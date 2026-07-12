@@ -1,5 +1,4 @@
 <?php
 
-use InstallerToolkit\Tests\TestCase;
-
-uses(TestCase::class)->in(__DIR__);
+uses(InstallerToolkit\Tests\TestCase::class)->in('Installer');
+uses(InstallerToolkit\Tests\Update\TestCase::class)->in('Update');

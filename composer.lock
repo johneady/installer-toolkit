@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "225c2a375bba16e93dcd192b2ff56f70",
+    "content-hash": "064c3a6aba32b8955add95505537a08f",
     "packages": [
         {
             "name": "brick/math",
@@ -1057,64 +1057,6 @@
                 }
             ],
             "time": "2026-07-08T16:19:22+00:00"
-        },
-        {
-            "name": "johneady/update-toolkit",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "../update-toolkit",
-                "reference": "c7d530314f3ca0591f23083b50f7805ed021c28e"
-            },
-            "require": {
-                "ext-json": "*",
-                "ext-sodium": "*",
-                "ext-zip": "*",
-                "illuminate/console": "^11.0|^12.0|^13.0",
-                "illuminate/database": "^11.0|^12.0|^13.0",
-                "illuminate/support": "^11.0|^12.0|^13.0",
-                "livewire/livewire": "^3.0|^4.0",
-                "php": "^8.2",
-                "symfony/process": "^6.0|^7.0"
-            },
-            "require-dev": {
-                "laravel/pint": "^1.29",
-                "orchestra/testbench": "^9.0|^10.0",
-                "pestphp/pest": "^2.0|^3.0"
-            },
-            "type": "library",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "UpdateToolkit\\UpdateToolkitServiceProvider"
-                    ]
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "UpdateToolkit\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "UpdateToolkit\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "pest"
-                ],
-                "pint": [
-                    "pint"
-                ]
-            },
-            "license": [
-                "proprietary"
-            ],
-            "description": "Centralized self-update engine for Laravel apps distributed via installer-toolkit .update packages.",
-            "transport-options": {
-                "relative": true
-            }
         },
         {
             "name": "laravel/framework",
@@ -8237,16 +8179,16 @@
         },
         {
             "name": "phpstan/phpdoc-parser",
-            "version": "2.3.2",
+            "version": "2.3.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpstan/phpdoc-parser.git",
-                "reference": "a004701b11273a26cd7955a61d67a7f1e525a45a"
+                "reference": "fb19eedd2bb67ff8cf7a5502ad329e701d6398a3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpdoc-parser/zipball/a004701b11273a26cd7955a61d67a7f1e525a45a",
-                "reference": "a004701b11273a26cd7955a61d67a7f1e525a45a",
+                "url": "https://api.github.com/repos/phpstan/phpdoc-parser/zipball/fb19eedd2bb67ff8cf7a5502ad329e701d6398a3",
+                "reference": "fb19eedd2bb67ff8cf7a5502ad329e701d6398a3",
                 "shasum": ""
             },
             "require": {
@@ -8278,9 +8220,9 @@
             "description": "PHPDoc parser with support for nullable, intersection and generic types",
             "support": {
                 "issues": "https://github.com/phpstan/phpdoc-parser/issues",
-                "source": "https://github.com/phpstan/phpdoc-parser/tree/2.3.2"
+                "source": "https://github.com/phpstan/phpdoc-parser/tree/2.3.3"
             },
-            "time": "2026-01-25T14:56:51+00:00"
+            "time": "2026-07-08T07:01:06+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -10011,13 +9953,12 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "johneady/update-toolkit": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2",
+        "ext-json": "*",
         "ext-sodium": "*",
         "ext-zip": "*"
     },
