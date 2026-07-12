@@ -134,6 +134,10 @@ trait ManagesBackups
             throw new RuntimeException('Failed to write a backup batch. Check disk space.');
         }
 
+        // The list file's trailing newline reads as one empty line past the
+        // real entries — clamp so progress never reports past the total.
+        $offset = min($offset, $total);
+
         return ['offset' => $offset, 'total' => $total, 'done' => $offset >= $total];
     }
 
