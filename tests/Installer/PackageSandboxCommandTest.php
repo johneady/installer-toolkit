@@ -140,6 +140,35 @@ test('generated router serves a nested public asset requested by its root-relati
     }
 });
 
+test('generated router executes a PHP file under public instead of serving its source', function () {
+    $command = fakeSandboxCommand(['slug' => 'fake-app']);
+
+    $tempDir = storage_path('app/sandbox-router-php-test');
+    File::ensureDirectoryExists($tempDir.'/fake-app/public');
+    // A stand-in for the standalone updater.php: it must be EXECUTED, not
+    // readfile()'d as source (the bug that served updater.php as raw text).
+    file_put_contents($tempDir.'/fake-app/public/updater.php', '<?php echo "UPDATER_OUTPUT:" . (1 + 1);');
+
+    $routerPath = $command->callProtected('generateRouterScript', $tempDir);
+
+    $port = $command->callProtected('findFreePort');
+    $process = new Process(['php', '-S', "127.0.0.1:{$port}", '-t', $tempDir, $routerPath]);
+    $process->start();
+    (new ReflectionProperty($command, 'serverProcess'))->setValue($command, $process);
+
+    try {
+        $command->callProtected('waitForServer', $port);
+
+        $response = Http::get("http://127.0.0.1:{$port}/updater.php");
+
+        expect($response->status())->toBe(200)
+            ->and($response->body())->toBe('UPDATER_OUTPUT:2') // executed, not source
+            ->and($response->body())->not->toContain('<?php'); // no raw source leaked
+    } finally {
+        $process->stop(3);
+    }
+});
+
 test('extractOuterPackage throws when install.php is missing from the zip', function () {
     $command = fakeSandboxCommand(['slug' => 'fake-app']);
 

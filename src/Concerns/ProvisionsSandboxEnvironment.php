@@ -282,6 +282,20 @@ if (str_starts_with(\$uri, '/{$slug}/public/')) {
 
 \$publicPath = __DIR__ . '/{$slug}/public' . \$uri;
 if (\$uri !== '/' && is_file(\$publicPath)) {
+    \$extension = strtolower(pathinfo(\$publicPath, PATHINFO_EXTENSION));
+
+    // A PHP file under public/ (e.g. the standalone updater.php) must be
+    // EXECUTED, never readfile()'d as source. __DIR__ inside the file still
+    // resolves to its real directory, so its app-root derivation stays correct.
+    if (\$extension === 'php') {
+        \$_SERVER['SCRIPT_NAME'] = \$uri;
+        \$_SERVER['SCRIPT_FILENAME'] = \$publicPath;
+        chdir(dirname(\$publicPath));
+        require \$publicPath;
+
+        return true;
+    }
+
     \$extensionMimeTypes = [
         'css' => 'text/css',
         'js' => 'application/javascript',
@@ -300,7 +314,6 @@ if (\$uri !== '/' && is_file(\$publicPath)) {
         'txt' => 'text/plain',
         'webmanifest' => 'application/manifest+json',
     ];
-    \$extension = strtolower(pathinfo(\$publicPath, PATHINFO_EXTENSION));
     \$mimeType = \$extensionMimeTypes[\$extension] ?? (mime_content_type(\$publicPath) ?: 'application/octet-stream');
     header('Content-Type: ' . \$mimeType);
     readfile(\$publicPath);
