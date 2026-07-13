@@ -8,7 +8,7 @@
 
             <form method="post" action="{{ $launchUrl }}">
                 @csrf
-                <flux:button variant="primary" type="submit">Launch Updater</flux:button>
+                <x-filament::button type="submit">Launch Updater</x-filament::button>
             </form>
         </div>
 
@@ -30,7 +30,7 @@
                             <tr class="border-t border-gray-100 dark:border-gray-800">
                                 <td class="py-2 pr-4 text-gray-700 dark:text-gray-300">—</td>
                                 <td class="py-2 pr-4">
-                                    <flux:badge color="primary">Installed</flux:badge>
+                                    <x-filament::badge color="primary">Installed</x-filament::badge>
                                 </td>
                                 <td class="py-2 pr-4 text-gray-700 dark:text-gray-300">v{{ $installation }}</td>
                                 <td class="py-2 pr-4 text-gray-500 dark:text-gray-400">Initial installation</td>
@@ -47,11 +47,11 @@
                                 </td>
                                 <td class="py-2 pr-4">
                                     @if ($result->applied())
-                                        <flux:badge color="success">Applied</flux:badge>
+                                        <x-filament::badge color="success">Applied</x-filament::badge>
                                     @elseif ($result->rolledBack())
-                                        <flux:badge color="gray">Rolled back</flux:badge>
+                                        <x-filament::badge color="gray">Rolled back</x-filament::badge>
                                     @else
-                                        <flux:badge color="danger">{{ ucfirst($result->status) }}</flux:badge>
+                                        <x-filament::badge color="danger">{{ ucfirst($result->status) }}</x-filament::badge>
                                     @endif
                                 </td>
                                 <td class="py-2 pr-4 text-gray-700 dark:text-gray-300">
