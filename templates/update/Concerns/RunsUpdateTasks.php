@@ -411,8 +411,8 @@ trait RunsUpdateTasks
 
     /**
      * Append the run's outcome to storage/app/updater/results/ — the
-     * updater's own history, and the file the application ingests into its
-     * update_history table on its next boot.
+     * updater's history and the single source of truth for recent results,
+     * read directly by RecentUpdateResults for the admin panel.
      */
     private function writeResult(string $status, array $extra): void
     {

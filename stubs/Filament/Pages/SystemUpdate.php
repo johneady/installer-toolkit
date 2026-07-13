@@ -56,6 +56,19 @@ class SystemUpdate extends Page
     }
 
     /**
+     * Infer the originally-installed version: the versionFrom of the earliest
+     * result that records one (the version the app ran before its first
+     * update). Falls back to the current app version when no result carries a
+     * versionFrom — including a fresh install with no recorded updates — so
+     * the install row always renders.
+     */
+    public function installedVersion(): string
+    {
+        return app(RecentUpdateResults::class)->oldest()?->versionFrom
+            ?? (string) config('app.version', '—');
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function getViewData(): array
@@ -64,6 +77,7 @@ class SystemUpdate extends Page
             'currentVersion' => (string) config('app.version', '—'),
             'launchUrl' => route('updater.launch'),
             'results' => $this->recentResults(),
+            'installation' => $this->installedVersion(),
         ];
     }
 }

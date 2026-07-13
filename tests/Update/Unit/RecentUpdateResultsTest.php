@@ -136,3 +136,73 @@ it('round-trips the updater writer rolled_back payload without field loss', func
         ->and($result->backupId)->toBe('20260712-100000-def')
         ->and($result->rolledBack())->toBeTrue();
 });
+
+it('returns null for the oldest result when no results exist', function (): void {
+    expect(app(RecentUpdateResults::class)->oldest())->toBeNull();
+});
+
+it('infers the originally installed version from the oldest result', function (): void {
+    writeResult('20260710-100000-applied.json', [
+        'status' => 'applied',
+        'finished_at' => '2026-07-10T10:00:00-04:00',
+        'version_from' => '1.0.0',
+        'version_to' => '1.1.0',
+    ]);
+
+    writeResult('20260712-080000-applied.json', [
+        'status' => 'applied',
+        'finished_at' => '2026-07-12T08:00:00-04:00',
+        'version_from' => '1.1.0',
+        'version_to' => '1.2.0',
+    ]);
+
+    $oldest = app(RecentUpdateResults::class)->oldest();
+
+    expect($oldest)->toBeInstanceOf(UpdateResult::class)
+        ->and($oldest->versionFrom)->toBe('1.0.0')
+        ->and($oldest->versionTo)->toBe('1.1.0');
+});
+
+it('skips corrupt files when finding the oldest result', function (): void {
+    File::ensureDirectoryExists(resultsDir());
+    file_put_contents(resultsDir().'/20260709-090000-applied.json', '{not json');
+
+    writeResult('20260710-100000-applied.json', [
+        'status' => 'applied',
+        'version_from' => '1.0.0',
+        'version_to' => '1.1.0',
+    ]);
+
+    $oldest = app(RecentUpdateResults::class)->oldest();
+
+    expect($oldest)->not->toBeNull()
+        ->and($oldest->versionFrom)->toBe('1.0.0');
+});
+
+it('skips a version-less oldest result and returns the next oldest', function (): void {
+    // Oldest run failed before capturing a version_from.
+    writeResult('20260709-090000-failed.json', [
+        'status' => 'failed',
+        'finished_at' => '2026-07-09T09:00:00-04:00',
+    ]);
+
+    writeResult('20260710-100000-applied.json', [
+        'status' => 'applied',
+        'finished_at' => '2026-07-10T10:00:00-04:00',
+        'version_from' => '1.0.0',
+        'version_to' => '1.1.0',
+    ]);
+
+    $oldest = app(RecentUpdateResults::class)->oldest();
+
+    expect($oldest)->not->toBeNull()
+        ->and($oldest->versionFrom)->toBe('1.0.0')
+        ->and($oldest->file)->toBe('20260710-100000-applied.json');
+});
+
+it('returns null for the oldest result when none record a versionFrom', function (): void {
+    writeResult('20260710-100000-failed.json', ['status' => 'failed']);
+    writeResult('20260712-080000-failed.json', ['status' => 'failed']);
+
+    expect(app(RecentUpdateResults::class)->oldest())->toBeNull();
+});

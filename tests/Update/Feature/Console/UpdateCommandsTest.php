@@ -3,25 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
-use InstallerToolkit\Update\Models\UpdateHistory;
-
-it('lists update history', function (): void {
-    UpdateHistory::create([
-        'version_from' => '1.0.0',
-        'version_to' => '1.2.0',
-        'status' => UpdateHistory::STATUS_APPLIED,
-    ]);
-
-    $this->artisan('update:history')
-        ->assertSuccessful()
-        ->expectsOutputToContain('1.2.0');
-});
-
-it('informs when no history exists', function (): void {
-    $this->artisan('update:history')
-        ->assertSuccessful()
-        ->expectsOutputToContain('No updates have been recorded');
-});
 
 it('prunes stale upload artifacts', function (): void {
     $stale = storage_path('app/pending-update-aaaabbbbccccddddeeee000011112222.update');
