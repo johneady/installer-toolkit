@@ -47,7 +47,7 @@ trait RendersSteps
         $appName = htmlspecialchars(APP_NAME);
         $checkIcon = $this->statusIcon('check', 16);
 
-        $protocol = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $protocol = requestIsHttps() ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $detectedUrl = htmlspecialchars($protocol.'://'.$host);
 
@@ -117,6 +117,7 @@ HTML;
         $content = <<<HTML
         {$errors}
         <form method="POST" action="install.php?step=1">
+            {$this->csrfField()}
             <!-- EULA Box -->
             <div class="h-eula">
                 <div class="h-eula-head">
@@ -222,6 +223,7 @@ HTML;
         $content = <<<HTML
         {$warning}
         <form method="POST" action="install.php?step=2">
+        {$this->csrfField()}
         <div>{$items}</div>
         <div class="h-actions">
             <a href="install.php?step=1" class="h-btn h-btn-ghost">← Back</a>
@@ -247,7 +249,7 @@ HTML;
                     return;
                 }
 
-                fetch('install.php?ajax=mod-rewrite', { method: 'POST' })
+                fetch(withCsrf('install.php?ajax=mod-rewrite'), { method: 'POST' })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data && data.html) {
@@ -313,6 +315,7 @@ HTML;
         {$errors}
         <div id="db-test-result" class="h-hidden"></div>
         <form method="POST" action="install.php?step=3" id="db-form">
+            {$this->csrfField()}
             <!-- Database Configuration Card -->
             <div class="h-card" style="padding:0; margin-bottom:20px;">
                 <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
@@ -380,7 +383,7 @@ HTML;
         $errors = $this->renderErrors();
         $s = $_SESSION['installer']['settings'] ?? [];
 
-        $protocol = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $protocol = requestIsHttps() ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $defaultUrl = $protocol.'://'.$host;
 
@@ -403,6 +406,7 @@ HTML;
         $content = <<<HTML
         {$errors}
         <form method="POST" action="install.php?step=4">
+            {$this->csrfField()}
             <!-- Application Settings -->
             <div style="margin-bottom:32px;">
                 <h3 class="h-section-title"><span class="bump"></span>Application</h3>
@@ -513,6 +517,7 @@ HTML;
         {$errors}
         <div id="mail-test-result" class="h-hidden"></div>
         <form method="POST" action="install.php?step=5" id="mail-form">
+            {$this->csrfField()}
             <!-- Mail Configuration -->
             <div class="h-card" style="padding:0; margin-bottom:20px;">
                 <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
@@ -623,6 +628,7 @@ HTML;
         {$errors}
         <p class="h-lede">Create your administrator account. You will use these credentials to log into the admin panel.</p>
         <form method="POST" action="install.php?step=6">
+            {$this->csrfField()}
             <!-- Admin Account Card -->
             <div class="h-card" style="padding:0; margin-bottom:20px;">
                 <div class="h-card-header" style="margin:0; border-radius:22px 22px 0 0;">
@@ -877,7 +883,7 @@ HTML;
                         setTaskState(el, 'pending');
                     });
                     updateProgress(0);
-                    fetch('install.php?ajax=install-reset', { method: 'POST' }).then(function() { runNextTask(); });
+                    fetch(withCsrf('install.php?ajax=install-reset'), { method: 'POST' }).then(function() { runNextTask(); });
                 } else {
                     document.querySelectorAll('.task-item').forEach(function(el) {
                         if (el.dataset.status !== 'done') {
@@ -893,7 +899,7 @@ HTML;
             // to call next and which JSON flag signals completion.
             function runTaskBatch(el, batchTask, doneKey) {
                 setTaskState(el, 'active');
-                fetch('install.php?ajax=install-task&task=' + batchTask, { method: 'POST' })
+                fetch(withCsrf('install.php?ajax=install-task&task=' + batchTask), { method: 'POST' })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data.success && data[doneKey] === false) {
@@ -919,7 +925,8 @@ HTML;
             // server-side after everything has actually run.
             function runOptimizeBatch(el, commands, index) {
                 setTaskState(el, 'active');
-                fetch('{$appFolder}/public/install-optimize.php?commands=' + encodeURIComponent(commands) + '&index=' + index + '&token=' + encodeURIComponent(optimizeToken))
+                var body = new URLSearchParams({ commands: commands, index: index, token: optimizeToken });
+                fetch('{$appFolder}/public/install-optimize.php', { method: 'POST', body: body })
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (!data.success) {
@@ -930,7 +937,7 @@ HTML;
                             runOptimizeBatch(el, commands, index + 1);
                             return;
                         }
-                        return fetch('install.php?ajax=install-task&task=optimize_confirm', { method: 'POST' }).then(parseJsonResponse);
+                        return fetch(withCsrf('install.php?ajax=install-task&task=optimize_confirm'), { method: 'POST' }).then(parseJsonResponse);
                     })
                     .then(function(data) {
                         if (!data) {
@@ -984,7 +991,7 @@ HTML;
                 setTaskState(el, 'active');
 
                 if (task === 'optimize') {
-                    fetch('install.php?ajax=install-task&task=' + task, { method: 'POST' })
+                    fetch(withCsrf('install.php?ajax=install-task&task=' + task), { method: 'POST' })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) {
@@ -998,7 +1005,7 @@ HTML;
                     return;
                 }
 
-                fetch('install.php?ajax=install-task&task=' + task, { method: 'POST' })
+                fetch(withCsrf('install.php?ajax=install-task&task=' + task), { method: 'POST' })
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (data.success && data.extract_done === false) {
@@ -1272,6 +1279,22 @@ HTML;
     {
         $warningIcon = $this->statusIcon('warning', 20);
 
+        // Offer a restart only when the app zip is still on disk — proof
+        // this is a stranded, never-finished attempt (e.g. the session that
+        // started it died mid-install) rather than a genuinely completed
+        // production site. See installNeverFinished()'s docblock.
+        $restartSection = $this->installNeverFinished() ? <<<HTML
+        <div class="h-alert" style="display:block; margin-top:16px;">
+            <p class="t">Was your install interrupted?</p>
+            <p class="d">The application package is still present, which usually means a previous attempt never finished (for example, if your browser session was lost partway through). If that's the case, you can restart the installer from the beginning — this discards any progress from the interrupted attempt.</p>
+            <form method="POST" action="install.php" style="margin-top:12px;">
+                {$this->csrfField()}
+                <input type="hidden" name="action" value="restart-install">
+                <button type="submit" class="h-btn h-btn-tint">Restart Installation</button>
+            </form>
+        </div>
+        HTML : '';
+
         $content = <<<HTML
         <!-- Warning Alert -->
         <div class="h-alert h-alert-warn" style="align-items:flex-start;">
@@ -1284,6 +1307,8 @@ HTML;
                 <p class="d" style="margin-top:6px;">Please delete <code>install.php</code> from your server immediately.</p>
             </div>
         </div>
+
+        {$restartSection}
 HTML;
 
         $this->renderLayout('Already Installed', $content, 0);

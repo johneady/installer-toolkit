@@ -4,9 +4,17 @@ trait HandlesUpdaterRequests
 {
     public function run(): void
     {
+        // Most shared hosts allow overriding this per-request even when the
+        // php.ini default is low; @-suppressed since it's a no-op (not an
+        // error) when disabled via disable_functions. Covers every request
+        // this tool handles — chunk upload assembly/validation, backup,
+        // extraction, and restore are all slow enough to risk the default.
+        @set_time_limit(300);
+
         // A distinct session name so the updater's session cookie never
         // collides with the application's own session.
         session_name('app_updater');
+        applyHardenedSessionCookieParams();
         session_start();
 
         if (! isset($_SESSION['updater'])) {
@@ -21,14 +29,19 @@ trait HandlesUpdaterRequests
         }
 
         // AJAX sub-actions are routed by name, not by which screen they
-        // happen to live on.
+        // happen to live on. CSRF is only checked once authorized — the
+        // token-gate form above submits the operator's filesystem-proof
+        // token itself, which an attacker riding the session cookie
+        // wouldn't have anyway.
         if (isset($_GET['ajax']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->requireValidCsrfToken();
             $this->handleAjax((string) $_GET['ajax']);
 
             return;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->requireValidCsrfToken();
             $this->handlePost((string) ($_POST['action'] ?? ''));
 
             return;
@@ -121,6 +134,22 @@ trait HandlesUpdaterRequests
             return;
         }
 
+        // The review screen already hides the "Apply Update" button when
+        // space is short, but that's client-side only — re-check here so a
+        // resubmitted or hand-crafted request can't start a run that will
+        // run out of disk partway through backup or extraction. (The size
+        // heuristic lives in diskSpaceShortfall(), shared with the upload
+        // gate and the review screen.)
+        $stagedZip = (string) ($package['staged_zip'] ?? '');
+        $stagedSize = is_file($stagedZip) ? (int) filesize($stagedZip) : 0;
+
+        if ($shortfall = $this->diskSpaceShortfall($stagedSize, $this->appRoot())) {
+            $this->errors[] = 'Not enough free disk space to safely apply this update (needs roughly '.$this->formatBytes($shortfall['needed']).', '.$this->formatBytes($shortfall['free']).' available).';
+            $this->renderReview();
+
+            return;
+        }
+
         $_SESSION['updater']['update'] = [
             'started' => true,
             'finished' => false,
@@ -147,6 +176,28 @@ trait HandlesUpdaterRequests
         unset($_SESSION['updater']['package'], $_SESSION['updater']['upload']);
 
         header('Location: '.$this->selfUrl());
+        exit;
+    }
+
+    /**
+     * Every authorized state-changing POST (form submission or AJAX call)
+     * must carry the per-session token minted by csrfToken() and rendered
+     * into forms/window.CSRF_TOKEN by renderLayout() — otherwise a
+     * cross-site page could ride the authorized updater session cookie
+     * into e.g. start-update or update-task=restore.
+     */
+    private function requireValidCsrfToken(): void
+    {
+        if (csrfTokenValid('csrf_token')) {
+            return;
+        }
+
+        if (isset($_GET['ajax'])) {
+            $this->jsonResponse(['success' => false, 'message' => 'Your session has expired or this request could not be verified. Please reload the page and try again.']);
+        }
+
+        $this->errors[] = 'Your session has expired or this request could not be verified. Please reload the page and try again.';
+        $this->renderCurrentScreen();
         exit;
     }
 

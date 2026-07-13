@@ -65,6 +65,13 @@ abstract class PackageTestCommand extends Command
 
     protected string $sampleDataMode = 'full';
 
+    /**
+     * The installer's per-session CSRF token, harvested from the rendered
+     * page the same way the real browser gets it (window.CSRF_TOKEN) —
+     * install.php rejects every POST/AJAX request without it.
+     */
+    protected string $installerCsrfToken = '';
+
     public function handle(): int
     {
         if ($configError = $this->loadPackageConfig()) {
@@ -192,6 +199,8 @@ abstract class PackageTestCommand extends Command
      */
     protected function runWizard(PendingRequest $client, array $mysql, string $baseUri): void
     {
+        $this->installerCsrfToken = $this->fetchInstallerCsrfToken($client);
+
         $this->line('  Step 1/6: accepting EULA');
         $this->postStep($client, 1, ['accept_eula' => '1'], 2);
 
@@ -254,11 +263,27 @@ abstract class PackageTestCommand extends Command
         }
     }
 
+    /**
+     * Read the session-bound CSRF token off the rendered installer page,
+     * exactly as the browser does. The token is minted once per session, so
+     * one harvest at wizard start covers the whole run.
+     */
+    protected function fetchInstallerCsrfToken(PendingRequest $client): string
+    {
+        $body = $client->get('/install.php')->body();
+
+        if (! preg_match('/window\.CSRF_TOKEN\s*=\s*"([a-f0-9]+)"/', $body, $matches)) {
+            throw new RuntimeException('Could not find window.CSRF_TOKEN on the installer page.');
+        }
+
+        return $matches[1];
+    }
+
     protected function postStep(PendingRequest $client, int $step, array $data, int $expectedNextStep): void
     {
         $response = $client->withOptions(['allow_redirects' => false])
             ->asForm()
-            ->post("/install.php?step={$step}", $data);
+            ->post("/install.php?step={$step}", $data + ['_csrf' => $this->installerCsrfToken]);
 
         $location = $response->header('Location');
         $expected = "install.php?step={$expectedNextStep}";
@@ -341,7 +366,7 @@ abstract class PackageTestCommand extends Command
             // here rather than raising it for the whole client. Apps with a
             // large migration count (200+) can take several minutes to
             // migrate in total.
-            $response = $client->timeout(300)->post("/install.php?ajax=install-task&task={$task}");
+            $response = $client->timeout(300)->post("/install.php?ajax=install-task&task={$task}&_csrf={$this->installerCsrfToken}");
             $requestCount++;
             $this->output->write('.');
             $json = $response->json();
@@ -398,7 +423,14 @@ abstract class PackageTestCommand extends Command
             // so this test actually exercises the same termination
             // condition the real browser JS relies on.
             for ($index = 0; $index < $maxIterations; $index++) {
-                $response = $client->get("/{$this->slug}/public/install-optimize.php?commands=".urlencode($commands).'&index='.$index.'&token='.urlencode($optimizeToken));
+                // install-optimize.php is POST-only, with the token in the
+                // body (not the query string) so it never lands in access
+                // logs — mirror the browser's URLSearchParams POST.
+                $response = $client->asForm()->post("/{$this->slug}/public/install-optimize.php", [
+                    'commands' => $commands,
+                    'index' => $index,
+                    'token' => $optimizeToken,
+                ]);
                 $requestCount++;
                 $this->output->write('.');
                 $json = $response->json();
@@ -421,7 +453,7 @@ abstract class PackageTestCommand extends Command
             // Only after every optimize command has succeeded does the
             // browser (here, the test client) confirm completion — this is
             // what actually flips install_complete server-side.
-            $response = $client->post("/install.php?ajax=install-task&task={$originalTask}_confirm");
+            $response = $client->post("/install.php?ajax=install-task&task={$originalTask}_confirm&_csrf={$this->installerCsrfToken}");
             $requestCount++;
             $json = $response->json();
 

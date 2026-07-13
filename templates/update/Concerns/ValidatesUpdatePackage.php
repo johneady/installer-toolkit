@@ -63,7 +63,22 @@ trait ValidatesUpdatePackage
             return $fail("Invalid version format in update package: '{$updateVersion}'.");
         }
 
-        if (version_compare($updateVersion, $currentVersion, '<=')) {
+        // Ordinarily the package must be strictly newer. The one exception:
+        // config/app.php's version literal is overwritten by extraction
+        // partway through applying an update, before post_update/verify/
+        // finalize complete — so a run that fails after extraction but
+        // before finalize leaves the site on the new version literal.
+        // Without this exception, re-uploading that exact same package to
+        // finish the job would be rejected as "not newer than current",
+        // stranding the site between versions with no way to retry. The
+        // on-disk marker written at taskPrepare() (and cleared at finalize/
+        // restore) is what distinguishes an interrupted run from a normal
+        // completed update — and it survives a lost browser session, which
+        // is precisely the stranding scenario.
+        $sameVersionInterrupted = version_compare($updateVersion, $currentVersion, '==')
+            && $this->interruptedUpdateVersion() === $updateVersion;
+
+        if (version_compare($updateVersion, $currentVersion, '<=') && ! $sameVersionInterrupted) {
             $zip->close();
 
             return $fail("Update version ({$updateVersion}) must be newer than the current version ({$currentVersion}).");

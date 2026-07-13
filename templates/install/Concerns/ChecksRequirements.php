@@ -174,7 +174,7 @@ trait ChecksRequirements
             file_put_contents($testHtaccess, "RewriteEngine On\nRewriteRule ^test$ target.php [L]");
 
             // Build the test URL
-            $protocol = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $protocol = requestIsHttps() ? 'https' : 'http';
             $host = $_SERVER['HTTP_HOST'];
             $scriptDir = dirname($_SERVER['SCRIPT_NAME']);
             $scriptDir = $scriptDir === '/' ? '' : $scriptDir;

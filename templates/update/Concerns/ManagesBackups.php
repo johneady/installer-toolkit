@@ -192,6 +192,16 @@ trait ManagesBackups
             '--user='.$db['username'],
             '--single-transaction',
             '--skip-lock-tables',
+            // Since MySQL 5.7.31/8.0.21, dumping tablespace metadata requires
+            // the PROCESS privilege, which shared-hosting DB users are almost
+            // never granted — without this flag mysqldump exits non-zero and
+            // the backup silently degrades to files-only. Triggers are dumped
+            // by default; --routines is deliberately NOT passed because it
+            // needs SELECT on mysql.proc / SHOW_ROUTINE, which those same
+            // users typically lack — it would reintroduce the exact
+            // privilege-based failure --no-tablespaces exists to avoid.
+            '--no-tablespaces',
+            '--default-character-set=utf8mb4',
             '--result-file='.$sqlPath,
             $db['database'],
         ];
@@ -352,6 +362,13 @@ trait ManagesBackups
         // The mysql client lives next to mysqldump.
         $mysql = preg_replace('/mysqldump(\.exe)?$/', 'mysql$1', $binary) ?: 'mysql';
 
+        // Drop every existing table first. The dump only DROPs tables it
+        // contains, so a table created by the failed update's migrations
+        // (but absent from the pre-update dump) would otherwise survive the
+        // restore — and a later retry of the same update then fails at
+        // `migrate` with "table already exists", stranding the site.
+        $dropWarning = $this->dropAllTables($mysql, $db);
+
         $command = [
             $mysql,
             '--host='.$db['host'],
@@ -363,8 +380,70 @@ trait ManagesBackups
         $exitCode = $this->runProcess($command, ['MYSQL_PWD' => $db['password']], $stderr, $sqlPath);
 
         return $exitCode === 0
-            ? 'Database restored from dump.'
+            ? 'Database restored from dump.'.$dropWarning
             : 'WARNING: database restore failed ('.trim(substr($stderr, 0, 300)).'). Restore manually from '.$sqlPath;
+    }
+
+    /**
+     * Drop every table currently in the database before importing a restore
+     * dump, using a single `mysql` invocation fed a generated
+     * `SET FOREIGN_KEY_CHECKS=0; DROP TABLE ...;` script (disabling FK
+     * checks for the duration avoids drop-order errors on tables with
+     * cross-references). Best-effort: a failure here is surfaced as a
+     * warning appended to the restore's own success message rather than
+     * aborting the restore, since the dump import that follows is what
+     * actually matters for getting the site back up.
+     *
+     * @param  array{connection: string, host: string, port: string, database: string, username: string, password: string}  $db
+     */
+    private function dropAllTables(string $mysql, array $db): string
+    {
+        $listCommand = [
+            $mysql,
+            '--host='.$db['host'],
+            '--port='.$db['port'],
+            '--user='.$db['username'],
+            '--batch',
+            '--skip-column-names',
+            '--execute=SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()',
+            $db['database'],
+        ];
+
+        $listExitCode = $this->runProcess($listCommand, ['MYSQL_PWD' => $db['password']], $listStderr, null, $tables);
+
+        if ($listExitCode !== 0) {
+            return ' WARNING: could not enumerate existing tables before restore ('.trim(substr($listStderr, 0, 200)).') — restore may fail if the update left extra tables behind.';
+        }
+
+        $tableNames = array_filter(array_map('trim', explode("\n", $tables)));
+
+        if ($tableNames === []) {
+            return '';
+        }
+
+        $dropScript = "SET FOREIGN_KEY_CHECKS=0;\n";
+        foreach ($tableNames as $table) {
+            $dropScript .= 'DROP TABLE IF EXISTS `'.str_replace('`', '``', $table)."`;\n";
+        }
+        $dropScript .= "SET FOREIGN_KEY_CHECKS=1;\n";
+
+        $scriptPath = $this->updaterStorageDir().'/restore-drop-'.bin2hex(random_bytes(4)).'.sql';
+        file_put_contents($scriptPath, $dropScript);
+
+        $dropCommand = [
+            $mysql,
+            '--host='.$db['host'],
+            '--port='.$db['port'],
+            '--user='.$db['username'],
+            $db['database'],
+        ];
+
+        $exitCode = $this->runProcess($dropCommand, ['MYSQL_PWD' => $db['password']], $dropStderr, $scriptPath);
+        @unlink($scriptPath);
+
+        return $exitCode === 0
+            ? ''
+            : ' WARNING: failed to drop existing tables before restore ('.trim(substr($dropStderr, 0, 200)).') — the dump import may fail if the update left extra tables behind.';
     }
 
     /**
@@ -447,12 +526,13 @@ trait ManagesBackups
 
     /**
      * Run an external process with stdin optionally fed from a file and
-     * stderr captured. Returns the exit code.
+     * stderr captured. Returns the exit code; stdout is captured into the
+     * optional $stdout out-param (discarded when the caller doesn't ask).
      *
      * @param  list<string>  $command
      * @param  array<string, string>  $extraEnv
      */
-    private function runProcess(array $command, array $extraEnv, ?string &$stderr, ?string $stdinFile = null): int
+    private function runProcess(array $command, array $extraEnv, ?string &$stderr, ?string $stdinFile = null, ?string &$stdout = null): int
     {
         $descriptors = [
             0 => $stdinFile !== null ? ['file', $stdinFile, 'r'] : ['pipe', 'r'],
@@ -481,7 +561,7 @@ trait ManagesBackups
             fclose($pipes[0]);
         }
 
-        stream_get_contents($pipes[1]);
+        $stdout = (string) stream_get_contents($pipes[1]);
         fclose($pipes[1]);
         $stderr = (string) stream_get_contents($pipes[2]);
         fclose($pipes[2]);

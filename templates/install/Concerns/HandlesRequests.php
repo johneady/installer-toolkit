@@ -4,6 +4,7 @@ trait HandlesRequests
 {
     public function run(): void
     {
+        applyHardenedSessionCookieParams();
         session_start();
 
         // Initialize session storage
@@ -13,17 +14,6 @@ trait HandlesRequests
 
         $step = isset($_GET['step']) ? (int) $_GET['step'] : 0;
         $step = max(0, min($this->totalSteps, $step));
-
-        // AJAX sub-actions are routed by name, not by which step they
-        // happen to live on — a step reorder must not silently break a
-        // test button or the install-task runner (see class docblock note
-        // on why the render/validate/post switches below are still keyed
-        // by step number: those genuinely are per-step).
-        if (isset($_GET['ajax']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->handleAjax($_GET['ajax']);
-
-            return;
-        }
 
         // Already-installed guard — a fresh visitor (no installer progress
         // in their session) hitting a site that already has an APP_KEY sees
@@ -43,9 +33,45 @@ trait HandlesRequests
         // outlive the session GC window on a completed install, and without
         // it a stale-but-alive session would keep bypassing the
         // already-installed screen on a live production site.
+        //
+        // This must run before the AJAX dispatch below: db-test and
+        // mail-test open arbitrary attacker-supplied host:port connections
+        // and echo back what they find, and were previously reachable by
+        // anyone regardless of install progress — including on a finished
+        // site where install.php was never deleted. Ajax handlers that
+        // legitimately need to run without wizard progress (none currently
+        // do) would need to be special-cased here.
         $inProgress = ! empty($_SESSION['installer']['admin']);
         if (! $inProgress && $this->isAlreadyInstalled()) {
+            // restart-install is the one action this guard allows through:
+            // a visitor whose session died mid-install (shared-host session
+            // GC, browser crash, switching devices) would otherwise be stuck
+            // on this screen with no way back in short of deleting files by
+            // hand. It only fires when the app zip is still present — proof
+            // the install never reached renderComplete(), which is the
+            // request that deletes it — so a genuinely finished production
+            // site can't be reset this way even if install.php was never
+            // removed.
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'restart-install') {
+                $this->requireValidCsrfToken();
+                $this->handleInstallRestart();
+
+                return;
+            }
+
             $this->renderAlreadyInstalled();
+
+            return;
+        }
+
+        // AJAX sub-actions are routed by name, not by which step they
+        // happen to live on — a step reorder must not silently break a
+        // test button or the install-task runner (see class docblock note
+        // on why the render/validate/post switches below are still keyed
+        // by step number: those genuinely are per-step).
+        if (isset($_GET['ajax']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->requireValidCsrfToken();
+            $this->handleAjax($_GET['ajax']);
 
             return;
         }
@@ -55,6 +81,7 @@ trait HandlesRequests
 
         // Handle POST submissions
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->requireValidCsrfToken();
             $this->handlePost($step);
 
             return;
@@ -62,6 +89,33 @@ trait HandlesRequests
 
         // Render the current step
         $this->renderStep($step);
+    }
+
+    /**
+     * Every state-changing POST (form submission or AJAX call) must carry
+     * the per-session token minted by csrfToken() and rendered into forms/
+     * window.CSRF_TOKEN by renderLayout() — otherwise a cross-site page
+     * could ride the session cookie into e.g. handleAdminPost() or
+     * handleInstallReset(). The plain GET-based step navigation this
+     * installer otherwise uses is unaffected; only POST/AJAX go through
+     * this check.
+     */
+    private function requireValidCsrfToken(): void
+    {
+        if (csrfTokenValid('csrf_token')) {
+            return;
+        }
+
+        if (isset($_GET['ajax'])) {
+            header('Content-Type: application/json');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Your session has expired or this request could not be verified. Please reload the page and try again.']);
+            exit;
+        }
+
+        $this->errors[] = 'Your session has expired or this request could not be verified. Please reload the page and try again.';
+        $this->renderStep($this->validateStepAccess((int) ($_GET['step'] ?? 0)));
+        exit;
     }
 
     // ========================================================================
@@ -75,6 +129,20 @@ trait HandlesRequests
      */
     private function handleAjax(string $action): void
     {
+        // db-test and mail-test open a connection to attacker-supplied
+        // host:port values and echo back what they find (banner text,
+        // MySQL version) — a pre-auth network oracle if reachable by
+        // anyone. Requiring that the wizard has already reached the
+        // requirements step keeps them scoped to someone actually running
+        // this install, not an anonymous visitor probing the network.
+        $requiresProgress = in_array($action, ['db-test', 'mail-test'], true);
+        if ($requiresProgress && empty($_SESSION['installer']['requirements_passed'])) {
+            header('Content-Type: application/json');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Installation has not progressed far enough to run this check.']);
+            exit;
+        }
+
         switch ($action) {
             case 'install-task':
                 $this->handleInstallTask($_GET['task'] ?? '');
@@ -128,6 +196,39 @@ trait HandlesRequests
         $envContent = file_get_contents($envFile);
 
         return (bool) preg_match('/^APP_KEY=base64:.+$/m', $envContent);
+    }
+
+    /**
+     * Whether the install visible on disk is a stranded, never-finished
+     * attempt rather than a genuinely completed production site — i.e. it's
+     * safe to offer a restart. renderComplete() (step 9) is the one request
+     * that deletes the app zip, so its continued presence is proof no
+     * session ever reached that far, regardless of how long ago the
+     * session that started this attempt died.
+     */
+    private function installNeverFinished(): bool
+    {
+        return file_exists(__DIR__.'/'.ZIP_FILENAME);
+    }
+
+    /**
+     * Recovery path for a session lost mid-install (shared-host session GC,
+     * browser crash, switching devices): wipes the session-scoped install
+     * progress and any partial extraction/env artifacts, then restarts the
+     * wizard from step 1. Gated on installNeverFinished() by the caller so
+     * this can never touch a genuinely completed site.
+     */
+    private function handleInstallRestart(): void
+    {
+        session_regenerate_id(true);
+        $_SESSION['installer'] = [];
+
+        @unlink(__DIR__.'/.install-working.zip');
+        @unlink(__DIR__.'/'.APP_FOLDER.'/public/install-optimize.php');
+        @unlink(__DIR__.'/'.APP_FOLDER.'/.env');
+
+        header('Location: install.php?step=1');
+        exit;
     }
 
     // ========================================================================

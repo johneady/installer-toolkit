@@ -47,6 +47,16 @@ trait RendersChrome
         return $html;
     }
 
+    /**
+     * Hidden input carrying the per-session CSRF token, for every plain
+     * <form method="POST"> — the fetch()-driven AJAX calls instead wrap
+     * their URL with the shared withCsrf() JS helper (see renderLayout()).
+     */
+    private function csrfField(): string
+    {
+        return '<input type="hidden" name="_csrf" value="'.htmlspecialchars(csrfToken('csrf_token')).'">';
+    }
+
     private function renderLayout(string $title, string $content, int $currentStep): void
     {
         $headerStrip = $this->renderHeaderStrip($title, $currentStep);
@@ -67,6 +77,13 @@ trait RendersChrome
             'xSmall' => $this->statusIcon('x', 14),
         ]);
 
+        // Exposed globally so every fetch()-driven AJAX call (task runners,
+        // connection tests, upload chunks) can carry proof it originated
+        // from a page this session actually rendered, not a cross-site
+        // request riding the session cookie. Plain <form> POSTs get their
+        // own hidden input at the call site instead of relying on this.
+        $csrfToken = json_encode(csrfToken('csrf_token'));
+
         echo <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -80,6 +97,15 @@ trait RendersChrome
     </style>
     <script>
         window.INSTALLER_ICONS = {$iconsJson};
+        window.CSRF_TOKEN = {$csrfToken};
+
+        // Appends the CSRF token to a fetch() URL's query string — used by
+        // every AJAX call below and in per-step inline scripts, so a POST
+        // to install.php/updater.php can't be driven from a cross-site page
+        // riding the session cookie alone.
+        function withCsrf(url) {
+            return url + (url.indexOf('?') === -1 ? '?' : '&') + '_csrf=' + encodeURIComponent(window.CSRF_TOKEN);
+        }
 
         (function() {
             var stored = localStorage.getItem('installer-theme');
@@ -138,7 +164,7 @@ trait RendersChrome
 
                 var formData = new FormData(form);
 
-                fetch(options.endpoint, { method: 'POST', body: formData })
+                fetch(withCsrf(options.endpoint), { method: 'POST', body: formData })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         resultDiv.classList.remove('h-hidden');

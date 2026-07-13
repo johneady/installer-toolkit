@@ -228,25 +228,33 @@ test('runInstallTask throws with the server message when a task fails', function
 test('runInstallTask runs the optimize endpoint once per command, then confirms completion', function () {
     // Real install-optimize.php reports done:false for every command
     // except the last — assert against that shape so the test actually
-    // exercises the done-driven loop instead of a precomputed count.
-    Http::fake([
-        '*/install-optimize.php*index=7*' => Http::response(['success' => true, 'done' => true, 'message' => 'Completed.']),
-        '*/install-optimize.php*' => Http::response(['success' => true, 'done' => false, 'message' => 'Running.']),
-        '*/install.php*' => Http::response(['success' => true]),
-    ]);
+    // exercises the done-driven loop instead of a precomputed count. The
+    // endpoint is POST-only with commands/index/token in the form body
+    // (never the query string), so the fake keys off the body too.
+    Http::fake(function ($request) {
+        if (str_contains((string) $request->url(), 'install-optimize.php')) {
+            $done = (int) $request['index'] === 7;
+
+            return Http::response(['success' => true, 'done' => $done, 'message' => $done ? 'Completed.' : 'Running.']);
+        }
+
+        return Http::response(['success' => true]);
+    });
 
     $command = fakeTestCommand(['slug' => 'fake-app']);
     $client = Http::baseUrl('http://127.0.0.1:0');
     $command->callProtected('runInstallTask', $client, 'optimize', 'deadbeef');
 
-    // One install-optimize.php request per command (8 total), each with an
-    // increasing index and the same full commands list and token.
+    // One install-optimize.php POST per command (8 total), each with an
+    // increasing index and the same full commands list and token in the
+    // form body.
     foreach (range(0, 7) as $index) {
         Http::assertSent(function ($request) use ($index) {
             return str_contains((string) $request->url(), 'install-optimize.php')
-                && str_contains((string) $request->url(), 'commands=config%3Aclear%2Cpackage%3Adiscover%2Cconfig%3Acache%2Cevent%3Acache%2Croute%3Acache%2Cview%3Acache%2Cicons%3Acache%2Cfilament%3Aoptimize')
-                && str_contains((string) $request->url(), 'index='.$index)
-                && str_contains((string) $request->url(), 'token=deadbeef');
+                && $request->method() === 'POST'
+                && $request['commands'] === 'config:clear,package:discover,config:cache,event:cache,route:cache,view:cache,icons:cache,filament:optimize'
+                && (int) $request['index'] === $index
+                && $request['token'] === 'deadbeef';
         });
     }
 

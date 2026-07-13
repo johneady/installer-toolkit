@@ -32,6 +32,77 @@ trait BootsUpdaterEnvironment
         return $this->updaterStorageDir().'/results';
     }
 
+    /**
+     * Marker recording that an update run is underway (or was interrupted
+     * partway through). Written by taskPrepare() with the target version,
+     * removed by taskFinalize() and a completed restore. Its presence on
+     * disk — unlike anything session-bound — survives a lost browser
+     * session, which is exactly the scenario it exists for: extraction may
+     * have already bumped config/app.php's version literal before the run
+     * died, and this marker is what lets ValidatesUpdatePackage accept the
+     * same-version package again to finish the job.
+     */
+    private function updateInProgressFile(): string
+    {
+        return $this->updaterStorageDir().'/update-in-progress.json';
+    }
+
+    private function writeUpdateInProgressMarker(?string $versionTo): void
+    {
+        @file_put_contents($this->updateInProgressFile(), json_encode([
+            'version_to' => $versionTo,
+            'started_at' => date('c'),
+        ]));
+    }
+
+    private function clearUpdateInProgressMarker(): void
+    {
+        @unlink($this->updateInProgressFile());
+    }
+
+    /**
+     * The one authored copy of the update's disk-space heuristic: the
+     * uploaded package, its staged inner zip, the pre-update backup, and
+     * the extracted files all coexist on disk during a run — roughly 4x the
+     * package size. Returns [needed, free] when free space is definitely
+     * insufficient, or null when there is enough (or free space cannot be
+     * determined, which must not block an update). Shared by the upload
+     * gate, the review screen, and the start-update guard so the three can
+     * never disagree about whether a run fits.
+     *
+     * @return array{needed: int, free: int}|null
+     */
+    private function diskSpaceShortfall(int $packageBytes, string $dir): ?array
+    {
+        $needed = $packageBytes * 4;
+        $free = function_exists('disk_free_space') ? @disk_free_space($dir) : false;
+
+        if ($free === false || $free >= $needed) {
+            return null;
+        }
+
+        return ['needed' => $needed, 'free' => (int) $free];
+    }
+
+    /**
+     * The version_to of an interrupted update run, or null when no run is
+     * in progress/interrupted.
+     */
+    private function interruptedUpdateVersion(): ?string
+    {
+        $file = $this->updateInProgressFile();
+
+        if (! is_file($file)) {
+            return null;
+        }
+
+        $marker = json_decode((string) file_get_contents($file), true);
+
+        return is_array($marker) && is_string($marker['version_to'] ?? null)
+            ? $marker['version_to']
+            : null;
+    }
+
     private function ensureUpdaterDirs(): void
     {
         foreach ([$this->updaterStorageDir(), $this->backupsDir(), $this->resultsDir()] as $dir) {
@@ -144,7 +215,33 @@ trait BootsUpdaterEnvironment
             }
         }
 
-        return $this->updatesConfig = array_replace_recursive($defaults, $fromApp);
+        return $this->updatesConfig = $this->mergeConfigOverDefaults($defaults, $fromApp);
+    }
+
+    /**
+     * Deep-merge $overrides over $defaults, but replace list-type values
+     * (sequential, numeric-keyed arrays like `protected_paths` or
+     * `backup.exclude`) wholesale rather than index-by-index.
+     * array_replace_recursive merges lists positionally, so an app config
+     * with e.g. 3 protected_paths entries would still inherit index 3+ from
+     * the 5-entry default list — an operator can never actually shrink or
+     * fully replace a default list, only overwrite its first N entries.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function mergeConfigOverDefaults(array $defaults, array $overrides): array
+    {
+        foreach ($overrides as $key => $value) {
+            if (is_array($value) && isset($defaults[$key]) && is_array($defaults[$key]) && ! array_is_list($value)) {
+                $defaults[$key] = $this->mergeConfigOverDefaults($defaults[$key], $value);
+            } else {
+                $defaults[$key] = $value;
+            }
+        }
+
+        return $defaults;
     }
 
     private function slug(): string

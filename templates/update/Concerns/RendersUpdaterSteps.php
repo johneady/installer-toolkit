@@ -184,16 +184,16 @@ trait RendersUpdaterSteps
                     initData.append('size', file.size);
                     initData.append('total_chunks', totalChunks);
 
-                    fetch('updater.php?ajax=upload-init', { method: 'POST', body: initData })
+                    fetch(withCsrf('updater.php?ajax=upload-init'), { method: 'POST', body: initData })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) throw new Error(data.message);
-                            sendChunk(file, data.upload_id, 0, totalChunks);
+                            sendChunk(file, data.upload_id, 0, totalChunks, false);
                         })
                         .catch(function(err) { fail(err.message); });
                 }
 
-                function sendChunk(file, uploadId, index, totalChunks) {
+                function sendChunk(file, uploadId, index, totalChunks, isRetry) {
                     var start = index * CHUNK;
                     var blob = file.slice(start, Math.min(start + CHUNK, file.size));
 
@@ -202,10 +202,13 @@ trait RendersUpdaterSteps
                     form.append('index', index);
                     form.append('chunk', blob, 'chunk');
 
-                    fetch('updater.php?ajax=upload-chunk', { method: 'POST', body: form })
+                    fetch(withCsrf('updater.php?ajax=upload-chunk'), { method: 'POST', body: form })
                         .then(parseJsonResponse)
                         .then(function(data) {
-                            if (!data.success) throw new Error(data.message);
+                            // A definitive server answer (validation failure,
+                            // chunk rejected) — never retried, unlike the
+                            // transient errors handled in .catch below.
+                            if (!data.success) { fail(data.message); return; }
 
                             var pct = Math.round(((index + 1) / totalChunks) * 100);
                             document.getElementById('upload-percent').textContent = pct + '%';
@@ -213,7 +216,7 @@ trait RendersUpdaterSteps
                             document.getElementById('upload-detail').textContent = 'Chunk ' + (index + 1) + ' of ' + totalChunks;
 
                             if (!data.complete) {
-                                sendChunk(file, uploadId, index + 1, totalChunks);
+                                sendChunk(file, uploadId, index + 1, totalChunks, false);
                             } else if (data.valid) {
                                 document.getElementById('upload-detail').textContent = 'Validated — v' + data.version;
                                 window.location = 'updater.php';
@@ -221,7 +224,21 @@ trait RendersUpdaterSteps
                                 fail(data.message);
                             }
                         })
-                        .catch(function(err) { fail(err.message); });
+                        .catch(function(err) {
+                            // Transient failure (network drop, gateway 502,
+                            // dropped response): retry this chunk once before
+                            // giving up, so a single blip can't kill a
+                            // multi-hundred-MB upload. The server treats a
+                            // re-send of an already-received chunk as
+                            // idempotent, so a lost *response* (chunk actually
+                            // landed) is also safe to retry.
+                            if (!isRetry) {
+                                document.getElementById('upload-detail').textContent = 'Chunk ' + (index + 1) + ' failed — retrying…';
+                                setTimeout(function() { sendChunk(file, uploadId, index, totalChunks, true); }, 2000);
+                                return;
+                            }
+                            fail(err.message);
+                        });
                 }
             })();
         </script>
@@ -295,6 +312,31 @@ trait RendersUpdaterSteps
 
         $checkRow = $this->renderRequirementRow(['name' => 'Package Integrity', 'detail' => 'Checksum verified; no unsafe paths found in the archive.', 'passed' => true, 'critical' => true]);
 
+        // The exact staged inner-zip size is known now (unlike at
+        // upload-init's rough size-based estimate), so this is a firmer
+        // check. The size heuristic lives in diskSpaceShortfall(), shared
+        // with the upload gate and the start-update guard.
+        $stagedZip = (string) ($package['staged_zip'] ?? '');
+        $stagedSize = is_file($stagedZip) ? (int) filesize($stagedZip) : 0;
+        $shortfall = $this->diskSpaceShortfall($stagedSize, $this->appRoot());
+
+        $applyAction = $shortfall === null
+            ? <<<HTML
+            <form method="post" action="{$this->selfUrl()}" style="margin-left:auto;">
+                {$this->csrfField()}
+                <input type="hidden" name="action" value="start-update">
+                <button type="submit" class="h-btn h-btn-primary">Apply Update →</button>
+            </form>
+            HTML
+            : '';
+
+        $spaceWarning = $shortfall === null ? '' : <<<HTML
+            <div class="h-alert h-alert-bad" style="display:block; margin-top:16px;">
+                <p class="t">Not enough free disk space</p>
+                <p class="d">This update needs roughly {$this->formatBytes($shortfall['needed'])} free (backup + staged files + extraction), but only {$this->formatBytes($shortfall['free'])} is available. Free up space on the server, then reload this page.</p>
+            </div>
+            HTML;
+
         $content = <<<HTML
         <p class="h-lede">The uploaded package is valid and ready to apply.</p>
 
@@ -315,15 +357,15 @@ trait RendersUpdaterSteps
             <p class="d">The site goes into maintenance mode while the update runs. {$backupNote}</p>
         </div>
 
+        {$spaceWarning}
+
         <div class="h-actions" style="margin-top:18px;">
             <form method="post" action="{$this->selfUrl()}">
+                {$this->csrfField()}
                 <input type="hidden" name="action" value="cancel-package">
                 <button type="submit" class="h-btn h-btn-ghost">← Cancel</button>
             </form>
-            <form method="post" action="{$this->selfUrl()}" style="margin-left:auto;">
-                <input type="hidden" name="action" value="start-update">
-                <button type="submit" class="h-btn h-btn-primary">Apply Update →</button>
-            </form>
+            {$applyAction}
         </div>
         HTML;
 
@@ -454,7 +496,7 @@ trait RendersUpdaterSteps
 
             function runTask(taskName, el) {
                 setTaskState(el, 'active');
-                fetch('updater.php?ajax=update-task&task=' + taskName, { method: 'POST' })
+                fetch(withCsrf('updater.php?ajax=update-task&task=' + taskName), { method: 'POST' })
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (!data.success) {
@@ -504,7 +546,7 @@ trait RendersUpdaterSteps
                 setTaskState(el, 'active', 'Restoring backup…');
 
                 (function restoreLoop() {
-                    fetch('updater.php?ajax=update-task&task=restore', { method: 'POST' })
+                    fetch(withCsrf('updater.php?ajax=update-task&task=restore'), { method: 'POST' })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) {

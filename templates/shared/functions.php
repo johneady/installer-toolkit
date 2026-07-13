@@ -1,6 +1,68 @@
 <?php
 
 /**
+ * Whether this request arrived over TLS — the one shared answer for the
+ * session cookie's Secure flag, the auto-detected application URL, and the
+ * mod_rewrite self-probe, so they can never disagree (e.g. a Secure cookie
+ * paired with a suggested http:// app URL behind a TLS-terminating proxy).
+ *
+ * X-Forwarded-Proto is honored so Cloudflare-flexible-SSL-style setups
+ * (browser↔proxy HTTPS, proxy↔origin plain HTTP) detect correctly — common
+ * on the shared hosting these tools target. A client spoofing the header on
+ * a plain-HTTP site only breaks its own session cookie (browsers never send
+ * this header themselves), so trusting it unconditionally is safe here.
+ */
+function requestIsHttps(): bool
+{
+    return (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+}
+
+/**
+ * Apply hardened cookie parameters before session_start(), shared by
+ * install.php and updater.php so both get the same protection: HttpOnly
+ * (unreachable from JS, closing an XSS-to-session-theft path), SameSite=Lax
+ * (a cross-site page cannot drive the authorized updater session into a
+ * state-changing POST like start-update/restore), and Secure whenever the
+ * request itself arrived over HTTPS (never forced — these tools must still
+ * work on a host that hasn't set up TLS yet).
+ */
+function applyHardenedSessionCookieParams(): void
+{
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => requestIsHttps(),
+    ]);
+}
+
+/**
+ * Mint (once per session) and return a CSRF token, and expose the check
+ * used to validate one. Shared between install.php and updater.php's
+ * state-changing POST actions — both tools drive their own session-gated
+ * multi-step flow with no other CSRF protection, since neither loads any
+ * framework that would otherwise provide it.
+ */
+function csrfToken(string $sessionKey): string
+{
+    if (empty($_SESSION[$sessionKey])) {
+        $_SESSION[$sessionKey] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION[$sessionKey];
+}
+
+function csrfTokenValid(string $sessionKey): bool
+{
+    $expected = (string) ($_SESSION[$sessionKey] ?? '');
+    $provided = (string) ($_POST['_csrf'] ?? $_GET['_csrf'] ?? '');
+
+    return $expected !== '' && $provided !== '' && hash_equals($expected, $provided);
+}
+
+/**
  * Render a clean, standalone error page when an unhandled exception
  * escapes the installer or updater. Provides the full error detail in a
  * copy-pasteable block and directs the user to raise a support ticket.

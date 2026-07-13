@@ -48,9 +48,10 @@ return [
     | Extraction
     |--------------------------------------------------------------------------
     |
-    | `extraction_batch_size` is how many files are extracted per HTTP request
-    | during the batched extraction step. Lower this on memory-constrained
-    | shared hosts.
+    | `extraction_batch_size` is the ceiling on how many files are extracted
+    | per HTTP request during the batched extraction step (the updater may
+    | extract fewer per request if a batch is running close to its
+    | wall-clock budget). Lower this on memory-constrained shared hosts.
     |
     */
 

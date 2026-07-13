@@ -16,10 +16,24 @@
  */
 trait RunsUpdateTasks
 {
-    private const EXTRACT_BATCH_FILES = 400;
+    /**
+     * Default/ceiling files-per-batch for extraction, overridable per-app
+     * via config/updates.php's `extraction_batch_size` (e.g. lowered on
+     * memory-constrained shared hosts). Also shrunk adaptively at runtime —
+     * see taskExtract() — when a batch runs close to or over
+     * BATCH_BUDGET_SECONDS.
+     */
+    private const EXTRACT_BATCH_FILES_DEFAULT = 400;
 
     /** Locks stale after this many seconds are considered abandoned. */
     private const LOCK_STALE_SECONDS = 1800;
+
+    private function extractBatchFilesCeiling(): int
+    {
+        $configured = (int) ($this->updatesConfig()['extraction_batch_size'] ?? self::EXTRACT_BATCH_FILES_DEFAULT);
+
+        return $configured > 0 ? $configured : self::EXTRACT_BATCH_FILES_DEFAULT;
+    }
 
     private function lockFile(): string
     {
@@ -105,6 +119,12 @@ trait RunsUpdateTasks
         }
         $_SESSION['updater']['update']['lock_token'] = $lockToken;
 
+        // On-disk record that a run is underway — unlike the session, this
+        // survives a lost browser session, letting a re-upload of the same
+        // version through validation to finish an interrupted run (see
+        // updateInProgressFile()). Cleared at finalize and after a restore.
+        $this->writeUpdateInProgressMarker($_SESSION['updater']['update']['version_to'] ?? null);
+
         $this->enableMaintenanceMode();
 
         return ['message' => 'Maintenance mode enabled.'];
@@ -181,9 +201,10 @@ trait RunsUpdateTasks
         $prefixLen = strlen($prefix);
         $started = microtime(true);
         $processed = 0;
+        $batchCeiling = $this->extractBatchFilesCeiling();
 
         for ($i = $offset; $i < $total; $i++) {
-            if ($processed >= self::EXTRACT_BATCH_FILES || (microtime(true) - $started) >= self::BATCH_BUDGET_SECONDS) {
+            if ($processed >= $batchCeiling || (microtime(true) - $started) >= self::BATCH_BUDGET_SECONDS) {
                 break;
             }
 
@@ -350,6 +371,7 @@ trait RunsUpdateTasks
         $this->pruneBackups(max(1, $keep));
 
         $this->disableMaintenanceMode();
+        $this->clearUpdateInProgressMarker();
         @unlink($this->lockFile());
 
         $update['finished'] = true;
@@ -453,6 +475,7 @@ trait RunsUpdateTasks
         ]);
 
         $this->disableMaintenanceMode();
+        $this->clearUpdateInProgressMarker();
         @unlink($this->lockFile());
 
         unset($_SESSION['updater']['update'], $_SESSION['updater']['package']);

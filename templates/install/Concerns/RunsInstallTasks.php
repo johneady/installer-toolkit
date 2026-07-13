@@ -15,6 +15,13 @@ trait RunsInstallTasks
     {
         header('Content-Type: application/json');
 
+        // Most shared hosts allow overriding this per-request even when
+        // the php.ini default is low; @-suppressed since it's a no-op (not
+        // an error) when disabled via disable_functions. Covers every task
+        // dispatched below — extraction, migration, and seeding are all
+        // slow enough to risk the default limit.
+        @set_time_limit(300);
+
         // Check if task was already completed (with verification for extract task)
         $completedTasks = $_SESSION['installer']['completed_tasks'] ?? [];
         if (in_array($task, $completedTasks)) {
@@ -108,9 +115,22 @@ trait RunsInstallTasks
      * On the first call, the zip is copied to a temporary working location
      * so the original is never at risk of corruption from a timed-out request.
      */
+    /** Default files-per-batch; shrunk adaptively — see taskExtract(). */
+    private const EXTRACT_DEFAULT_BATCH_SIZE = 500;
+
+    /**
+     * Target wall-clock seconds per extract batch. extractTo() extracts an
+     * entire batch in one atomic C call that cannot be interrupted
+     * mid-flight, so — unlike the updater's per-file extraction loop — this
+     * can only shrink the *next* batch's size when the previous one ran
+     * long, not bail out partway through the current one.
+     */
+    private const EXTRACT_BATCH_BUDGET_SECONDS = 8;
+
     private function taskExtract(): void
     {
-        $batchSize = 500;
+        $batchSize = (int) ($_SESSION['installer']['extract_batch_size'] ?? self::EXTRACT_DEFAULT_BATCH_SIZE);
+        $batchStart = microtime(true);
         $zipPath = __DIR__.'/'.ZIP_FILENAME;
         $workingZip = __DIR__.'/.install-working.zip';
 
@@ -174,6 +194,15 @@ trait RunsInstallTasks
                 continue;
             }
 
+            // The zip is vendor-shipped, not user-uploaded, but extractTo()
+            // performs no traversal checks of its own — a corrupted or
+            // tampered archive containing a '..' segment could otherwise
+            // write outside the document root.
+            if (str_contains($name, '..')) {
+                $zip->close();
+                throw new RuntimeException("Application package contains an unsafe file path: {$name}");
+            }
+
             // Ensure the parent directory exists
             $destDir = dirname(__DIR__.'/'.$name);
             if (! is_dir($destDir)) {
@@ -193,8 +222,18 @@ trait RunsInstallTasks
 
         $_SESSION['installer']['extract_offset'] = $end;
 
-        // Not finished yet — signal the frontend to call again
+        // Not finished yet — signal the frontend to call again. Size the
+        // *next* batch from how long this one actually took: a batch that
+        // ran close to or over budget shrinks (down to a 20-file floor so
+        // large single files can't wedge progress entirely); one that
+        // finished quickly is allowed to grow back toward the default, up
+        // to a ceiling that keeps a single extractTo() call bounded.
         if ($end < $totalFiles) {
+            $elapsed = microtime(true) - $batchStart;
+            $ratio = self::EXTRACT_BATCH_BUDGET_SECONDS / max($elapsed, 0.001);
+            $nextBatchSize = (int) max(20, min(self::EXTRACT_DEFAULT_BATCH_SIZE, $batchSize * $ratio));
+            $_SESSION['installer']['extract_batch_size'] = $nextBatchSize;
+
             $percent = round(($end / $totalFiles) * 100);
             echo json_encode([
                 'success' => true,
@@ -204,6 +243,8 @@ trait RunsInstallTasks
             ]);
             exit;
         }
+
+        unset($_SESSION['installer']['extract_batch_size']);
 
         // Extraction complete — clean up working copy and verify
         unset($_SESSION['installer']['extract_offset']);
@@ -252,6 +293,13 @@ trait RunsInstallTasks
     {
         $appFolder = APP_FOLDER;
         $htaccess = <<<HTACCESS
+# Deny access to .env and its variants (.env.backup, .env.example, …)
+# regardless of mod_rewrite availability. Anchored so unrelated dotfiles
+# that merely start with ".env" (e.g. ".environment.js") stay servable.
+<FilesMatch "^\.env(\..*)?\$">
+    Require all denied
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
@@ -259,8 +307,14 @@ trait RunsInstallTasks
     RewriteRule ^install\.php$ - [L]
     RewriteRule ^_cleanup\.php$ - [L]
 
-    # Rewrite everything else to the application public directory
-    RewriteCond %{REQUEST_URI} !^/{$appFolder}/public/
+    # Rewrite everything else to the application public directory. The
+    # condition matches the captured path (\$1), not the request URI —
+    # matching the URI would still be true for the rewritten target
+    # (e.g. /shop/{app}/public/foo under a subdirectory install), causing
+    # an infinite internal rewrite loop and a 500 from Apache's recursion
+    # limit. Matching the capture group instead correctly stops the rule
+    # from re-firing once the path already points into public/.
+    RewriteCond \$1 !^{$appFolder}/public/
     RewriteRule ^(.*)$ {$appFolder}/public/\$1 [L]
 </IfModule>
 HTACCESS;
@@ -839,15 +893,25 @@ ENV;
  */
 header('Content-Type: application/json');
 
+if (\$_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Method not allowed.']);
+    exit;
+}
+
 \$expectedToken = '{$token}';
 
-if (! isset(\$_GET['token']) || ! hash_equals(\$expectedToken, \$_GET['token'])) {
+// The token travels in the POST body, not the query string, so it never
+// lands in access/proxy logs or browser history — this endpoint has no
+// session of its own (see the class docblock above), so the token is its
+// only access control.
+if (! isset(\$_POST['token']) || ! hash_equals(\$expectedToken, \$_POST['token'])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized.']);
     exit;
 }
 
-\$commands = array_filter(explode(',', \$_GET['commands'] ?? ''));
+\$commands = array_filter(explode(',', \$_POST['commands'] ?? ''));
 \$allowed = ['config:clear', 'config:cache', 'event:cache', 'route:cache', 'view:cache', 'icons:cache', 'filament:optimize', 'package:discover'];
 
 if (empty(\$commands) || array_diff(\$commands, \$allowed)) {
@@ -864,7 +928,7 @@ if (empty(\$commands) || array_diff(\$commands, \$allowed)) {
 // session access (see the class docblock above), so the browser tracks
 // and sends the index of the next command to run.
 \$commands = array_values(\$commands);
-\$index = (int) (\$_GET['index'] ?? 0);
+\$index = (int) (\$_POST['index'] ?? 0);
 
 if (\$index < 0 || \$index >= count(\$commands)) {
     echo json_encode(['success' => false, 'message' => 'Invalid command index.']);

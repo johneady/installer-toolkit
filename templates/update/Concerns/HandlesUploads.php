@@ -43,6 +43,18 @@ trait HandlesUploads
             $this->jsonResponse(['success' => false, 'message' => 'Invalid upload size.']);
         }
 
+        // Running out of space mid-run is one of the ugliest ways an update
+        // can fail on shared hosting — reject up front rather than
+        // discovering it partway through backup or extraction. (The size
+        // heuristic lives in diskSpaceShortfall(), shared with the review
+        // screen and the start-update guard.)
+        if ($shortfall = $this->diskSpaceShortfall($size, $this->updaterStorageDir())) {
+            $this->jsonResponse([
+                'success' => false,
+                'message' => 'Not enough free disk space for this update. Needs roughly '.$this->formatBytes($shortfall['needed']).', but only '.$this->formatBytes($shortfall['free']).' is available.',
+            ]);
+        }
+
         // Discard any previous attempt's artifacts before starting fresh.
         $this->discardPackageArtifacts();
 
@@ -66,36 +78,83 @@ trait HandlesUploads
         $index = (int) ($_POST['index'] ?? -1);
 
         if (! is_array($upload) || $uploadId === '' || ! hash_equals($upload['id'], $uploadId)) {
+            // A retried final chunk whose original response was lost: the
+            // upload state was already cleared when the package finished
+            // assembling and validating, but the validated package it
+            // produced is still in the session — replay that completion
+            // response instead of failing the client into a full re-upload.
+            $package = $_SESSION['updater']['package'] ?? null;
+            if ($uploadId !== '' && is_array($package)
+                && hash_equals((string) ($package['upload_id'] ?? ''), $uploadId)) {
+                $this->jsonResponse([
+                    'success' => true,
+                    'complete' => true,
+                    'valid' => true,
+                    'version' => $package['version'],
+                ]);
+            }
+
             $this->jsonResponse(['success' => false, 'message' => 'No upload in progress. Start again.']);
         }
 
-        if ($index !== (int) $upload['next_index']) {
+        // The client resending the chunk immediately before next_index is
+        // not "out of order" — it's a retry after a dropped response (the
+        // chunk landed and was acked server-side, but the ack never reached
+        // the browser). That exact chunk is already fully appended to
+        // partPath, so just re-acknowledge it instead of failing the whole
+        // multi-hundred-MB upload over one flaky response. Retrying the
+        // *final* chunk this way falls through to the assembly/validation
+        // logic below exactly as if it were the original request for that
+        // index, rather than re-reporting an incomplete state.
+        $isRetryOfPreviousChunk = $index === (int) $upload['next_index'] - 1;
+
+        if ($isRetryOfPreviousChunk && $index + 1 < (int) $upload['total_chunks']) {
+            $this->jsonResponse([
+                'success' => true,
+                'complete' => false,
+                'received' => (int) $upload['next_index'],
+                'total' => (int) $upload['total_chunks'],
+            ]);
+        }
+
+        if (! $isRetryOfPreviousChunk && $index !== (int) $upload['next_index']) {
             $this->jsonResponse(['success' => false, 'message' => "Chunk out of order (expected {$upload['next_index']}, got {$index}). Start the upload again."]);
         }
 
-        $chunk = $_FILES['chunk'] ?? null;
-
-        if (! is_array($chunk) || ($chunk['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            $this->jsonResponse(['success' => false, 'message' => 'Chunk upload failed (PHP upload error '.(int) ($chunk['error'] ?? -1).'). Check post_max_size/upload_max_filesize.']);
-        }
-
-        if ($chunk['size'] > self::MAX_CHUNK_BYTES) {
-            $this->jsonResponse(['success' => false, 'message' => 'Chunk too large.']);
-        }
-
         $partPath = $this->uploadPartPath($uploadId);
-        $target = fopen($partPath, $index === 0 ? 'wb' : 'ab');
-        $source = fopen($chunk['tmp_name'], 'rb');
 
-        if ($target === false || $source === false) {
-            $this->jsonResponse(['success' => false, 'message' => 'Failed to write the upload to storage/app/updater. Check permissions and disk space.']);
+        // A retry of the final chunk: its bytes are already appended to
+        // partPath from the original request (only the response was lost),
+        // so skip straight to assembly/validation below instead of
+        // re-appending and duplicating the tail of the file.
+        if (! $isRetryOfPreviousChunk) {
+            $chunk = $_FILES['chunk'] ?? null;
+
+            if (! is_array($chunk) || ($chunk['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                $this->jsonResponse(['success' => false, 'message' => 'Chunk upload failed (PHP upload error '.(int) ($chunk['error'] ?? -1).'). Check post_max_size/upload_max_filesize.']);
+            }
+
+            if (! is_uploaded_file($chunk['tmp_name'])) {
+                $this->jsonResponse(['success' => false, 'message' => 'Chunk upload rejected (not a genuine upload).']);
+            }
+
+            if ($chunk['size'] > self::MAX_CHUNK_BYTES) {
+                $this->jsonResponse(['success' => false, 'message' => 'Chunk too large.']);
+            }
+
+            $target = fopen($partPath, $index === 0 ? 'wb' : 'ab');
+            $source = fopen($chunk['tmp_name'], 'rb');
+
+            if ($target === false || $source === false) {
+                $this->jsonResponse(['success' => false, 'message' => 'Failed to write the upload to storage/app/updater. Check permissions and disk space.']);
+            }
+
+            stream_copy_to_stream($source, $target);
+            fclose($source);
+            fclose($target);
+
+            $_SESSION['updater']['upload']['next_index'] = $index + 1;
         }
-
-        stream_copy_to_stream($source, $target);
-        fclose($source);
-        fclose($target);
-
-        $_SESSION['updater']['upload']['next_index'] = $index + 1;
 
         if ($index + 1 < (int) $upload['total_chunks']) {
             $this->jsonResponse([
