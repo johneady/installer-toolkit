@@ -25,6 +25,14 @@ trait ProvidesUtilities
         return true;
     }
 
+    /**
+     * Deliberately a separate implementation from
+     * PackageBuildCommand::formatBytes() (that one is Composer-autoloaded
+     * CLI code with its own pinned output format) — this one must stay
+     * dependency-free so bin/build can inline it into the standalone
+     * installer/updater, and formats for the wizard UI rather than a CLI
+     * summary table.
+     */
     private function formatBytes(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -36,5 +44,17 @@ trait ProvidesUtilities
         }
 
         return round($value, $value >= 100 ? 0 : 1).' '.$units[$i];
+    }
+
+    /**
+     * Whether a submitted port string is a valid TCP port number. Used for
+     * both db_port and mail_port on the installer's wizard forms — an
+     * interior newline or non-numeric garbage in either would otherwise be
+     * written straight into .env unescaped and unquoted, corrupting the file
+     * or being silently misinterpreted.
+     */
+    private function isValidPort(string $port): bool
+    {
+        return ctype_digit($port) && (int) $port >= 1 && (int) $port <= 65535;
     }
 }

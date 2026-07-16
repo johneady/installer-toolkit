@@ -98,6 +98,16 @@ trait ValidatesUpdatePackage
             return $fail("This update requires PHP {$minimumPhp} or later. You are running PHP ".PHP_VERSION.'.');
         }
 
+        // Checked here with the other manifest-shape validations, before the
+        // inner zip is streamed to disk — a package missing its checksum is
+        // rejected without paying for a potentially hundreds-of-MB copy.
+        $expectedChecksum = (string) ($manifest['checksum'] ?? '');
+        if ($expectedChecksum === '') {
+            $zip->close();
+
+            return $fail('Invalid update package: manifest.json is missing a checksum.');
+        }
+
         $innerZipName = $this->innerZipName();
 
         if ($zip->locateName($innerZipName) === false) {
@@ -124,8 +134,7 @@ trait ValidatesUpdatePackage
 
         $zip->close();
 
-        $expectedChecksum = (string) ($manifest['checksum'] ?? '');
-        if ($expectedChecksum !== '' && hash_file('sha256', $stagedPath) !== $expectedChecksum) {
+        if (hash_file('sha256', $stagedPath) !== $expectedChecksum) {
             @unlink($stagedPath);
 
             return $fail('Update package integrity check failed. The file may be corrupted.');

@@ -366,7 +366,7 @@ abstract class PackageTestCommand extends Command
             // here rather than raising it for the whole client. Apps with a
             // large migration count (200+) can take several minutes to
             // migrate in total.
-            $response = $client->timeout(300)->post("/install.php?ajax=install-task&task={$task}&_csrf={$this->installerCsrfToken}");
+            $response = $client->timeout(300)->asForm()->post("/install.php?ajax=install-task&task={$task}", ['_csrf' => $this->installerCsrfToken]);
             $requestCount++;
             $this->output->write('.');
             $json = $response->json();
@@ -453,7 +453,7 @@ abstract class PackageTestCommand extends Command
             // Only after every optimize command has succeeded does the
             // browser (here, the test client) confirm completion — this is
             // what actually flips install_complete server-side.
-            $response = $client->post("/install.php?ajax=install-task&task={$originalTask}_confirm&_csrf={$this->installerCsrfToken}");
+            $response = $client->asForm()->post("/install.php?ajax=install-task&task={$originalTask}_confirm", ['_csrf' => $this->installerCsrfToken]);
             $requestCount++;
             $json = $response->json();
 

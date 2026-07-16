@@ -120,4 +120,26 @@ trait GuardsUpdaterAccess
     {
         return strtok((string) ($_SERVER['REQUEST_URI'] ?? 'updater.php'), '?') ?: 'updater.php';
     }
+
+    /**
+     * Whether the current session has passed the token gate. Public so
+     * bootstrap.php's fatal-error handler can decide whether the visitor is
+     * entitled to see exception detail — deliberately defensive (an
+     * exception thrown before session_start() ran, e.g. a malformed
+     * config/updates.php, must not fatal a second time just answering this).
+     */
+    public function isAuthorized(): bool
+    {
+        return ! empty($_SESSION['updater']['authorized']);
+    }
+
+    /**
+     * selfUrl(), HTML-escaped for use in a form action="" attribute — the
+     * path is derived from the client-controlled REQUEST_URI, so unlike a
+     * literal string it must never be interpolated into markup unescaped.
+     */
+    private function selfUrlEscaped(): string
+    {
+        return htmlspecialchars($this->selfUrl());
+    }
 }

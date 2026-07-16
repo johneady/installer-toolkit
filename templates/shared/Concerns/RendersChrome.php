@@ -49,8 +49,8 @@ trait RendersChrome
 
     /**
      * Hidden input carrying the per-session CSRF token, for every plain
-     * <form method="POST"> — the fetch()-driven AJAX calls instead wrap
-     * their URL with the shared withCsrf() JS helper (see renderLayout()).
+     * <form method="POST"> — the fetch()-driven AJAX calls instead use the
+     * shared fetchWithCsrf() JS helper (see renderLayout()).
      */
     private function csrfField(): string
     {
@@ -99,12 +99,23 @@ trait RendersChrome
         window.INSTALLER_ICONS = {$iconsJson};
         window.CSRF_TOKEN = {$csrfToken};
 
-        // Appends the CSRF token to a fetch() URL's query string — used by
-        // every AJAX call below and in per-step inline scripts, so a POST
-        // to install.php/updater.php can't be driven from a cross-site page
-        // riding the session cookie alone.
-        function withCsrf(url) {
-            return url + (url.indexOf('?') === -1 ? '?' : '&') + '_csrf=' + encodeURIComponent(window.CSRF_TOKEN);
+        // POSTs the CSRF token in the request body (never the query string,
+        // which would leak it into access/proxy logs and browser history) —
+        // used by every AJAX call below and in per-step inline scripts, so a
+        // POST to install.php/updater.php can't be driven from a cross-site
+        // page riding the session cookie alone. Reuses the caller's FormData
+        // body when given one (upload endpoints already send one), otherwise
+        // creates one so a body-less POST still carries the token.
+        function fetchWithCsrf(url, options) {
+            options = options || {};
+            // Always POST — the token travels in a FormData body, and a GET
+            // with a body is invalid anyway, so callers never need to say it.
+            options.method = options.method || 'POST';
+            var body = options.body instanceof FormData ? options.body : new FormData();
+            body.append('_csrf', window.CSRF_TOKEN);
+            options.body = body;
+
+            return fetch(url, options);
         }
 
         (function() {
@@ -164,7 +175,7 @@ trait RendersChrome
 
                 var formData = new FormData(form);
 
-                fetch(withCsrf(options.endpoint), { method: 'POST', body: formData })
+                fetchWithCsrf(options.endpoint, { body: formData })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         resultDiv.classList.remove('h-hidden');

@@ -57,7 +57,7 @@ function csrfToken(string $sessionKey): string
 function csrfTokenValid(string $sessionKey): bool
 {
     $expected = (string) ($_SESSION[$sessionKey] ?? '');
-    $provided = (string) ($_POST['_csrf'] ?? $_GET['_csrf'] ?? '');
+    $provided = (string) ($_POST['_csrf'] ?? '');
 
     return $expected !== '' && $provided !== '' && hash_equals($expected, $provided);
 }
@@ -69,8 +69,16 @@ function csrfTokenValid(string $sessionKey): bool
  *
  * Shared between install.php and updater.php — bin/build inlines this file
  * into both generated tools, so there is exactly one authored copy.
+ *
+ * $isAuthorized gates the exception message, file/line, and stack trace:
+ * updater.php sits behind a token gate on a live production site, and an
+ * unauthenticated visitor who merely triggers an exception (a malformed
+ * request, a broken config file) must not learn internal paths or stack
+ * frames. install.php has no equivalent concept — running it at all is the
+ * install wizard's whole pre-auth flow, identical in exposure before and
+ * after this change — so it always passes true.
  */
-function renderFatalErrorPage(Throwable $e, string $toolLabel, string $toolVersion, string $productName): void
+function renderFatalErrorPage(Throwable $e, string $toolLabel, string $toolVersion, string $productName, bool $isAuthorized = true): void
 {
     // If headers haven't been sent yet, set a 500 status.
     if (! headers_sent()) {
@@ -85,23 +93,29 @@ function renderFatalErrorPage(Throwable $e, string $toolLabel, string $toolVersi
     $timestamp = date('Y-m-d H:i:s T');
     $url = htmlspecialchars($_SERVER['REQUEST_URI'] ?? '');
     $errorClass = htmlspecialchars(get_class($e));
-    $message = htmlspecialchars($e->getMessage());
-    $file = htmlspecialchars($e->getFile());
     $line = (int) $e->getLine();
 
+    $message = $isAuthorized
+        ? htmlspecialchars($e->getMessage())
+        : 'Details are hidden because this session is not authorized. Sign in (or use the recovery token) and reload to see the full report.';
+    $file = $isAuthorized ? htmlspecialchars($e->getFile()) : '(hidden)';
+
     // Build the plain-text error block the user can copy
-    $traceLines = [];
-    foreach ($e->getTrace() as $i => $frame) {
-        $f = $frame['file'] ?? '[internal]';
-        $l = $frame['line'] ?? 0;
-        $fn = ($frame['class'] ?? '').($frame['type'] ?? '').($frame['function'] ?? '');
-        $traceLines[] = "#{$i} {$f}:{$l} {$fn}()";
-        if ($i >= 9) { // limit trace depth for readability
-            $traceLines[] = '... (truncated)';
-            break;
+    $traceText = '(hidden — not authorized)';
+    if ($isAuthorized) {
+        $traceLines = [];
+        foreach ($e->getTrace() as $i => $frame) {
+            $f = $frame['file'] ?? '[internal]';
+            $l = $frame['line'] ?? 0;
+            $fn = ($frame['class'] ?? '').($frame['type'] ?? '').($frame['function'] ?? '');
+            $traceLines[] = "#{$i} {$f}:{$l} {$fn}()";
+            if ($i >= 9) { // limit trace depth for readability
+                $traceLines[] = '... (truncated)';
+                break;
+            }
         }
+        $traceText = implode("\n", $traceLines);
     }
-    $traceText = implode("\n", $traceLines);
 
     $copyBlock = htmlspecialchars(
         "=== {$toolLabel} Error ===\n"
@@ -110,9 +124,9 @@ function renderFatalErrorPage(Throwable $e, string $toolLabel, string $toolVersi
         ."Tool:       {$toolLabel} v{$toolVersion}\n"
         ."PHP:        {$phpVersion}\n"
         ."Error:      {$errorClass}\n"
-        ."Message:    {$e->getMessage()}\n"
+        .'Message:    '.($isAuthorized ? $e->getMessage() : '(hidden — not authorized)')."\n"
         ."File:       {$file}\n"
-        ."Line:       {$line}\n"
+        .'Line:       '.($isAuthorized ? $line : '(hidden)')."\n"
         ."\nStack Trace:\n{$traceText}\n"
         ."=====================================\n"
     );
@@ -338,7 +352,7 @@ function renderFatalErrorPage(Throwable $e, string $toolLabel, string $toolVersi
                 <p class="section-title">Error Details</p>
                 <dl class="meta-grid">
                     <dt>Type</dt><dd>{$errorClass}</dd>
-                    <dt>File</dt><dd>{$file} (line {$line})</dd>
+                    <dt>File</dt><dd>{$file}</dd>
                     <dt>PHP</dt><dd>{$phpVersion}</dd>
                     <dt>Time</dt><dd>{$timestamp}</dd>
                 </dl>

@@ -451,6 +451,35 @@ ENV;
         return str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
     }
 
+    /**
+     * Blank the FIRST_USER_* values taskGenerateEnv() wrote to .env, once
+     * seeding — the only consumer, via the app's own AdminUserSeeder reading
+     * env()/config() — has had its chance to read them. The keys are kept
+     * (some app code may still call env('FIRST_USER_EMAIL') expecting a
+     * defined-but-empty value rather than a missing key) so only the values,
+     * most importantly the admin's chosen password, stop sitting in
+     * plaintext on disk for the life of the install.
+     */
+    private function scrubFirstUserCredentialsFromEnv(): void
+    {
+        $envPath = __DIR__.'/'.APP_FOLDER.'/.env';
+
+        $contents = @file_get_contents($envPath);
+        if ($contents === false) {
+            return;
+        }
+
+        $scrubbed = preg_replace(
+            '/^(FIRST_USER_(?:EMAIL|FIRST_NAME|LAST_NAME|PASSWORD))=.*$/m',
+            '$1=""',
+            $contents
+        );
+
+        if ($scrubbed !== null) {
+            @file_put_contents($envPath, $scrubbed);
+        }
+    }
+
     private function bootstrapLaravel(): object
     {
         $autoloadPath = __DIR__.'/'.APP_FOLDER.'/vendor/autoload.php';
@@ -844,6 +873,7 @@ ENV;
 
         if ($done) {
             $this->markTaskComplete('seed');
+            $this->scrubFirstUserCredentialsFromEnv();
         }
 
         echo json_encode([

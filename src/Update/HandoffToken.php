@@ -39,6 +39,10 @@ class HandoffToken
         File::ensureDirectoryExists(dirname($this->handoffFile()));
 
         file_put_contents($this->handoffFile(), json_encode($payload, JSON_PRETTY_PRINT));
+        // Only a sha256 hash is stored, never the raw token, but matches the
+        // updater's own recovery-token file (chmod 0600) as defense in depth
+        // on a shared host where other local users could otherwise read it.
+        @chmod($this->handoffFile(), 0600);
 
         return $token;
     }

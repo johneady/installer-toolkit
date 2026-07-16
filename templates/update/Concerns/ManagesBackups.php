@@ -14,8 +14,10 @@ trait ManagesBackups
     /** Files added to the backup zip per request. */
     private const BACKUP_BATCH_FILES = 400;
 
-    /** Wall-clock budget per backup/restore batch request, in seconds. */
-    private const BATCH_BUDGET_SECONDS = 8;
+    // BATCH_BUDGET_SECONDS lives in BootsUpdaterEnvironment — every trait
+    // assembled into the Updater class already depends on it for paths, so
+    // it's a neutral shared home for a constant both this trait and
+    // RunsUpdateTasks read.
 
     private function backupDir(string $backupId): string
     {
@@ -301,6 +303,7 @@ trait ManagesBackups
         $excluded = $this->backupExcludedSegments();
         $base = $this->appRoot();
         $deleted = 0;
+        $touchedDirs = [];
 
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS),
@@ -322,10 +325,45 @@ trait ManagesBackups
 
             if (@unlink($item->getPathname())) {
                 $deleted++;
+                $touchedDirs[] = dirname($item->getPathname());
             }
         }
 
+        $this->pruneEmptyDirectories($touchedDirs, $base);
+
         return $deleted;
+    }
+
+    /**
+     * Remove directories left empty by deleteFilesAbsentFromBackup()'s
+     * unlinks, walking each one up toward (but never including) $base so a
+     * removed update also cleans up any now-empty directories it introduced
+     * a level or two above the deleted file, not just the immediate parent.
+     * Only ever removes a directory found genuinely empty — never touches
+     * $base itself, and stops climbing the moment a directory still has
+     * other contents or isn't a descendant of $base.
+     *
+     * @param  list<string>  $dirs
+     */
+    private function pruneEmptyDirectories(array $dirs, string $base): void
+    {
+        $base = rtrim($base, '/');
+
+        foreach (array_unique($dirs) as $dir) {
+            while ($dir !== $base && str_starts_with($dir, $base.'/')) {
+                $entries = @scandir($dir);
+
+                if ($entries === false || array_diff($entries, ['.', '..']) !== []) {
+                    break;
+                }
+
+                if (! @rmdir($dir)) {
+                    break;
+                }
+
+                $dir = dirname($dir);
+            }
+        }
     }
 
     /**

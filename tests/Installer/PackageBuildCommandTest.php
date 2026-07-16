@@ -191,7 +191,27 @@ test('generateManifest creates a valid manifest using config min_php_version', f
         ->and($manifest['type'])->toBe('update')
         ->and($manifest['version'])->toBe('1.3.0')
         ->and($manifest['minimum_php'])->toBe('8.2.0')
+        ->and($manifest['minimum_version'])->toBe('1.0.0')
         ->and($manifest['checksum'])->toBe(hash_file('sha256', $innerZipPath));
+});
+
+test('generateManifest defaults minimum_version to 1.0.0 when package-config omits minimum_update_version', function () {
+    $command = fakeCommand([]);
+
+    expect($command->callProtected('resolveMinimumVersion'))->toBe('1.0.0');
+});
+
+test('generateManifest uses package-config minimum_update_version when set', function () {
+    $command = fakeCommand(['minimum_update_version' => '2.3.0']);
+
+    expect($command->callProtected('resolveMinimumVersion'))->toBe('2.3.0');
+});
+
+test('generateManifest fails closed when minimum_update_version is not SemVer', function () {
+    $command = fakeCommand(['minimum_update_version' => 'not-semver']);
+
+    expect(fn () => $command->callProtected('resolveMinimumVersion'))
+        ->toThrow(RuntimeException::class, "'minimum_update_version' must be SemVer");
 });
 
 test('assembleOutput produces only the full zip and update package when demo is not configured', function () {

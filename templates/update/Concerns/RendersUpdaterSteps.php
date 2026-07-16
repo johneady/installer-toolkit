@@ -34,7 +34,7 @@ trait RendersUpdaterSteps
             {$tokenHelp}
         </div>
 
-        <form method="post" action="{$this->selfUrl()}" style="margin-top:18px;">
+        <form method="post" action="{$this->selfUrlEscaped()}" style="margin-top:18px;">
             <div class="h-field">
                 <label for="token">Access Token</label>
                 <input type="text" id="token" name="token" autocomplete="off" spellcheck="false" placeholder="Paste the token from access-token.txt" required>
@@ -184,7 +184,7 @@ trait RendersUpdaterSteps
                     initData.append('size', file.size);
                     initData.append('total_chunks', totalChunks);
 
-                    fetch(withCsrf('updater.php?ajax=upload-init'), { method: 'POST', body: initData })
+                    fetchWithCsrf('updater.php?ajax=upload-init', { body: initData })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) throw new Error(data.message);
@@ -202,7 +202,7 @@ trait RendersUpdaterSteps
                     form.append('index', index);
                     form.append('chunk', blob, 'chunk');
 
-                    fetch(withCsrf('updater.php?ajax=upload-chunk'), { method: 'POST', body: form })
+                    fetchWithCsrf('updater.php?ajax=upload-chunk', { body: form })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             // A definitive server answer (validation failure,
@@ -322,7 +322,7 @@ trait RendersUpdaterSteps
 
         $applyAction = $shortfall === null
             ? <<<HTML
-            <form method="post" action="{$this->selfUrl()}" style="margin-left:auto;">
+            <form method="post" action="{$this->selfUrlEscaped()}" style="margin-left:auto;">
                 {$this->csrfField()}
                 <input type="hidden" name="action" value="start-update">
                 <button type="submit" class="h-btn h-btn-primary">Apply Update →</button>
@@ -360,7 +360,7 @@ trait RendersUpdaterSteps
         {$spaceWarning}
 
         <div class="h-actions" style="margin-top:18px;">
-            <form method="post" action="{$this->selfUrl()}">
+            <form method="post" action="{$this->selfUrlEscaped()}">
                 {$this->csrfField()}
                 <input type="hidden" name="action" value="cancel-package">
                 <button type="submit" class="h-btn h-btn-ghost">← Cancel</button>
@@ -496,7 +496,7 @@ trait RendersUpdaterSteps
 
             function runTask(taskName, el) {
                 setTaskState(el, 'active');
-                fetch(withCsrf('updater.php?ajax=update-task&task=' + taskName), { method: 'POST' })
+                fetchWithCsrf('updater.php?ajax=update-task&task=' + taskName)
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (!data.success) {
@@ -546,7 +546,7 @@ trait RendersUpdaterSteps
                 setTaskState(el, 'active', 'Restoring backup…');
 
                 (function restoreLoop() {
-                    fetch(withCsrf('updater.php?ajax=update-task&task=restore'), { method: 'POST' })
+                    fetchWithCsrf('updater.php?ajax=update-task&task=restore')
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) {

@@ -7,6 +7,16 @@
  */
 trait BootsUpdaterEnvironment
 {
+    /**
+     * Wall-clock budget per batched backup/restore/extract request, in
+     * seconds. Lives here (rather than in ManagesBackups or RunsUpdateTasks,
+     * both of which read it) since every trait assembled into the Updater
+     * class already depends on this one for paths/environment — a neutral
+     * home that doesn't make one batching trait implicitly depend on
+     * another's internals.
+     */
+    private const BATCH_BUDGET_SECONDS = 8;
+
     private function appRoot(): string
     {
         return UPDATER_APP_ROOT;

@@ -49,6 +49,22 @@ foreach ($required as $key) {
     }
 }
 
+// Both values are interpolated verbatim into generated PHP below (inside
+// single-quoted define() literals) — validate their shape up front so a
+// stray quote or backslash in package-config.php can't corrupt the
+// generated install.php/updater.php. LoadsPackageConfig enforces the same
+// slug pattern on the artisan (package:build) side; bin/build is a separate
+// entry point and must not trust the config file any less.
+if (! preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', $config['slug'])) {
+    echo "Error: package-config.php's 'slug' must contain only lowercase letters, numbers, and hyphens, got: '{$config['slug']}'.\n";
+    exit(1);
+}
+
+if (! preg_match('/^\d+\.\d+\.\d+$/', $config['min_php_version'])) {
+    echo "Error: package-config.php's 'min_php_version' must be a SemVer string (e.g. 8.3.0), got: '{$config['min_php_version']}'.\n";
+    exit(1);
+}
+
 $slug = $config['slug'];
 $zipFilename = $config['slug'].'.zip';
 
@@ -179,9 +195,16 @@ echo "  2. Copy install.php + the zip to your distribution channel\n";
  * than silently shipping a broken installer) if the pattern doesn't match
  * exactly once.
  */
+/**
+ * preg_replace_callback (not preg_replace) so the replacement lands
+ * literally — preg_replace would interpret \1/$1-style sequences in the
+ * replacement (seeder arrays, the addslashes()'d app name) as
+ * backreferences and silently corrupt the output. Same trap injectCss()
+ * documents for the compiled CSS.
+ */
 function replaceMarkerOrFail(string $pattern, string $replacement, string $subject, string $errorLabel): string
 {
-    $result = preg_replace($pattern, $replacement, $subject, 1, $count);
+    $result = preg_replace_callback($pattern, fn () => $replacement, $subject, 1, $count);
 
     if ($count !== 1) {
         echo "Error: Failed to substitute {$errorLabel}\n";
@@ -216,19 +239,14 @@ function injectCss(string $template, string $css, string $toolLabel): string
     return $result;
 }
 
+/**
+ * var_export(), not string interpolation — a seeder class name containing a
+ * quote or backslash would otherwise break out of the generated array
+ * literal and corrupt install.php.
+ */
 function buildSeederArray(array $seeders): string
 {
-    if (empty($seeders)) {
-        return '[]';
-    }
-
-    $lines = "[\n";
-    foreach ($seeders as $seeder) {
-        $lines .= "        '{$seeder}',\n";
-    }
-    $lines .= '    ]';
-
-    return $lines;
+    return var_export(array_values(array_map('strval', $seeders)), true);
 }
 
 /**

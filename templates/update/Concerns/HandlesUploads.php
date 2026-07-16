@@ -142,6 +142,8 @@ trait HandlesUploads
                 $this->jsonResponse(['success' => false, 'message' => 'Chunk too large.']);
             }
 
+            $appendOffset = $index === 0 ? 0 : (int) @filesize($partPath);
+
             $target = fopen($partPath, $index === 0 ? 'wb' : 'ab');
             $source = fopen($chunk['tmp_name'], 'rb');
 
@@ -149,9 +151,26 @@ trait HandlesUploads
                 $this->jsonResponse(['success' => false, 'message' => 'Failed to write the upload to storage/app/updater. Check permissions and disk space.']);
             }
 
-            stream_copy_to_stream($source, $target);
+            $copied = stream_copy_to_stream($source, $target);
             fclose($source);
             fclose($target);
+
+            // A short write (e.g. the disk filled up mid-chunk) must fail
+            // this chunk immediately rather than silently ack a truncated
+            // write — otherwise it only surfaces once every chunk of a
+            // multi-hundred-MB upload has been sent, as a generic "upload
+            // incomplete" with no indication which chunk actually failed.
+            // Roll the part file back to its pre-append length first: the
+            // client's lost-response retry re-sends this same index, and it
+            // must append onto clean state, not after the truncated bytes.
+            if ($copied !== $chunk['size']) {
+                if (($handle = @fopen($partPath, 'r+b')) !== false) {
+                    ftruncate($handle, $appendOffset);
+                    fclose($handle);
+                }
+
+                $this->jsonResponse(['success' => false, 'message' => 'Failed to write the full chunk to storage/app/updater. Check available disk space.']);
+            }
 
             $_SESSION['updater']['upload']['next_index'] = $index + 1;
         }

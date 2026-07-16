@@ -89,9 +89,9 @@ abstract class PackageBuildCommand extends Command
             return self::FAILURE;
         }
 
-        $version = config('app.version');
+        $version = (string) config('app.version');
 
-        if (! preg_match('/^\d+\.\d+\.\d+$/', $version)) {
+        if (! $this->isSemVer($version)) {
             $this->error("Invalid version format: '{$version}'. Expected SemVer (e.g., 1.2.0). Set 'version' in config/app.php.");
 
             return self::FAILURE;
@@ -628,7 +628,7 @@ abstract class PackageBuildCommand extends Command
             $zip->close();
         }
 
-        $minimumVersion = '1.0.0';
+        $minimumVersion = $this->resolveMinimumVersion();
 
         $manifest = [
             'type' => 'update',
@@ -652,6 +652,31 @@ abstract class PackageBuildCommand extends Command
         $this->info('Manifest generated.');
 
         return $manifestPath;
+    }
+
+    /**
+     * The manifest's `minimum_version`: the lowest installed version this
+     * update package may be applied to (ValidatesUpdatePackage rejects the
+     * upload otherwise). Defaults to '1.0.0' — unchanged behavior for apps
+     * that don't set this — but is configurable via package-config.php's
+     * `minimum_update_version` for a release that needs to raise the floor
+     * (e.g. a breaking schema change that only a migration path starting
+     * from some later version handles correctly).
+     */
+    protected function resolveMinimumVersion(): string
+    {
+        $minimumVersion = (string) ($this->config['minimum_update_version'] ?? '1.0.0');
+
+        if (! $this->isSemVer($minimumVersion)) {
+            throw new \RuntimeException("package-config.php's 'minimum_update_version' must be SemVer (e.g. 1.2.0), got: '{$minimumVersion}'.");
+        }
+
+        return $minimumVersion;
+    }
+
+    protected function isSemVer(string $version): bool
+    {
+        return preg_match('/^\d+\.\d+\.\d+$/', $version) === 1;
     }
 
     /**
@@ -761,6 +786,15 @@ abstract class PackageBuildCommand extends Command
         $this->info("Send {$updateFilename} to existing customers for updates.");
     }
 
+    /**
+     * Deliberately a separate implementation from the framework-free
+     * templates/shared/Concerns/ProvidesUtilities::formatBytes(), not
+     * duplication to merge: this one is Composer-autoloaded CLI code with a
+     * pinned output format (always 2 decimals, zero-guarded — see
+     * PackageBuildCommandTest), while the shared trait formats for the
+     * installer/updater's wizard UI and must stay dependency-free for
+     * bin/build to inline it into a single standalone script.
+     */
     protected function formatBytes(int $bytes): string
     {
         if ($bytes <= 0) {

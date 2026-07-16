@@ -249,7 +249,7 @@ HTML;
                     return;
                 }
 
-                fetch(withCsrf('install.php?ajax=mod-rewrite'), { method: 'POST' })
+                fetchWithCsrf('install.php?ajax=mod-rewrite')
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data && data.html) {
@@ -883,7 +883,7 @@ HTML;
                         setTaskState(el, 'pending');
                     });
                     updateProgress(0);
-                    fetch(withCsrf('install.php?ajax=install-reset'), { method: 'POST' }).then(function() { runNextTask(); });
+                    fetchWithCsrf('install.php?ajax=install-reset').then(function() { runNextTask(); });
                 } else {
                     document.querySelectorAll('.task-item').forEach(function(el) {
                         if (el.dataset.status !== 'done') {
@@ -899,7 +899,7 @@ HTML;
             // to call next and which JSON flag signals completion.
             function runTaskBatch(el, batchTask, doneKey) {
                 setTaskState(el, 'active');
-                fetch(withCsrf('install.php?ajax=install-task&task=' + batchTask), { method: 'POST' })
+                fetchWithCsrf('install.php?ajax=install-task&task=' + batchTask)
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data.success && data[doneKey] === false) {
@@ -937,7 +937,7 @@ HTML;
                             runOptimizeBatch(el, commands, index + 1);
                             return;
                         }
-                        return fetch(withCsrf('install.php?ajax=install-task&task=optimize_confirm'), { method: 'POST' }).then(parseJsonResponse);
+                        return fetchWithCsrf('install.php?ajax=install-task&task=optimize_confirm').then(parseJsonResponse);
                     })
                     .then(function(data) {
                         if (!data) {
@@ -991,7 +991,7 @@ HTML;
                 setTaskState(el, 'active');
 
                 if (task === 'optimize') {
-                    fetch(withCsrf('install.php?ajax=install-task&task=' + task), { method: 'POST' })
+                    fetchWithCsrf('install.php?ajax=install-task&task=' + task)
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) {
@@ -1005,7 +1005,7 @@ HTML;
                     return;
                 }
 
-                fetch(withCsrf('install.php?ajax=install-task&task=' + task), { method: 'POST' })
+                fetchWithCsrf('install.php?ajax=install-task&task=' + task)
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (data.success && data.extract_done === false) {

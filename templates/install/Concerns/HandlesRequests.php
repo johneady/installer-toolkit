@@ -401,6 +401,14 @@ trait HandlesRequests
             return;
         }
 
+        if (! $this->isValidPort($db['port'])) {
+            $_SESSION['installer']['db'] = $db;
+            $this->errors[] = 'Database port must be a number between 1 and 65535.';
+            $this->renderStep(3);
+
+            return;
+        }
+
         try {
             $this->connectToDatabase($db);
         } catch (PDOException $e) {
@@ -425,6 +433,11 @@ trait HandlesRequests
 
         if ($db['host'] === '' || $db['name'] === '' || $db['user'] === '') {
             echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
+            exit;
+        }
+
+        if (! $this->isValidPort($db['port'])) {
+            echo json_encode(['success' => false, 'message' => 'Database port must be a number between 1 and 65535.']);
             exit;
         }
 
@@ -487,6 +500,13 @@ trait HandlesRequests
         $mailPassword = $_POST['mail_password'] ?? '';
         $mailFromAddress = trim($_POST['mail_from_address'] ?? '');
         $mailFromName = trim($_POST['mail_from_name'] ?? '');
+
+        if (! $this->isValidPort($mailPort)) {
+            $this->errors[] = 'Mail port must be a number between 1 and 65535.';
+            $this->renderStep(5);
+
+            return;
+        }
 
         // A blank from-address is resolved at env-generation time (step 7),
         // where the admin email — collected on the *next* step — is known.

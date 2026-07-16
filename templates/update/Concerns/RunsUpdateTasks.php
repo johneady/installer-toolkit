@@ -402,7 +402,20 @@ trait RunsUpdateTasks
             $content = $zip->getFromName($entry);
 
             if ($content !== false && $content !== '') {
-                @file_put_contents($this->appRoot().'/public/updater.php', $content);
+                // Write to a temp file in the same directory and rename()
+                // into place — a plain file_put_contents() over the running
+                // script would let a request that lands mid-write parse a
+                // truncated file. rename() is atomic within a filesystem, so
+                // every request sees either the old or the new script, never
+                // a partial one.
+                $target = $this->appRoot().'/public/updater.php';
+                $tempTarget = $target.'.new-'.bin2hex(random_bytes(4));
+
+                if (@file_put_contents($tempTarget, $content) !== false) {
+                    if (! @rename($tempTarget, $target)) {
+                        @unlink($tempTarget);
+                    }
+                }
             }
         }
 
@@ -422,10 +435,14 @@ trait RunsUpdateTasks
             'updater_version' => UPDATER_VERSION,
         ], $extra);
 
-        @file_put_contents(
-            $this->resultsDir().'/'.date('Ymd-His').'-'.$status.'.json',
-            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-        );
+        $path = $this->resultsDir().'/'.date('Ymd-His').'-'.$status.'.json';
+
+        @file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        // No secrets in here (status/versions/timestamps only), but matches
+        // the rest of storage/app/updater's file permissions as defense in
+        // depth on a shared host where other local users could otherwise
+        // read operational history.
+        @chmod($path, 0600);
     }
 
     // ------------------------------------------------------------------
