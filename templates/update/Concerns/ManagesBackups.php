@@ -525,8 +525,12 @@ trait ManagesBackups
         $exclude = array_values(array_map('strval', (array) ($backup['exclude'] ?? [])));
 
         // The updater's own working area (uploads, staging, backups) must
-        // never be swallowed into a backup of itself.
-        $exclude[] = 'storage/app/updater';
+        // never be swallowed into a backup of itself. Derived from config
+        // rather than hardcoded, so an app that overrides
+        // updates.updater.storage_dir still gets this exclusion — hardcoding
+        // 'storage/app/updater' here would silently stop protecting a site
+        // that customizes the storage dir.
+        $exclude[] = ltrim((string) ($this->updatesConfig()['updater']['storage_dir'] ?? 'storage/app/updater'), '/');
 
         if (($backup['include_vendor'] ?? true) === false) {
             $exclude[] = 'vendor';
@@ -599,11 +603,70 @@ trait ManagesBackups
             fclose($pipes[0]);
         }
 
-        $stdout = (string) stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        $stderr = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
+        [$stdout, $stderr] = $this->drainProcessPipes($pipes[1], $pipes[2]);
 
         return proc_close($process);
+    }
+
+    /**
+     * Read stdout and stderr to EOF without blocking on either individually.
+     * A plain stream_get_contents($pipes[1]) followed by stream_get_contents
+     * ($pipes[2]) deadlocks if the child fills the stderr pipe's OS buffer
+     * (~64KB) while stdout is still open and this process hasn't gotten to
+     * reading stderr yet — the child blocks writing, this process blocks
+     * reading stdout, and neither side ever proceeds. mysqldump/mysql write
+     * their bulk output to stdout/--result-file and only diagnostics to
+     * stderr, so this is a defense-in-depth guard against an unusually
+     * chatty failure rather than a scenario hit in normal operation.
+     *
+     * @param  resource  $stdoutPipe
+     * @param  resource  $stderrPipe
+     * @return array{0: string, 1: string}
+     */
+    private function drainProcessPipes($stdoutPipe, $stderrPipe): array
+    {
+        stream_set_blocking($stdoutPipe, false);
+        stream_set_blocking($stderrPipe, false);
+
+        $stdout = '';
+        $stderr = '';
+        $open = [$stdoutPipe, $stderrPipe];
+
+        while ($open !== []) {
+            $read = $open;
+            $write = null;
+            $except = null;
+
+            // Both pipes are non-blocking, so a stream_select() timeout
+            // (nothing readable within 5s) is harmless to just loop past —
+            // the next iteration's feof() check is what actually detects a
+            // pipe closing, not this call's return value.
+            if (@stream_select($read, $write, $except, 5) === false) {
+                break;
+            }
+
+            foreach ($read as $pipe) {
+                $chunk = fread($pipe, 65536);
+
+                if ($chunk !== '' && $chunk !== false) {
+                    if ($pipe === $stdoutPipe) {
+                        $stdout .= $chunk;
+                    } else {
+                        $stderr .= $chunk;
+                    }
+                }
+            }
+
+            foreach ($open as $pipe) {
+                if (feof($pipe)) {
+                    $open = array_values(array_filter($open, fn ($p) => $p !== $pipe));
+                }
+            }
+        }
+
+        fclose($stdoutPipe);
+        fclose($stderrPipe);
+
+        return [$stdout, $stderr];
     }
 }

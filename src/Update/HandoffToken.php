@@ -18,12 +18,26 @@ use Illuminate\Support\Facades\File;
  *
  * This runs from inside the live application (a normal booted Laravel
  * request), unlike updater.php itself, which is framework-free.
+ *
+ * The handoff file is a single slot, not a queue: mint() overwrites
+ * handoff.json unconditionally, so if two admins click "Launch Updater"
+ * within the same window, only the most recently minted token is valid —
+ * the first admin's redirect lands on the token gate with "not recognized"
+ * instead of authorizing. This is self-healing (relaunching mints a fresh
+ * token and works normally) and deliberate: supporting concurrent handoffs
+ * would need a keyed/multi-token store for a race that in practice means
+ * one operator clicking twice, or two admins updating at the same moment on
+ * a single-server install — not worth the added complexity here.
  */
 class HandoffToken
 {
     /**
      * Mint a fresh handoff token and persist its hash. Returns the raw token
      * to place in the launch URL; it is not stored anywhere.
+     *
+     * Overwrites any handoff.json already on disk — see the class docblock's
+     * note on single-slot semantics: an earlier unconsumed token is
+     * invalidated the moment a new one is minted.
      */
     public function mint(): string
     {

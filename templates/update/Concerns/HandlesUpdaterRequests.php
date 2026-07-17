@@ -50,13 +50,28 @@ trait HandlesUpdaterRequests
         $this->renderCurrentScreen();
     }
 
+    /**
+     * Whether an update run has started and not yet finished. Shared by
+     * renderCurrentScreen() (so a mid-update page reload always lands back
+     * on the progress screen, never on upload) and by the upload/start-update
+     * handlers (so a second tab, or a hand-crafted request from the same
+     * authorized session, can't kick off a new upload or run while one is
+     * already in flight — see handleUploadInit()'s docblock).
+     */
+    private function updateRunInProgress(): bool
+    {
+        $update = $_SESSION['updater']['update'] ?? [];
+
+        return ! empty($update['started']) && empty($update['finished']);
+    }
+
     private function renderCurrentScreen(): void
     {
         $state = $_SESSION['updater'];
 
         // An update run in progress always wins — a mid-update page reload
         // must land back on the progress screen, never on upload.
-        if (! empty($state['update']['started']) && empty($state['update']['finished'])) {
+        if ($this->updateRunInProgress()) {
             $this->renderProgress();
 
             return;
@@ -108,10 +123,27 @@ trait HandlesUpdaterRequests
     {
         switch ($action) {
             case 'start-update':
-                $this->handleStartUpdate();
-                break;
             case 'cancel-package':
-                $this->handleCancelPackage();
+                // Both mutate or delete $_SESSION['updater']['package']/
+                // ['update'] state that an in-flight run depends on —
+                // start-update would clobber the run already underway,
+                // and cancel-package would delete the staged zip
+                // taskExtract() is actively reading (see
+                // updateRunInProgress()'s docblock). The UI can't reach
+                // either action once a run has started
+                // (renderCurrentScreen() always shows the progress screen
+                // instead), so this only guards against a second tab or a
+                // hand-crafted direct request. Checked once here, at the
+                // dispatch choke point, rather than in each handler, so a
+                // future state-changing POST action added to this switch
+                // can't forget it.
+                if ($this->updateRunInProgress()) {
+                    $this->renderProgress();
+
+                    return;
+                }
+
+                $action === 'start-update' ? $this->handleStartUpdate() : $this->handleCancelPackage();
                 break;
             default:
                 $this->renderCurrentScreen();
@@ -121,7 +153,8 @@ trait HandlesUpdaterRequests
     /**
      * Transition from the review screen into the update run. All the heavy
      * lifting happens in the progress screen's AJAX task loop; this just
-     * pins the run's metadata into the session.
+     * pins the run's metadata into the session. The in-progress guard lives
+     * in handlePost() (see its docblock), not here.
      */
     private function handleStartUpdate(): void
     {

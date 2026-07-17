@@ -131,14 +131,4 @@ trait BuildsUpdatePackages
 
         return $path;
     }
-
-    protected function pendingPath(string $uploadId): string
-    {
-        return storage_path("app/pending-update-{$uploadId}.update");
-    }
-
-    protected function validUploadId(): string
-    {
-        return bin2hex(random_bytes(16));
-    }
 }

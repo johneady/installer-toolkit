@@ -142,17 +142,21 @@ return [
     |
     | Before extracting an update, the toolkit snapshots the current app files
     | (and optionally the database) so a failed update can be rolled back.
-    | Backups live under storage/app/{directory}/{id}/.
+    | Backups live under {updater.storage_dir}/backups/{id}/.
     |
     | `include_vendor`: vendor/ is large; include it for a faithful rollback,
     | exclude it to save time/space if you accept that composer dependencies
     | will not be rolled back.
     |
+    | `exclude` entries are literal prefixes ('storage/logs') or bare directory
+    | names matched anywhere ('node_modules') — not glob patterns. The
+    | updater's own storage dir is always excluded automatically, so it never
+    | swallows its uploads/backups into a backup of itself.
+    |
     */
 
     'backup' => [
         'enabled' => env('UPDATE_BACKUP_ENABLED', true),
-        'directory' => 'update-backups',
         'keep' => 3,
         'include_vendor' => true,
         'exclude' => [
@@ -160,9 +164,6 @@ return [
             '.git',
             'storage/framework',
             'storage/logs',
-            'storage/app/update-backups',
-            'storage/app/update-staging-*',
-            'storage/app/pending-update-*',
             'package',
             'tests',
         ],
@@ -177,8 +178,10 @@ return [
     | Pruning
     |--------------------------------------------------------------------------
     |
-    | Abandoned upload artifacts (pending zips, staging dirs, progress files)
-    | older than this many hours are deleted by the `update:prune` command.
+    | Abandoned upload artifacts in the updater's storage dir (chunked upload
+    | parts, assembled packages, staged inner zips) older than this many hours
+    | are deleted by the `update:prune` command. This value is the default for
+    | its --hours option.
     |
     */
 

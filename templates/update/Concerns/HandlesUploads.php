@@ -31,6 +31,17 @@ trait HandlesUploads
 
     private function handleUploadInit(): void
     {
+        // The UI can't reach the upload screen while a run is in progress
+        // (renderCurrentScreen() always routes to the progress screen
+        // instead — see HandlesUpdaterRequests), but nothing stops a second
+        // tab or a hand-crafted request from the same authorized session
+        // reaching this endpoint directly. discardPackageArtifacts() below
+        // would otherwise delete the staged zip taskExtract() is actively
+        // reading, failing the run mid-extraction.
+        if ($this->updateRunInProgress()) {
+            $this->jsonResponse(['success' => false, 'message' => 'An update is currently in progress. Wait for it to finish before uploading another package.']);
+        }
+
         $name = (string) ($_POST['name'] ?? '');
         $size = (int) ($_POST['size'] ?? 0);
         $totalChunks = (int) ($_POST['total_chunks'] ?? 0);

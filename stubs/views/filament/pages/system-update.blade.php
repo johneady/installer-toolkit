@@ -39,11 +39,7 @@
                         @foreach ($results as $result)
                             <tr class="border-t border-gray-100 dark:border-gray-800">
                                 <td class="py-2 pr-4 text-gray-700 dark:text-gray-300">
-                                    @if ($result->finishedAt)
-                                        {{ \Illuminate\Support\Carbon::parse($result->finishedAt)->toDateTimeString() }}
-                                    @else
-                                        —
-                                    @endif
+                                    {{ $result->finishedAtDisplay() ?? '—' }}
                                 </td>
                                 <td class="py-2 pr-4">
                                     @if ($result->applied())

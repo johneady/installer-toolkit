@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace InstallerToolkit\Update;
 
+use Illuminate\Support\Carbon;
+use Throwable;
+
 /**
  * One entry from the standalone updater's results log
  * (storage/app/updater/results/*.json).
@@ -58,5 +61,34 @@ final class UpdateResult
     public function rolledBack(): bool
     {
         return $this->status === 'rolled_back';
+    }
+
+    /**
+     * finishedAt formatted for display, or null when absent or unparseable.
+     *
+     * finishedAt comes straight from a results JSON file the updater wrote
+     * with date('c') — trustworthy in practice, but this DTO is read by
+     * every consuming app's admin panel, and RecentUpdateResults already
+     * tolerates a corrupt/truncated results file elsewhere (see its
+     * class docblock). A raw Carbon::parse() in a Blade view would 500 the
+     * whole page on one bad timestamp instead of just blanking that row.
+     */
+    public function finishedAtDisplay(): ?string
+    {
+        // Carbon::parse('') does not throw — it silently returns "now" —
+        // so an empty string (a corrupt/truncated write, as opposed to the
+        // key being absent entirely, which fromArray() already normalizes
+        // to null) must be rejected explicitly or it would render a
+        // plausible-looking but fabricated timestamp instead of being
+        // treated as missing.
+        if ($this->finishedAt === null || $this->finishedAt === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($this->finishedAt)->toDateTimeString();
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

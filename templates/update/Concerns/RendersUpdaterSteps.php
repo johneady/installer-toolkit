@@ -77,6 +77,7 @@ trait RendersUpdaterSteps
         $versionLabel = $version !== null ? 'v'.htmlspecialchars($version) : 'unknown';
         $historyHtml = $this->renderRecentResults();
         $errorsHtml = $this->renderErrors();
+        $selfUrlJson = json_encode($this->selfUrl());
 
         $uploadSection = $criticalsPass
             ? <<<'HTML'
@@ -139,6 +140,7 @@ trait RendersUpdaterSteps
                 var zone = document.getElementById('upload-zone');
                 if (!zone) return;
 
+                var SELF_URL = {$selfUrlJson};
                 var input = document.getElementById('update-file');
                 var CHUNK = 1572864; // 1.5 MB — safely under shared-hosting upload_max_filesize floors
 
@@ -184,7 +186,7 @@ trait RendersUpdaterSteps
                     initData.append('size', file.size);
                     initData.append('total_chunks', totalChunks);
 
-                    fetchWithCsrf('updater.php?ajax=upload-init', { body: initData })
+                    fetchWithCsrf(SELF_URL + '?ajax=upload-init', { body: initData })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) throw new Error(data.message);
@@ -202,7 +204,7 @@ trait RendersUpdaterSteps
                     form.append('index', index);
                     form.append('chunk', blob, 'chunk');
 
-                    fetchWithCsrf('updater.php?ajax=upload-chunk', { body: form })
+                    fetchWithCsrf(SELF_URL + '?ajax=upload-chunk', { body: form })
                         .then(parseJsonResponse)
                         .then(function(data) {
                             // A definitive server answer (validation failure,
@@ -219,7 +221,7 @@ trait RendersUpdaterSteps
                                 sendChunk(file, uploadId, index + 1, totalChunks, false);
                             } else if (data.valid) {
                                 document.getElementById('upload-detail').textContent = 'Validated — v' + data.version;
-                                window.location = 'updater.php';
+                                window.location = SELF_URL;
                             } else {
                                 fail(data.message);
                             }
@@ -406,6 +408,7 @@ trait RendersUpdaterSteps
         $xIcon = $this->statusIcon('x');
         $checkIconJson = json_encode($this->statusIcon('check'));
         $xIconJson = json_encode($this->statusIcon('x'));
+        $selfUrlJson = json_encode($this->selfUrl());
 
         $content = <<<HTML
         <p class="h-lede">Updating to <strong>v{$target}</strong>. <strong>Please do not close or refresh this page.</strong></p>
@@ -445,6 +448,7 @@ trait RendersUpdaterSteps
 
         <script>
             var tasks = {$tasksJson};
+            var SELF_URL = {$selfUrlJson};
             var currentTaskIndex = 0;
 
             document.querySelectorAll('.task-item[data-status="done"]').forEach(function(el) {
@@ -496,7 +500,7 @@ trait RendersUpdaterSteps
 
             function runTask(taskName, el) {
                 setTaskState(el, 'active');
-                fetchWithCsrf('updater.php?ajax=update-task&task=' + taskName)
+                fetchWithCsrf(SELF_URL + '?ajax=update-task&task=' + taskName)
                     .then(parseJsonResponse)
                     .then(function(data) {
                         if (!data.success) {
@@ -522,7 +526,7 @@ trait RendersUpdaterSteps
                 if (currentTaskIndex >= tasks.length) {
                     // finalize cleared the run state server-side; reloading
                     // lands on the Complete screen.
-                    window.location = 'updater.php';
+                    window.location = SELF_URL;
                     return;
                 }
 
@@ -546,7 +550,7 @@ trait RendersUpdaterSteps
                 setTaskState(el, 'active', 'Restoring backup…');
 
                 (function restoreLoop() {
-                    fetchWithCsrf('updater.php?ajax=update-task&task=restore')
+                    fetchWithCsrf(SELF_URL + '?ajax=update-task&task=restore')
                         .then(parseJsonResponse)
                         .then(function(data) {
                             if (!data.success) {
@@ -557,7 +561,7 @@ trait RendersUpdaterSteps
                             if (data.task_done === false) {
                                 restoreLoop();
                             } else {
-                                window.location = 'updater.php?screen=home';
+                                window.location = SELF_URL + '?screen=home';
                             }
                         })
                         .catch(function(err) {
@@ -584,6 +588,7 @@ trait RendersUpdaterSteps
         $to = htmlspecialchars((string) ($done['version'] ?? ''));
         $from = htmlspecialchars((string) ($done['version_from'] ?? ''));
         $productName = htmlspecialchars(APP_NAME);
+        $runAnotherUrl = htmlspecialchars($this->selfUrl().'?screen=home');
 
         $content = <<<HTML
         <div class="h-success-head">
@@ -598,7 +603,7 @@ trait RendersUpdaterSteps
         </div>
 
         <div class="h-actions" style="margin-top:20px;">
-            <a href="updater.php?screen=home" class="h-btn h-btn-ghost">Run Another Update</a>
+            <a href="{$runAnotherUrl}" class="h-btn h-btn-ghost">Run Another Update</a>
             <a href="/" class="h-btn h-btn-primary" style="margin-left:auto;">Go to Site →</a>
         </div>
         HTML;
