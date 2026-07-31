@@ -12,9 +12,14 @@ Rather than reimplementing installation and updates in every product, each app p
 
 ## Installation
 
+This package is hosted on GitHub and is **not** published to Packagist, so the repository must be registered before it can be required:
+
 ```bash
-composer require johneady/installer-toolkit
+composer config repositories.installer-toolkit vcs https://github.com/johneady/installer-toolkit.git
+composer require johneady/installer-toolkit:^2.5
 ```
+
+> To stay on the development branch instead of tagged releases, replace `^2.5` with `dev-main` and set `"minimum-stability": "dev"` (with `"prefer-stable": true`) in your `composer.json`.
 
 The service provider is auto-discovered via Laravel's package discovery.
 
