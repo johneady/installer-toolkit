@@ -5,7 +5,7 @@
     "description": "Shared installer wizard, self-update engine, and package:build command for Laravel apps distributed as self-installing zips.",
     "license": "proprietary",
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "ext-json": "*",
         "ext-sodium": "*",
         "ext-zip": "*",

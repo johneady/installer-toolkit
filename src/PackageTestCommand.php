@@ -50,6 +50,7 @@ abstract class PackageTestCommand extends Command
 
     protected string $slug;
 
+    /** @var array<string, mixed> */
     protected array $config;
 
     /**
@@ -163,6 +164,9 @@ abstract class PackageTestCommand extends Command
         return $this->buildOutputDir.'/packages';
     }
 
+    /**
+     * @return array{0: string, 1: string, 2: string}
+     */
     protected function mysqlCredentials(): array
     {
         return ['installer_test', 'installer_test', 'installer_test'];
@@ -279,6 +283,9 @@ abstract class PackageTestCommand extends Command
         return $matches[1];
     }
 
+    /**
+     * @param  array<string, string>  $data
+     */
     protected function postStep(PendingRequest $client, int $step, array $data, int $expectedNextStep): void
     {
         $response = $client->withOptions(['allow_redirects' => false])
@@ -291,7 +298,7 @@ abstract class PackageTestCommand extends Command
         if (! $response->redirect() || ! str_contains((string) $location, $expected)) {
             $detail = $this->describeStepFailure($client, $step);
 
-            throw new RuntimeException("Step {$step} did not advance to step {$expectedNextStep} (got status {$response->status()}, Location: ".($location ?? 'none')."). {$detail}");
+            throw new RuntimeException("Step {$step} did not advance to step {$expectedNextStep} (got status {$response->status()}, Location: {$location}). {$detail}");
         }
     }
 

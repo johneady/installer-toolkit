@@ -17,6 +17,7 @@ abstract class PackageBuildCommand extends Command
 
     protected $description = 'Build the distributable package (zip + installer + readme)';
 
+    /** @var array<string> */
     protected array $excludeDirs = [
         '.git',
         'node_modules',
@@ -41,6 +42,7 @@ abstract class PackageBuildCommand extends Command
      */
     protected array $extraExcludeDirs = [];
 
+    /** @var array<string> */
     protected array $excludeStoragePaths = [
         'app',
         'debugbar',
@@ -50,8 +52,10 @@ abstract class PackageBuildCommand extends Command
         'framework/views',
     ];
 
+    /** @var array<string> */
     protected array $includeStorageFiles = [];
 
+    /** @var array<string> */
     protected array $includeRootFiles = [
         'artisan',
         'composer.json',
@@ -68,6 +72,8 @@ abstract class PackageBuildCommand extends Command
      * updater.php is excluded from the *copy* for a different reason: a
      * stale copy in the app checkout (e.g. laid down by a local install run)
      * must never win over the freshly-generated one embedTooling() stages.
+     *
+     * @var array<string>
      */
     protected array $excludePublicFiles = [
         'hot',
@@ -79,6 +85,7 @@ abstract class PackageBuildCommand extends Command
 
     protected string $slug;
 
+    /** @var array<string, mixed> */
     protected array $config;
 
     public function handle(): int
@@ -700,7 +707,7 @@ abstract class PackageBuildCommand extends Command
         $privateKey = $this->resolveSigningKey();
 
         if ($privateKey === '') {
-            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but the UPDATE_SIGNING_KEY environment variable is not set. Set it (from your CI secret), point UPDATE_SIGNING_KEY_FILE at a key file, or remove signing_key_id to build unsigned.");
+            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but no signing key resolved from config('updates.signing'). Set UPDATE_SIGNING_KEY (from your CI secret) or point UPDATE_SIGNING_KEY_FILE at a key file, and make sure config/updates.php maps them to signing.private_key / signing.private_key_file — a published config that omits those entries resolves empty even when the env vars are set. Or remove signing_key_id to build unsigned.");
         }
 
         $this->info("Signing manifest with key '{$keyId}'...");
@@ -718,13 +725,13 @@ abstract class PackageBuildCommand extends Command
      */
     protected function resolveSigningKey(): string
     {
-        $privateKey = (string) env('UPDATE_SIGNING_KEY', '');
+        $privateKey = (string) config('updates.signing.private_key', '');
 
         if ($privateKey !== '') {
             return $privateKey;
         }
 
-        $keyFile = (string) env('UPDATE_SIGNING_KEY_FILE', '');
+        $keyFile = (string) config('updates.signing.private_key_file', '');
 
         if ($keyFile === '') {
             return '';

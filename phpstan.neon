@@ -1,9 +1,15 @@
 includes:
-    - phpstan-baseline.neon
     - vendor/larastan/larastan/extension.neon
 
 parameters:
     level: 6
+
+    # The package has no bootstrapped Laravel app, so larastan can't resolve
+    # config_path() on its own and would treat every file — including
+    # config/ — as "outside config", flagging legitimate env() calls there.
+    # Point it at our config directory so env() is allowed where it belongs.
+    configDirectories:
+        - config
 
     paths:
         - src

@@ -31,6 +31,11 @@ class UpdateAuthorizer
             return (bool) app()->call($authorizer, ['request' => $request]);
         }
 
-        return (bool) $request->user()?->is_admin;
+        // The host app's User model exposes its admin flag as an Eloquent
+        // attribute (column) rather than a declared property, so access it
+        // via data_get() — that reads the attribute without a static type
+        // dependency on a column this package can't know about. Null when
+        // no user is authenticated.
+        return (bool) data_get($request->user(), 'is_admin');
     }
 }

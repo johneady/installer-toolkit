@@ -31,10 +31,10 @@ function testKeypair(): array
 afterEach(function () {
     File::deleteDirectory(storage_path('app'));
     File::delete(base_path('package/package-config.php'));
-    putenv('UPDATE_SIGNING_KEY');
-    putenv('UPDATE_SIGNING_KEY_FILE');
-    unset($_ENV['UPDATE_SIGNING_KEY'], $_SERVER['UPDATE_SIGNING_KEY']);
-    unset($_ENV['UPDATE_SIGNING_KEY_FILE'], $_SERVER['UPDATE_SIGNING_KEY_FILE']);
+    config([
+        'updates.signing.private_key' => '',
+        'updates.signing.private_key_file' => '',
+    ]);
 });
 
 function signingStagingDir(): array
@@ -69,7 +69,7 @@ test('generateManifest does not sign when package-config has no signing_key_id',
         ->and($manifest)->not->toHaveKey('key_id');
 });
 
-test('generateManifest fails closed when signing_key_id is set but UPDATE_SIGNING_KEY is missing', function () {
+test('generateManifest fails closed when signing_key_id is set but no signing key resolves', function () {
     $stagingDir = storage_path('app/test-sign-'.uniqid());
     File::ensureDirectoryExists($stagingDir);
 
@@ -82,11 +82,11 @@ test('generateManifest fails closed when signing_key_id is set but UPDATE_SIGNIN
     $command = signingFakeCommand(['signing_key_id' => 'key-2026-07']);
 
     expect(fn () => $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0'))
-        ->toThrow(RuntimeException::class, 'UPDATE_SIGNING_KEY environment variable is not set');
+        ->toThrow(RuntimeException::class, 'no signing key resolved');
 });
 
 test('generateManifest fails closed when UPDATE_SIGNING_KEY is not a valid Ed25519 private key', function () {
-    putenv('UPDATE_SIGNING_KEY=not-a-real-key');
+    config(['updates.signing.private_key' => 'not-a-real-key']);
 
     $stagingDir = storage_path('app/test-sign-'.uniqid());
     File::ensureDirectoryExists($stagingDir);
@@ -105,7 +105,7 @@ test('generateManifest fails closed when UPDATE_SIGNING_KEY is not a valid Ed255
 
 test('generateManifest signs the manifest when signing_key_id and UPDATE_SIGNING_KEY are both present', function () {
     $keypair = testKeypair();
-    putenv('UPDATE_SIGNING_KEY='.$keypair['private_key']);
+    config(['updates.signing.private_key' => $keypair['private_key']]);
 
     $stagingDir = storage_path('app/test-sign-'.uniqid());
     File::ensureDirectoryExists($stagingDir);
@@ -137,7 +137,7 @@ test('generateManifest falls back to UPDATE_SIGNING_KEY_FILE containing a dotenv
 
     $keyFile = $stagingDir.'/signing.env';
     file_put_contents($keyFile, "SOMETHING_ELSE=abc\nUPDATE_SIGNING_KEY={$keypair['private_key']}\n");
-    putenv('UPDATE_SIGNING_KEY_FILE='.$keyFile);
+    config(['updates.signing.private_key_file' => $keyFile]);
 
     $command = signingFakeCommand(['slug' => 'fake-app', 'signing_key_id' => 'key-test']);
     $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0');
@@ -158,7 +158,7 @@ test('generateManifest falls back to UPDATE_SIGNING_KEY_FILE containing a bare k
 
     $keyFile = $stagingDir.'/signing.key';
     file_put_contents($keyFile, $keypair['private_key']."\n");
-    putenv('UPDATE_SIGNING_KEY_FILE='.$keyFile);
+    config(['updates.signing.private_key_file' => $keyFile]);
 
     $command = signingFakeCommand(['slug' => 'fake-app', 'signing_key_id' => 'key-test']);
     $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0');
@@ -173,10 +173,10 @@ test('UPDATE_SIGNING_KEY takes precedence over UPDATE_SIGNING_KEY_FILE', functio
     $fileKeypair = testKeypair();
     [$stagingDir, $innerZipPath] = signingStagingDir();
 
-    putenv('UPDATE_SIGNING_KEY='.$envKeypair['private_key']);
+    config(['updates.signing.private_key' => $envKeypair['private_key']]);
     $keyFile = $stagingDir.'/signing.env';
     file_put_contents($keyFile, "UPDATE_SIGNING_KEY={$fileKeypair['private_key']}\n");
-    putenv('UPDATE_SIGNING_KEY_FILE='.$keyFile);
+    config(['updates.signing.private_key_file' => $keyFile]);
 
     $command = signingFakeCommand(['slug' => 'fake-app', 'signing_key_id' => 'key-test']);
     $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0');
@@ -192,7 +192,7 @@ test('UPDATE_SIGNING_KEY takes precedence over UPDATE_SIGNING_KEY_FILE', functio
 test('generateManifest fails closed when UPDATE_SIGNING_KEY_FILE points to a missing file', function () {
     [$stagingDir, $innerZipPath] = signingStagingDir();
 
-    putenv('UPDATE_SIGNING_KEY_FILE='.$stagingDir.'/does-not-exist.env');
+    config(['updates.signing.private_key_file' => $stagingDir.'/does-not-exist.env']);
 
     $command = signingFakeCommand(['signing_key_id' => 'key-test']);
 
@@ -205,7 +205,7 @@ test('generateManifest fails closed when UPDATE_SIGNING_KEY_FILE has no usable k
 
     $keyFile = $stagingDir.'/signing.env';
     file_put_contents($keyFile, "APP_NAME=whatever\n");
-    putenv('UPDATE_SIGNING_KEY_FILE='.$keyFile);
+    config(['updates.signing.private_key_file' => $keyFile]);
 
     $command = signingFakeCommand(['signing_key_id' => 'key-test']);
 
@@ -215,7 +215,7 @@ test('generateManifest fails closed when UPDATE_SIGNING_KEY_FILE has no usable k
 
 test('generateManifest signature does not verify against a tampered checksum (binds checksum into the signed payload)', function () {
     $keypair = testKeypair();
-    putenv('UPDATE_SIGNING_KEY='.$keypair['private_key']);
+    config(['updates.signing.private_key' => $keypair['private_key']]);
 
     $stagingDir = storage_path('app/test-sign-'.uniqid());
     File::ensureDirectoryExists($stagingDir);

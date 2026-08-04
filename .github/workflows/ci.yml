@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 concurrency:
@@ -10,6 +11,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # bin/build stamps the VERSION file into every generated install.php and
+  # updater.php as INSTALLER_VERSION/UPDATER_VERSION, but Composer resolves
+  # releases from the git tag alone. If the two disagree, customers get a
+  # build labelled with a version that isn't the one they're running — so a
+  # mismatch fails the release rather than shipping a misleading stamp.
+  version:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: VERSION matches tag
+        run: |
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          if [ "$file_version" != "$tag_version" ]; then
+            echo "::error::VERSION file says '${file_version}' but the tag is '${GITHUB_REF_NAME}' (expected '${tag_version}'). Update VERSION and re-tag."
+            exit 1
+          fi
+
+          echo "VERSION '${file_version}' matches tag '${GITHUB_REF_NAME}'."
+
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -17,7 +43,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        php: ['8.2', '8.3']
+        php: ['8.3']
 
     steps:
       - uses: actions/checkout@v4

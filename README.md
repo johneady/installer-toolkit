@@ -6,7 +6,7 @@ Rather than reimplementing installation and updates in every product, each app p
 
 ## Requirements
 
-- PHP 8.2+
+- PHP 8.3+
 - Laravel 11, 12, or 13
 - Extensions: `json`, `sodium`, `zip`
 
@@ -16,10 +16,10 @@ This package is hosted on GitHub and is **not** published to Packagist, so the r
 
 ```bash
 composer config repositories.installer-toolkit vcs https://github.com/johneady/installer-toolkit.git
-composer require johneady/installer-toolkit:^2.5
+composer require johneady/installer-toolkit:^2.6
 ```
 
-> To stay on the development branch instead of tagged releases, replace `^2.5` with `dev-main` and set `"minimum-stability": "dev"` (with `"prefer-stable": true`) in your `composer.json`.
+> To stay on the development branch instead of tagged releases, replace `^2.6` with `dev-main` and set `"minimum-stability": "dev"` (with `"prefer-stable": true`) in your `composer.json`.
 
 The service provider is auto-discovered via Laravel's package discovery.
 
@@ -62,6 +62,29 @@ Trusted public keys live in `config/updates.php` under `signing.trusted_keys`, k
 To rotate keys, add the new `key_id` alongside the old one so in-flight updates keep verifying, ship a release signed with the new key, then drop the old entry in a later release.
 
 **The private signing key must never be committed.** The build reads it from `UPDATE_SIGNING_KEY_FILE` in your local `.env`, which is gitignored.
+
+As of 2.6.0 the build resolves that key through `config('updates.signing.private_key_file')` rather than reading the environment directly, so it still resolves when the config is cached — the `env()` call returns null once `config:cache` has run, which silently broke signed builds in release pipelines.
+
+## Upgrading to 2.6.0
+
+Two changes require action in consuming apps:
+
+**PHP 8.3 is now the minimum.** Bump `"php"` in the app's `composer.json` to `^8.3`, or Composer will refuse to resolve.
+
+**Published configs need the signing key entries.** `mergeConfigFrom()` is a shallow merge, so an app whose published `config/updates.php` declares a `signing` array replaces the package's wholesale. The provider now backfills `private_key` and `private_key_file` when they are absent, so existing apps keep building — but declaring them explicitly is clearer:
+
+```php
+'signing' => [
+    'private_key' => env('UPDATE_SIGNING_KEY', ''),
+    'private_key_file' => env('UPDATE_SIGNING_KEY_FILE', ''),
+
+    'trusted_keys' => [
+        // ...
+    ],
+],
+```
+
+Note that only those two build-time entries are backfilled, and only when the config is not cached — a cached config is already fully resolved. `trusted_keys` remains a deliberate wholesale override: unioning it with the package's defaults would re-add keys an app had removed, making it impossible to revoke a trust anchor from the app side.
 
 ## Repository layout
 

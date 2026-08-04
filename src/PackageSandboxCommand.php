@@ -29,6 +29,7 @@ abstract class PackageSandboxCommand extends Command
 
     protected string $slug;
 
+    /** @var array<string, mixed> */
     protected array $config;
 
     public function handle(): int
