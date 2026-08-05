@@ -5,3 +5,4 @@
 # excludes .env from the vendored package, but it must never reach git either.
 .env
 .env.*
+.envrc
