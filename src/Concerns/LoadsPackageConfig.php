@@ -18,11 +18,26 @@ trait LoadsPackageConfig
 
         $this->config = require $configPath;
 
-        foreach (['name', 'slug', 'min_php_version'] as $requiredKey) {
+        foreach (['name', 'slug'] as $requiredKey) {
             if (empty($this->config[$requiredKey])) {
                 return "package-config.php is missing required key: '{$requiredKey}'.";
             }
         }
+
+        /**
+         * Derived from composer.json rather than read from package-config.php,
+         * so the floor baked into generated installers can never drift from the
+         * requirement the app actually enforces. Any 'min_php_version' left in
+         * a package-config.php is ignored.
+         */
+        $resolveMinPhpVersion = require __DIR__.'/../min_php_version.php';
+        $resolved = $resolveMinPhpVersion(base_path());
+
+        if ($resolved['error'] !== null) {
+            return "Could not determine the minimum PHP version: {$resolved['error']}";
+        }
+
+        $this->config['min_php_version'] = $resolved['version'];
 
         $slug = $this->config['slug'];
         if (! preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', $slug)) {

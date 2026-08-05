@@ -17,13 +17,18 @@ test('bin/build injects the app name and produces a syntactically valid install.
     $config = [
         'name' => "Fake App's Suite",
         'slug' => 'fake-app',
-        'min_php_version' => '8.3.0',
         'essential_seeders' => [],
         'sample_seeders' => [],
     ];
     file_put_contents(
         $projectDir.'/package/package-config.php',
         '<?php return '.var_export($config, true).';'
+    );
+
+    // The PHP floor comes from the app's own composer.json, not package-config.
+    file_put_contents(
+        $projectDir.'/composer.json',
+        json_encode(['require' => ['php' => '^8.3']])
     );
 
     $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]);
@@ -91,12 +96,77 @@ test('bin/build injects the app name and produces a syntactically valid install.
     $hookLint->run();
     expect($hookLint->isSuccessful())->toBeTrue();
 
-    // readme.html is templated too: the quoted PHP version must come from
-    // the app's min_php_version ('8.3.0' displayed as '8.3+'), never a
-    // hardcoded default, and no marker may survive substitution.
+    // readme.html is templated too: the quoted PHP version must come from the
+    // constraint in the app's composer.json ('^8.3' displayed as '8.3+'),
+    // never a hardcoded default, and no marker may survive substitution.
     $readme = file_get_contents($outputDir.'/readme.html');
     expect($readme)->toContain('PHP 8.3+')
         ->and($readme)->not->toContain('[[MIN_PHP_VERSION]]');
+
+    // The same derived floor is what the installer enforces at runtime.
+    expect($source)->toContain("define('MIN_PHP_VERSION', '8.3.0')");
+
+    File::deleteDirectory($projectDir);
+    File::deleteDirectory($outputDir);
+});
+
+test('bin/build tracks the app composer.json constraint rather than a stored version', function () {
+    $projectDir = storage_path('app/build-minphp-'.uniqid());
+    $outputDir = storage_path('app/build-minphp-output-'.uniqid());
+    File::ensureDirectoryExists($projectDir.'/package');
+
+    // A stale min_php_version left in package-config.php must not win: bumping
+    // composer.json alone has to move the floor in every generated artifact.
+    // This is the drift that shipped installers advertising an outdated PHP
+    // requirement back when the value was stored in two places.
+    $config = [
+        'name' => 'Fake App',
+        'slug' => 'fake-app',
+        'min_php_version' => '8.1.0',
+        'essential_seeders' => [],
+        'sample_seeders' => [],
+    ];
+    file_put_contents(
+        $projectDir.'/package/package-config.php',
+        '<?php return '.var_export($config, true).';'
+    );
+    file_put_contents(
+        $projectDir.'/composer.json',
+        json_encode(['require' => ['php' => '^8.5']])
+    );
+
+    (new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]))->mustRun();
+
+    $install = file_get_contents($outputDir.'/install.php');
+    $updater = file_get_contents($outputDir.'/updater.php');
+    $readme = file_get_contents($outputDir.'/readme.html');
+
+    expect($install)->toContain("define('MIN_PHP_VERSION', '8.5.0')")
+        ->and($install)->not->toContain('8.1.0')
+        ->and($updater)->toContain("define('MIN_PHP_VERSION', '8.5.0')")
+        ->and($readme)->toContain('PHP 8.5+');
+
+    File::deleteDirectory($projectDir);
+    File::deleteDirectory($outputDir);
+});
+
+test('bin/build fails loudly when the app composer.json declares no php constraint', function () {
+    $projectDir = storage_path('app/build-nophp-'.uniqid());
+    $outputDir = storage_path('app/build-nophp-output-'.uniqid());
+    File::ensureDirectoryExists($projectDir.'/package');
+
+    $config = ['name' => 'Fake App', 'slug' => 'fake-app', 'essential_seeders' => [], 'sample_seeders' => []];
+    file_put_contents(
+        $projectDir.'/package/package-config.php',
+        '<?php return '.var_export($config, true).';'
+    );
+    file_put_contents($projectDir.'/composer.json', json_encode(['require' => []]));
+
+    $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]);
+    $build->run();
+
+    expect($build->isSuccessful())->toBeFalse()
+        ->and($build->getOutput())->toContain("'require.php'");
 
     File::deleteDirectory($projectDir);
     File::deleteDirectory($outputDir);

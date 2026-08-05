@@ -641,7 +641,7 @@ abstract class PackageBuildCommand extends Command
             'type' => 'update',
             'version' => $version,
             'minimum_version' => $minimumVersion,
-            'minimum_php' => $this->config['min_php_version'] ?? '8.3.0',
+            'minimum_php' => $this->config['min_php_version'],
             'checksum' => $checksum,
             'built_at' => now()->toIso8601String(),
             'files_count' => $filesCount,

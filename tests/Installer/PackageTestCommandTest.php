@@ -20,9 +20,14 @@ function fakeTestCommand(array $config = []): FakePackageTestCommand
     return $command->withConfig($config);
 }
 
+beforeEach(function () {
+    writeAppComposerJson();
+});
+
 afterEach(function () {
     File::deleteDirectory(storage_path('app'));
     File::delete(base_path('package/package-config.php'));
+    File::delete(base_path('composer.json'));
 });
 
 test('handle fails when package-config.php is missing', function () {
@@ -37,7 +42,6 @@ test('handle fails when package-config.php is missing a required key', function 
     $config = [
         'name' => 'Fake App',
         'slug' => 'fake-app',
-        'min_php_version' => '8.3.0',
     ];
     unset($config[$missingKey]);
 
@@ -47,7 +51,7 @@ test('handle fails when package-config.php is missing a required key', function 
     $this->artisan('package:test')
         ->assertFailed()
         ->expectsOutputToContain("missing required key: '{$missingKey}'");
-})->with(['name', 'slug', 'min_php_version']);
+})->with(['name', 'slug']);
 
 test('findFreePort returns a usable, immediately reusable port', function () {
     $command = fakeTestCommand();

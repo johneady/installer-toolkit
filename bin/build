@@ -32,7 +32,6 @@ if (! file_exists($configFile)) {
     echo "  return [\n";
     echo "      'name'              => 'Your App Name',\n";
     echo "      'slug'              => 'your-app',\n";
-    echo "      'min_php_version'   => '8.3.0',\n";
     echo "      'essential_seeders' => [...],\n";
     echo "      'sample_seeders'    => [...],\n";
     echo "  ];\n\n";
@@ -41,7 +40,7 @@ if (! file_exists($configFile)) {
 
 $config = require $configFile;
 
-$required = ['name', 'slug', 'min_php_version'];
+$required = ['name', 'slug'];
 foreach ($required as $key) {
     if (empty($config[$key])) {
         echo "Error: Missing required config key: {$key}\n";
@@ -49,19 +48,28 @@ foreach ($required as $key) {
     }
 }
 
-// Both values are interpolated verbatim into generated PHP below (inside
-// single-quoted define() literals) — validate their shape up front so a
-// stray quote or backslash in package-config.php can't corrupt the
-// generated install.php/updater.php. LoadsPackageConfig enforces the same
-// slug pattern on the artisan (package:build) side; bin/build is a separate
-// entry point and must not trust the config file any less.
-if (! preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', $config['slug'])) {
-    echo "Error: package-config.php's 'slug' must contain only lowercase letters, numbers, and hyphens, got: '{$config['slug']}'.\n";
+// Derived from the project's composer.json rather than package-config.php, so
+// the floor baked into the generated install.php/updater.php can never drift
+// from the requirement the app actually enforces.
+$resolveMinPhpVersion = require $toolkitDir.'/src/min_php_version.php';
+$resolvedMinPhp = $resolveMinPhpVersion($projectDir);
+
+if ($resolvedMinPhp['error'] !== null) {
+    echo "Error: Could not determine the minimum PHP version: {$resolvedMinPhp['error']}\n";
     exit(1);
 }
 
-if (! preg_match('/^\d+\.\d+\.\d+$/', $config['min_php_version'])) {
-    echo "Error: package-config.php's 'min_php_version' must be a SemVer string (e.g. 8.3.0), got: '{$config['min_php_version']}'.\n";
+$config['min_php_version'] = $resolvedMinPhp['version'];
+
+// The slug is interpolated verbatim into generated PHP below (inside a
+// single-quoted define() literal) — validate its shape up front so a stray
+// quote or backslash in package-config.php can't corrupt the generated
+// install.php/updater.php. LoadsPackageConfig enforces the same pattern on
+// the artisan (package:build) side; bin/build is a separate entry point and
+// must not trust the config file any less. min_php_version needs no such
+// check: it is derived above and always matches \d+\.\d+\.\d+ by construction.
+if (! preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', $config['slug'])) {
+    echo "Error: package-config.php's 'slug' must contain only lowercase letters, numbers, and hyphens, got: '{$config['slug']}'.\n";
     exit(1);
 }
 

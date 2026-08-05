@@ -17,9 +17,14 @@ function fakeCommand(array $config = []): FakePackageBuildCommand
     return $command->withConfig($config);
 }
 
+beforeEach(function () {
+    writeAppComposerJson();
+});
+
 afterEach(function () {
     File::deleteDirectory(storage_path('app'));
     File::delete(base_path('package/package-config.php'));
+    File::delete(base_path('composer.json'));
 });
 
 test('handle fails when package-config.php is missing', function () {
@@ -34,7 +39,6 @@ test('handle fails when package-config.php is missing a required key', function 
     $config = [
         'name' => 'Fake App',
         'slug' => 'fake-app',
-        'min_php_version' => '8.3.0',
     ];
     unset($config[$missingKey]);
 
@@ -44,7 +48,7 @@ test('handle fails when package-config.php is missing a required key', function 
     $this->artisan('package:build')
         ->assertFailed()
         ->expectsOutputToContain("missing required key: '{$missingKey}'");
-})->with(['name', 'slug', 'min_php_version']);
+})->with(['name', 'slug']);
 
 test('shouldExclude filters out standard dev directories', function (string $path) {
     expect(fakeCommand()->callProtected('shouldExclude', $path))->toBeTrue();
@@ -169,7 +173,7 @@ test('createZip excludes specified files', function () {
         ->and($demoEntries)->toContain('fake-app/artisan');
 });
 
-test('generateManifest creates a valid manifest using config min_php_version', function () {
+test('generateManifest creates a valid manifest carrying the resolved min_php_version', function () {
     $stagingDir = storage_path('app/test-manifest-'.uniqid());
     File::ensureDirectoryExists($stagingDir);
 

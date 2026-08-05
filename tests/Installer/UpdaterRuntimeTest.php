@@ -42,10 +42,12 @@ function buildUpdaterSandbox(string $slug, string $currentVersion, array $update
     file_put_contents($projectDir.'/package/package-config.php', '<?php return '.var_export([
         'name' => 'Updater RT App',
         'slug' => $slug,
-        'min_php_version' => '8.2.0',
         'essential_seeders' => [],
         'sample_seeders' => [],
     ], true).';');
+
+    // bin/build derives the generated updater's MIN_PHP_VERSION from here.
+    file_put_contents($projectDir.'/composer.json', json_encode(['require' => ['php' => '^8.2']]));
 
     $outputDir = storage_path('app/updater-rt-out-'.uniqid());
     $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]);

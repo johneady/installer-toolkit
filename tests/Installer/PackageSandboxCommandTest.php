@@ -19,9 +19,14 @@ function fakeSandboxCommand(array $config = []): FakePackageSandboxCommand
     return $command->withConfig($config);
 }
 
+beforeEach(function () {
+    writeAppComposerJson();
+});
+
 afterEach(function () {
     File::deleteDirectory(storage_path('app'));
     File::delete(base_path('package/package-config.php'));
+    File::delete(base_path('composer.json'));
 });
 
 test('handle fails when package-config.php is missing', function () {
@@ -36,7 +41,6 @@ test('handle fails when package-config.php is missing a required key', function 
     $config = [
         'name' => 'Fake App',
         'slug' => 'fake-app',
-        'min_php_version' => '8.3.0',
     ];
     unset($config[$missingKey]);
 
@@ -46,7 +50,7 @@ test('handle fails when package-config.php is missing a required key', function 
     $this->artisan('package:sandbox')
         ->assertFailed()
         ->expectsOutputToContain("missing required key: '{$missingKey}'");
-})->with(['name', 'slug', 'min_php_version']);
+})->with(['name', 'slug']);
 
 test('handle fails when slug contains characters outside docker/path-safe charset', function () {
     File::ensureDirectoryExists(base_path('package'));
@@ -181,10 +185,12 @@ test('the assembled updater.php executes rather than being served as source', fu
     file_put_contents($projectDir.'/package/package-config.php', '<?php return '.var_export([
         'name' => 'Updater Smoke App',
         'slug' => 'updater-smoke',
-        'min_php_version' => '8.3.0',
         'essential_seeders' => [],
         'sample_seeders' => [],
     ], true).';');
+
+    // bin/build derives the generated updater's MIN_PHP_VERSION from here.
+    file_put_contents($projectDir.'/composer.json', json_encode(['require' => ['php' => '^8.3']]));
 
     $build = new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]);
     $build->mustRun();
