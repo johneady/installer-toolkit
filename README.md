@@ -6,7 +6,7 @@ Rather than reimplementing installation and updates in every product, each app p
 
 ## Requirements
 
-- PHP 8.3+
+- PHP 8.5+
 - Laravel 11, 12, or 13
 - Extensions: `json`, `sodium`, `zip`
 
