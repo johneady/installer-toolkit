@@ -16,10 +16,10 @@ This package is hosted on GitHub and is **not** published to Packagist, so the r
 
 ```bash
 composer config repositories.installer-toolkit vcs https://github.com/johneady/installer-toolkit.git
-composer require johneady/installer-toolkit:^2.6
+composer require johneady/installer-toolkit:^2.8
 ```
 
-> To stay on the development branch instead of tagged releases, replace `^2.6` with `dev-main` and set `"minimum-stability": "dev"` (with `"prefer-stable": true`) in your `composer.json`.
+> To stay on the development branch instead of tagged releases, replace `^2.8` with `dev-main` and set `"minimum-stability": "dev"` (with `"prefer-stable": true`) in your `composer.json`.
 
 The service provider is auto-discovered via Laravel's package discovery.
 
@@ -47,6 +47,31 @@ php artisan package:build --output=package
 
 This produces an outer zip containing the application archive, `install.php`, and `readme.html` — the three files a customer uploads to their document root.
 
+The installer and updater are generated from the toolkit installed in the app's `vendor/`, so a package is built from exactly the toolkit version its `composer.lock` pins. To try an unreleased toolkit change against a real app, point the build at a checkout:
+
+```bash
+php artisan package:build --toolkit=~/php/installer-toolkit
+```
+
+### Building in CI
+
+`.github/workflows/build-package.yml` is a reusable workflow that builds a release tag and attaches the full zip, demo zip and `.update` to that tag's GitHub Release. Call it from the app's release-please workflow once a release is cut:
+
+```yaml
+  package:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: johneady/installer-toolkit/.github/workflows/build-package.yml@v2.8.0
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: write
+    secrets: inherit
+```
+
+The job runs in the app repo's `release` environment and reads the signing key from that environment's `UPDATE_SIGNING_KEY` secret. Limit the environment's deployment branches to `main`, so pull request and Dependabot jobs can never read the key.
+
 ## Update signing
 
 Update packages are signed with Ed25519 and verified **fail-closed**: an unsigned or badly signed package is rejected rather than trusted.
@@ -61,7 +86,13 @@ Trusted public keys live in `config/updates.php` under `signing.trusted_keys`, k
 
 To rotate keys, add the new `key_id` alongside the old one so in-flight updates keep verifying, ship a release signed with the new key, then drop the old entry in a later release.
 
-**The private signing key must never be committed.** The build reads it from `UPDATE_SIGNING_KEY_FILE` in your local `.env`, which is gitignored.
+**The private signing key must never be committed.** The build looks for it in this order:
+
+1. `UPDATE_SIGNING_KEY`: the key itself. This is the CI secret.
+2. `UPDATE_SIGNING_KEY_FILE`: a path to a file holding the key, either bare or as an `UPDATE_SIGNING_KEY=` line.
+3. `~/.config/installer-toolkit/signing.key` (or `$XDG_CONFIG_HOME/installer-toolkit/signing.key`): one file per machine, so local builds need no signing entries in any app's `.env`. Keep it `chmod 600`.
+
+If the app sets `signing_key_id` and no key resolves, the build fails rather than shipping an unsigned package.
 
 As of 2.6.0 the build resolves that key through `config('updates.signing.private_key_file')` rather than reading the environment directly, so it still resolves when the config is cached — the `env()` call returns null once `config:cache` has run, which silently broke signed builds in release pipelines.
 
@@ -85,6 +116,10 @@ Two changes require action in consuming apps:
 ```
 
 Note that only those two build-time entries are backfilled, and only when the config is not cached — a cached config is already fully resolved. `trusted_keys` remains a deliberate wholesale override: unioning it with the package's defaults would re-add keys an app had removed, making it impossible to revoke a trust anchor from the app side.
+
+## Releases
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please). Merging conventional commits to `main` keeps a release PR open. Merging that PR bumps `VERSION`, writes `CHANGELOG.md`, tags `vX.Y.Z` and publishes the GitHub Release. Composer resolves versions from those tags. `fix:` bumps the patch version, `feat:` the minor version, and `feat!:` or `BREAKING CHANGE` the major version. Don't edit `VERSION` by hand.
 
 ## Repository layout
 

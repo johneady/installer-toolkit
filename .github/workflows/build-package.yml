@@ -1,0 +1,184 @@
+# Builds an app's distributable package and attaches it to that app's GitHub
+# Release: the -full.zip, -demo.zip (when the app has a demo build) and the
+# signed .update. It is called from each app's release-please workflow once a
+# release has been cut:
+#
+#   package:
+#     needs: release-please
+#     if: needs.release-please.outputs.release_created == 'true'
+#     uses: johneady/installer-toolkit/.github/workflows/build-package.yml@vX.Y.Z
+#     with:
+#       tag: ${{ needs.release-please.outputs.tag_name }}
+#       runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+#     permissions:
+#       contents: write
+#     secrets: inherit
+#
+# The build runs `php artisan package:build` from the tag, so the installer and
+# updater come from the toolkit version that tag's composer.lock pins, not from
+# whatever this workflow's ref is. This file only owns the steps around it.
+#
+# Signing: the job runs in the caller repo's `release` environment, whose
+# UPDATE_SIGNING_KEY secret holds the Ed25519 private key. Restrict that
+# environment's deployment branches to main so pull_request and Dependabot
+# jobs, which share the self-hosted runners and run third-party package code,
+# can never read it. package:build fails rather than ship unsigned when the app
+# sets signing_key_id and the secret is missing: the build step points
+# XDG_CONFIG_HOME at an empty directory, so the per-user key file fallback
+# (~/.config/installer-toolkit/signing.key, for local builds) can never pick up
+# a key lying on the runner instead.
+name: Build package
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build from and attach to, e.g. v1.4.0.
+        required: true
+        type: string
+      runs-on:
+        description: Runner label; callers pass their CI_RUNNER switch.
+        type: string
+        default: ubuntu-latest
+      timeout-minutes:
+        description: Self-hosted jobs wait on the host job lock, so callers on a self-hosted runner may want more.
+        type: number
+        default: 45
+      php-version:
+        type: string
+        default: '8.5'
+      php-extensions:
+        type: string
+        default: bcmath, intl, gd, zip, sodium, sqlite3, pdo_sqlite, pdo_mysql
+      node-version:
+        type: string
+        default: '24'
+    secrets:
+      UPDATE_SIGNING_KEY:
+        required: false
+
+jobs:
+  build:
+    name: Build and attach package
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    environment: release
+
+    permissions:
+      # Upload assets to the existing release.
+      contents: write
+
+    # A re-run for the same tag waits rather than racing the first upload.
+    concurrency:
+      group: build-package-${{ inputs.tag }}
+      cancel-in-progress: false
+
+    env:
+      TAG: ${{ inputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          extensions: ${{ inputs.php-extensions }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          npm ci
+
+      # package:build is an artisan command, so the app has to boot. The .env
+      # is never packaged (copyProjectFiles excludes it).
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Build package
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          XDG_CONFIG_HOME: ${{ runner.temp }}/no-signing-key-fallback
+        run: php artisan package:build --output="$RUNNER_TEMP/package"
+
+      # File names carry config('app.version'). A mismatch means the release
+      # PR did not bump config/app.php (missing x-release-please-version
+      # marker), and customers would get a package whose updater refuses it as
+      # "not newer".
+      - name: Package version matches tag
+        run: |
+          version="${TAG#v}"
+          ls -l "$RUNNER_TEMP/package/packages"
+
+          if ! ls "$RUNNER_TEMP/package"/packages/*-v"${version}".update >/dev/null 2>&1; then
+            echo "::error::No *-v${version}.update was built for tag ${TAG}. Check config/app.php's version and its x-release-please-version marker."
+            exit 1
+          fi
+
+          for f in "$RUNNER_TEMP/package"/packages/*; do
+            case "$(basename "$f")" in
+              *-v"${version}"-full.zip|*-v"${version}"-demo.zip|*-v"${version}".update) ;;
+              *) echo "::error::Unexpected file $(basename "$f") for tag ${TAG}."; exit 1 ;;
+            esac
+          done
+
+      # curl rather than gh: the self-hosted runners have no gh CLI. -T streams
+      # each file (the full and demo zips run to hundreds of MB) instead of
+      # reading it into memory.
+      #
+      # Each attempt first deletes any asset already carrying the name: one
+      # from an earlier run (so a re-run replaces it), or the "starter" asset
+      # GitHub keeps after an interrupted upload, which would make a plain
+      # retry fail with 422 already_exists. If every attempt fails the step
+      # fails, and re-running the job is safe.
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
+
+          release_id="$(curl -fsSL "${auth[@]}" "${api}/releases/tags/${TAG}" | php -r 'echo json_decode(stream_get_contents(STDIN))->id;')"
+
+          delete_assets_named() {
+            curl -fsSL "${auth[@]}" "${api}/releases/${release_id}/assets?per_page=100" \
+              | php -r 'foreach (json_decode(stream_get_contents(STDIN)) as $a) { if ($a->name === $argv[1]) { echo $a->id, "\n"; } }' -- "$1" \
+              | while read -r id; do
+                  echo "Deleting existing asset $1 (${id})"
+                  curl -fsSL -X DELETE "${auth[@]}" "${api}/releases/assets/${id}"
+                done
+          }
+
+          for f in "$RUNNER_TEMP"/package/packages/*; do
+            name="$(basename "$f")"
+
+            for attempt in 1 2 3; do
+              delete_assets_named "$name"
+              echo "Uploading ${name} ($(du -h "$f" | cut -f1)), attempt ${attempt}"
+
+              if curl -fsSL -X POST "${auth[@]}" \
+                -H "Content-Type: application/octet-stream" \
+                -T "$f" \
+                "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?name=${name}" \
+                -o /dev/null; then
+                continue 2
+              fi
+
+              sleep 15
+            done
+
+            echo "::error::Could not upload ${name} after 3 attempts. Re-run the job to try again."
+            exit 1
+          done

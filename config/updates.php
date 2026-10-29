@@ -221,8 +221,9 @@ return [
     'signing' => [
         // The private Ed25519 key used to sign update manifests at build time.
         // Accessed through config() (not env() directly) so it still resolves
-        // when the config is cached during a release build. Leave both unset
-        // (and omit signing_key_id from package-config.php) to build unsigned.
+        // when the config is cached during a release build. With both unset,
+        // package:build falls back to ~/.config/installer-toolkit/signing.key;
+        // omit signing_key_id from package-config.php to build unsigned.
         'private_key' => env('UPDATE_SIGNING_KEY', ''),
         'private_key_file' => env('UPDATE_SIGNING_KEY_FILE', ''),
 

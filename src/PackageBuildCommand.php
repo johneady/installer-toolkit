@@ -13,7 +13,7 @@ abstract class PackageBuildCommand extends Command
 {
     use LoadsPackageConfig;
 
-    protected $signature = 'package:build {--output=package : Output directory for the distributable files} {--toolkit=~/php/installer-toolkit : Path to the installer-toolkit directory}';
+    protected $signature = 'package:build {--output=package : Output directory for the distributable files} {--toolkit= : Build with this installer-toolkit checkout instead of the installed package}';
 
     protected $description = 'Build the distributable package (zip + installer + readme)';
 
@@ -184,22 +184,11 @@ abstract class PackageBuildCommand extends Command
 
     protected function runToolkit(string $basePath, string $toolkitOutputDir): void
     {
-        $toolkitOption = $this->option('toolkit');
-
-        if (str_starts_with($toolkitOption, '~')) {
-            $home = getenv('HOME');
-
-            if ($home === false || $home === '') {
-                throw new \RuntimeException('Cannot resolve "~" in --toolkit path: the HOME environment variable is not set. Pass an absolute --toolkit path instead.');
-            }
-
-            $toolkitOption = $home.substr($toolkitOption, 1);
-        }
-
-        $buildScript = $toolkitOption.'/bin/build';
+        $toolkitDir = $this->resolveToolkitDir();
+        $buildScript = $toolkitDir.'/bin/build';
 
         if (! file_exists($buildScript)) {
-            throw new \RuntimeException("Installer toolkit not found at: {$toolkitOption}");
+            throw new \RuntimeException("Installer toolkit not found at: {$toolkitDir}");
         }
 
         $this->info('Running installer toolkit...');
@@ -215,6 +204,34 @@ abstract class PackageBuildCommand extends Command
         if (! $process->isSuccessful()) {
             throw new \RuntimeException('Installer toolkit failed: '.$process->getErrorOutput());
         }
+    }
+
+    /**
+     * The toolkit whose bin/build and templates generate install.php and
+     * updater.php. By default that is this package itself — the version the
+     * app's composer.lock pins — so a package is reproducible from its tag.
+     * --toolkit points at a checkout instead, for trying an unreleased
+     * toolkit change against a real app.
+     */
+    protected function resolveToolkitDir(): string
+    {
+        $toolkitOption = (string) $this->option('toolkit');
+
+        if ($toolkitOption === '') {
+            return dirname(__DIR__);
+        }
+
+        if ($toolkitOption === '~' || str_starts_with($toolkitOption, '~/')) {
+            $home = getenv('HOME');
+
+            if ($home === false || $home === '') {
+                throw new \RuntimeException('Cannot resolve "~" in --toolkit path: the HOME environment variable is not set. Pass an absolute --toolkit path instead.');
+            }
+
+            $toolkitOption = $home.substr($toolkitOption, 1);
+        }
+
+        return $toolkitOption;
     }
 
     protected function buildFrontend(string $basePath): void
@@ -707,7 +724,9 @@ abstract class PackageBuildCommand extends Command
         $privateKey = $this->resolveSigningKey();
 
         if ($privateKey === '') {
-            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but no signing key resolved from config('updates.signing'). Set UPDATE_SIGNING_KEY (from your CI secret) or point UPDATE_SIGNING_KEY_FILE at a key file, and make sure config/updates.php maps them to signing.private_key / signing.private_key_file — a published config that omits those entries resolves empty even when the env vars are set. Or remove signing_key_id to build unsigned.");
+            $defaultFile = $this->defaultSigningKeyFile() ?? '~/.config/installer-toolkit/signing.key';
+
+            throw new \RuntimeException("package-config.php sets 'signing_key_id' => '{$keyId}' but no signing key resolved from config('updates.signing'). Set UPDATE_SIGNING_KEY (from your CI secret), point UPDATE_SIGNING_KEY_FILE at a key file, or put the key in {$defaultFile}, and make sure config/updates.php maps them to signing.private_key / signing.private_key_file — a published config that omits those entries resolves empty even when the env vars are set. Or remove signing_key_id to build unsigned.");
         }
 
         $this->info("Signing manifest with key '{$keyId}'...");
@@ -716,12 +735,17 @@ abstract class PackageBuildCommand extends Command
     }
 
     /**
-     * The private key comes from UPDATE_SIGNING_KEY directly (CI secret), or
-     * from the file UPDATE_SIGNING_KEY_FILE points at (local dev, where the
-     * key lives outside every distributed project). The file may be a dotenv
-     * file containing an UPDATE_SIGNING_KEY= line or hold the bare key. A
-     * configured-but-unreadable file fails the build rather than falling
-     * through to unsigned.
+     * The private key comes from, in order:
+     *
+     *   1. UPDATE_SIGNING_KEY directly (the CI secret);
+     *   2. the file UPDATE_SIGNING_KEY_FILE points at;
+     *   3. the per-user default file (see defaultSigningKeyFile()), so a local
+     *      build needs no signing entries in any project's .env at all.
+     *
+     * A file may be a dotenv file containing an UPDATE_SIGNING_KEY= line or
+     * hold the bare key. A configured-but-unreadable file fails the build
+     * rather than falling through to unsigned; the default file is only used
+     * when it exists.
      */
     protected function resolveSigningKey(): string
     {
@@ -732,13 +756,19 @@ abstract class PackageBuildCommand extends Command
         }
 
         $keyFile = (string) config('updates.signing.private_key_file', '');
+        $source = 'UPDATE_SIGNING_KEY_FILE';
 
         if ($keyFile === '') {
-            return '';
+            $keyFile = $this->defaultSigningKeyFile();
+            $source = 'The per-user signing key file';
+
+            if ($keyFile === null || ! file_exists($keyFile)) {
+                return '';
+            }
         }
 
         if (! is_readable($keyFile)) {
-            throw new \RuntimeException("UPDATE_SIGNING_KEY_FILE points to '{$keyFile}' but the file does not exist or is not readable.");
+            throw new \RuntimeException("{$source} '{$keyFile}' does not exist or is not readable.");
         }
 
         $contents = trim((string) file_get_contents($keyFile));
@@ -751,7 +781,31 @@ abstract class PackageBuildCommand extends Command
             return $contents;
         }
 
-        throw new \RuntimeException("UPDATE_SIGNING_KEY_FILE '{$keyFile}' does not contain an UPDATE_SIGNING_KEY entry or a bare key.");
+        throw new \RuntimeException("{$source} '{$keyFile}' does not contain an UPDATE_SIGNING_KEY entry or a bare key.");
+    }
+
+    /**
+     * $XDG_CONFIG_HOME/installer-toolkit/signing.key, falling back to
+     * ~/.config when XDG_CONFIG_HOME is unset. One file per machine, outside
+     * every repo, so no project's .env has to reference it. Null when neither
+     * variable is set. build-package.yml points XDG_CONFIG_HOME at an empty
+     * directory, so a CI build never falls back to a key file on the runner.
+     */
+    protected function defaultSigningKeyFile(): ?string
+    {
+        $configHome = (string) (getenv('XDG_CONFIG_HOME') ?: '');
+
+        if ($configHome === '') {
+            $home = (string) (getenv('HOME') ?: '');
+
+            if ($home === '') {
+                return null;
+            }
+
+            $configHome = $home.'/.config';
+        }
+
+        return $configHome.'/installer-toolkit/signing.key';
     }
 
     protected function createUpdateZip(string $updateZipPath, string $innerZipPath, string $manifestPath): void
