@@ -8,12 +8,6 @@
  */
 trait HandlesUploads
 {
-    /** Server-side ceiling per chunk; the client sends 1.5 MB chunks. */
-    private const MAX_CHUNK_BYTES = 4194304;
-
-    /** Refuse packages over this size outright (corrupt/abusive uploads). */
-    private const MAX_PACKAGE_BYTES = 2147483648;
-
     private function uploadPartPath(string $uploadId): string
     {
         return $this->updaterStorageDir().'/upload-'.$uploadId.'.part';

@@ -126,14 +126,14 @@ $template = replaceMarkerOrFail(
     '/private const ESSENTIAL_SEED_CLASSES = \[.*?\];/s',
     "private const ESSENTIAL_SEED_CLASSES = {$essentialArray};",
     $template,
-    'ESSENTIAL_SEED_CLASSES in Concerns/RunsInstallTasks.php'
+    'ESSENTIAL_SEED_CLASSES in templates/install/class.php'
 );
 
 $template = replaceMarkerOrFail(
     '/private const SAMPLE_SEED_CLASSES = \[.*?\];/s',
     "private const SAMPLE_SEED_CLASSES = {$sampleArray};",
     $template,
-    'SAMPLE_SEED_CLASSES in Concerns/RunsInstallTasks.php'
+    'SAMPLE_SEED_CLASSES in templates/install/class.php'
 );
 
 file_put_contents($packageDir.'/install.php', $template);

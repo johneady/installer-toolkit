@@ -16,18 +16,6 @@
  */
 trait RunsUpdateTasks
 {
-    /**
-     * Default/ceiling files-per-batch for extraction, overridable per-app
-     * via config/updates.php's `extraction_batch_size` (e.g. lowered on
-     * memory-constrained shared hosts). Also shrunk adaptively at runtime —
-     * see taskExtract() — when a batch runs close to or over
-     * BATCH_BUDGET_SECONDS.
-     */
-    private const EXTRACT_BATCH_FILES_DEFAULT = 400;
-
-    /** Locks stale after this many seconds are considered abandoned. */
-    private const LOCK_STALE_SECONDS = 1800;
-
     private function extractBatchFilesCeiling(): int
     {
         $configured = (int) ($this->updatesConfig()['extraction_batch_size'] ?? self::EXTRACT_BATCH_FILES_DEFAULT);

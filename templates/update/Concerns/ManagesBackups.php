@@ -11,14 +11,6 @@
  */
 trait ManagesBackups
 {
-    /** Files added to the backup zip per request. */
-    private const BACKUP_BATCH_FILES = 400;
-
-    // BATCH_BUDGET_SECONDS lives in BootsUpdaterEnvironment — every trait
-    // assembled into the Updater class already depends on it for paths, so
-    // it's a neutral shared home for a constant both this trait and
-    // RunsUpdateTasks read.
-
     private function backupDir(string $backupId): string
     {
         if (! preg_match('/^[a-z0-9\-]+$/', $backupId)) {
