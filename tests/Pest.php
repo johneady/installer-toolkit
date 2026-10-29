@@ -12,15 +12,19 @@ uses(InstallerToolkit\Tests\Update\TestCase::class)->in('Update');
 |
 | The Tia Engine records which tests touch which src/ files, then re-runs
 | only the tests affected by your latest changes, replaying cached results
-| for the rest. `locally()` activates it on every local `pest`/`composer test`
-| run without the `--tia` flag. It requires the PCOV coverage driver, which is
-| installed in this project.
+| for the rest. `locally()` activates it on every local `pest` run without the
+| `--tia` flag. It requires the PCOV coverage driver, which is installed in
+| this project.
 |
 | Note that "locally" is not automatic: Pest's environment defaults to LOCAL
 | and only becomes CI when `--ci` is passed explicitly. The `ci:check` Composer
 | script passes that flag so the pipeline always runs the full suite rather
-| than trusting a cached dependency graph. Because `composer test` is meant for
-| fast local feedback, it deliberately omits `--ci`.
+| than trusting a cached dependency graph.
+|
+| `composer test` passes `--no-tia` and always runs everything. The coverage
+| graph can't see bin/build or the generated install.php/updater.php (they run
+| as subprocesses), so a templates/ change would otherwise replay every cached
+| result. The full suite takes seconds, so TIA buys nothing there.
 |
 | Changes that cannot alter behaviour (comments, docblocks, whitespace) are
 | hashed out and correctly replay from cache rather than triggering a re-run.

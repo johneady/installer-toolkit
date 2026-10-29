@@ -51,7 +51,7 @@
             "Composer\\Config::disableProcessTimeout",
             "@lint:check",
             "@analyse",
-            "vendor/bin/pest --parallel"
+            "vendor/bin/pest --parallel --no-tia"
         ],
         "ci:check": [
             "Composer\\Config::disableProcessTimeout",
