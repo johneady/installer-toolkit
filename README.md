@@ -97,7 +97,7 @@ Each app also needs the following:
 
 To rebuild a release whose package job failed, run the workflow by hand ("Run workflow", on `main`) with the tag. That skips release-please and rebuilds only that tag. The tag's GitHub Release must already exist.
 
-The signing key reaches the build as the `UPDATE_SIGNING_KEY` secret. The job runs in the app repo's `release` environment. On GitHub Pro or Team, an environment secret limited to `main` takes precedence. A private repo on GitHub Free ignores environment secrets, so there the key must be a repository secret. That secret has no branch restriction: any workflow run from any branch of the repo can read it by naming it, including pull request runs from same-repo branches. Only Dependabot and fork PRs never receive it. So only people with push access must be able to change workflows. Never name the secret, or pass `secrets: inherit`, in a workflow that runs on pull requests, because those runs execute third-party package code on the same runners.
+The signing key reaches the build as the `UPDATE_SIGNING_KEY` secret of the app repo's `release` environment, which the package job runs in. Limit that environment's deployment branches to `main` and keep the key **only** there. Pull request and Dependabot jobs run third-party package code, often on the same runners, and the branch rule is what keeps the key away from them. A repository-level copy has no branch restriction: any workflow on any branch could read it by naming it. GitHub's documentation says private repos on the Free plan can't use environments, but in practice these repos enforce both the branch rule and the environment secret.
 
 ## Update signing
 
