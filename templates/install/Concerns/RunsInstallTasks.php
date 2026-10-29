@@ -873,7 +873,7 @@ if (\$index < 0 || \$index >= count(\$commands)) {
 \$command = \$commands[\$index];
 
 // This hint table and matching logic are exported verbatim from
-// RunsInstallTasks::FAILURE_HINTS / matchFailureHint() at generation time
+// Installer::FAILURE_HINTS / matchFailureHint() at generation time
 // (see ensureOptimizerEndpoint()) — there is exactly one authored copy of
 // the rules; this standalone process (see the class docblock above) has no
 // access to the installer class's methods, so it gets a data copy instead

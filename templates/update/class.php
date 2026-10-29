@@ -19,8 +19,8 @@ class Updater
     // Constants the traits read live here, not in the traits: a trait cannot
     // declare constants before PHP 8.2, and one would stop this whole file
     // compiling on PHP 8.0/8.1, so a customer on an old host would get a fatal
-    // error instead of the requirements page telling them to upgrade. A test
-    // (TemplatePhpCompatibilityTest) keeps them out of the traits.
+    // error instead of the requirements page telling them to upgrade. CI's
+    // legacy-php job compiles the generated files on PHP 8.0 to catch this.
 
     // ─── Shared by ManagesBackups and RunsUpdateTasks ───
 

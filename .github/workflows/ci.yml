@@ -74,3 +74,41 @@ jobs:
 
       - name: Run tests
         run: vendor/bin/pest --parallel
+
+  # The generated install.php/updater.php are single files, so PHP compiles
+  # every line before running any. Syntax newer than the customer's PHP
+  # (trait constants, enums, readonly, the 8.5 pipe operator...) is a fatal
+  # error before the requirements page can say "upgrade PHP". The matrix
+  # above only tests 8.5, where all of that is legal, so build a package and
+  # compile the output on the oldest PHP the installer should still greet.
+  legacy-php:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.5 to build
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Build installer files for a fixture app
+        run: |
+          app="$RUNNER_TEMP/fixture-app"
+          mkdir -p "$app/package"
+          echo '<?php return ["name" => "Fixture", "slug" => "fixture", "essential_seeders" => ["Database\\Seeders\\A"], "sample_seeders" => []];' > "$app/package/package-config.php"
+          echo '{"require": {"php": "^8.5"}}' > "$app/composer.json"
+          php bin/build "$app" "$RUNNER_TEMP/out"
+
+      - name: Set up PHP 8.0 to compile
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          coverage: none
+
+      - name: Generated files compile on PHP 8.0
+        run: |
+          php -v | head -1
+          for f in "$RUNNER_TEMP"/out/*.php; do php -l "$f"; done

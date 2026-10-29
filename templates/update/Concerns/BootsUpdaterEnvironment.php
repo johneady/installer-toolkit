@@ -234,7 +234,7 @@ trait BootsUpdaterEnvironment
     private function mergeConfigOverDefaults(array $defaults, array $overrides): array
     {
         foreach ($overrides as $key => $value) {
-            if (is_array($value) && isset($defaults[$key]) && is_array($defaults[$key]) && ! array_is_list($value)) {
+            if (is_array($value) && isset($defaults[$key]) && is_array($defaults[$key]) && ! $this->isList($value)) {
                 $defaults[$key] = $this->mergeConfigOverDefaults($defaults[$key], $value);
             } else {
                 $defaults[$key] = $value;
@@ -242,6 +242,18 @@ trait BootsUpdaterEnvironment
         }
 
         return $defaults;
+    }
+
+    /**
+     * array_is_list() without the PHP 8.1 requirement: this runs on every
+     * updater request, before the requirements check can tell an 8.0 host
+     * to upgrade.
+     *
+     * @param  array<mixed>  $value
+     */
+    private function isList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
     }
 
     private function slug(): string

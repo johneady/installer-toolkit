@@ -20,8 +20,8 @@ class Installer
     // Constants the traits read live here, not in the traits: a trait cannot
     // declare constants before PHP 8.2, and one would stop this whole file
     // compiling on PHP 8.0/8.1, so a customer on an old host would get a fatal
-    // error instead of the requirements page telling them to upgrade. A test
-    // (TemplatePhpCompatibilityTest) keeps them out of the traits.
+    // error instead of the requirements page telling them to upgrade. CI's
+    // legacy-php job compiles the generated files on PHP 8.0 to catch this.
 
     // ─── Used by RunsInstallTasks ───
 
@@ -47,9 +47,9 @@ class Installer
      *
      * This is the single authored copy — ensureOptimizerEndpoint() exports
      * this same array into the generated install-optimize.php so the
-     * standalone optimizer process (which has no access to this class, see
-     * its class docblock) shows identical hints instead of a hand-kept
-     * second copy that can drift out of sync.
+     * standalone optimizer process (which has no access to this class; see
+     * that file's own class docblock) shows identical hints instead of a
+     * hand-kept second copy that can drift out of sync.
      *
      * @var list<array{patterns: list<string>, hint: string}>
      */
