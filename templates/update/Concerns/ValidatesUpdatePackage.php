@@ -9,8 +9,6 @@
  */
 trait ValidatesUpdatePackage
 {
-    private const SIGNATURE_FORMAT_VERSION = 1;
-
     /**
      * @return array{valid: bool, error: ?string, version: ?string, files_count: ?int, minimum_php: ?string, signed_by: ?string}
      */
