@@ -75,7 +75,7 @@ permissions:
 
 jobs:
   release:
-    uses: johneady/installer-toolkit/.github/workflows/release.yml@v2.9.0
+    uses: johneady/installer-toolkit/.github/workflows/release.yml@v2.9.1
     with:
       runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
       release-timeout-minutes: ${{ vars.CI_RUNNER && 60 || 5 }}

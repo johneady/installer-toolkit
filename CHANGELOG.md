@@ -5,7 +5,6 @@
 
 ### Performance Improvements
 
-* **ci:** skip GitHub's npm cache on self-hosted release builds ([a48d694](https://github.com/johneady/installer-toolkit/commit/a48d6947106dc3f87933f6fbb393eea80b496f59))
 * **ci:** skip GitHub's npm cache on self-hosted release builds ([7242711](https://github.com/johneady/installer-toolkit/commit/7242711fd89dd7625a7b17d0e9dde6c66c8d62a6))
 
 ## [2.9.0](https://github.com/johneady/installer-toolkit/compare/v2.8.0...v2.9.0) (2026-10-29)
