@@ -55,22 +55,49 @@ php artisan package:build --toolkit=~/php/installer-toolkit
 
 ### Building in CI
 
-`.github/workflows/build-package.yml` is a reusable workflow that builds a release tag and attaches the full zip, demo zip and `.update` to that tag's GitHub Release. Call it from the app's release-please workflow once a release is cut:
+`.github/workflows/release.yml` is a reusable workflow that runs an app's whole release. On each push to `main`, release-please keeps a release PR open. Merging that PR tags `vX.Y.Z` and publishes a GitHub Release. The workflow then builds that tag with `build-package.yml` and attaches the full zip, demo zip and `.update` to the release. The app's `.github/workflows/release-please.yml` only calls it:
 
 ```yaml
-  package:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    uses: johneady/installer-toolkit/.github/workflows/build-package.yml@v2.8.0
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild, e.g. v1.4.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    uses: johneady/installer-toolkit/.github/workflows/release.yml@v2.9.0
     with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
       runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      release-timeout-minutes: ${{ vars.CI_RUNNER && 30 || 5 }}
+      package-timeout-minutes: ${{ vars.CI_RUNNER && 120 || 45 }}
+      rebuild-tag: ${{ inputs.tag }}
     permissions:
       contents: write
+      pull-requests: write
+      issues: write
     secrets: inherit
 ```
 
-The job runs in the app repo's `release` environment and reads the signing key from that environment's `UPDATE_SIGNING_KEY` secret. Limit the environment's deployment branches to `main`, so pull request and Dependabot jobs can never read the key.
+Each app also needs the following:
+
+- `release-please-config.json`: release type `simple`, `"include-component-in-tag": false` (tags must be plain `vX.Y.Z`), `"extra-files": ["config/app.php"]`, and a `bootstrap-sha` for the first release.
+- `.release-please-manifest.json`.
+- A `// x-release-please-version` marker on the `'version'` line in `config/app.php`.
+- "Allow GitHub Actions to create and approve pull requests" turned on under Settings → Actions → General.
+
+To rebuild a release whose package job failed, run the workflow by hand ("Run workflow", on `main`) with the tag. That skips release-please and rebuilds only that tag. The tag's GitHub Release must already exist.
+
+The signing key reaches the build as the `UPDATE_SIGNING_KEY` secret. The job runs in the app repo's `release` environment. On GitHub Pro or Team, an environment secret limited to `main` takes precedence. A private repo on GitHub Free ignores environment secrets, so there the key must be a repository secret. That secret has no branch restriction: any workflow run from any branch of the repo can read it by naming it, including pull request runs from same-repo branches. Only Dependabot and fork PRs never receive it. So only people with push access must be able to change workflows. Never name the secret, or pass `secrets: inherit`, in a workflow that runs on pull requests, because those runs execute third-party package code on the same runners.
 
 ## Update signing
 
@@ -131,6 +158,7 @@ Releases are cut by [release-please](https://github.com/googleapis/release-pleas
 | `stubs/` | Files copied into built packages |
 | `config/updates.php` | Update and signing configuration |
 | `readme.html` | Customer-facing install guide, packed into built zips |
+| `.github/workflows/release.yml` | Reusable release pipeline that apps call (release-please, then `build-package.yml`) |
 
 > `readme.html` is a shipped build artifact, not documentation for this repo. `package:build` fails if it is missing, and `[[MIN_PHP_VERSION]]` inside it is substituted at build time.
 

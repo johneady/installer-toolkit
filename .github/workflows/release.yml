@@ -1,0 +1,130 @@
+# The whole release pipeline for an app, so every app releases the same way
+# and a fix lands here once instead of in a copy per app. Each app's
+# .github/workflows/release-please.yml only calls it; the caller to copy is in
+# README.md (Building in CI). This repository calls it too, with package: false.
+#
+# On a push to main, release-please keeps one "chore(main): release X.Y.Z" PR
+# open, rebuilt from the conventional commits merged since the last release.
+# Merging that PR is the release: it tags vX.Y.Z and publishes a GitHub
+# Release with the changelog, and the package job then builds that tag
+# (build-package.yml) and attaches the -full.zip, -demo.zip and signed .update.
+#
+# release-please reads the app's release-please-config.json and
+# .release-please-manifest.json. Apps bump config/app.php's 'version' through
+# its x-release-please-version marker (extra-files), so package:build names its
+# files after the tag; build-package.yml fails the release if they disagree.
+# fix: bumps the patch, feat: the minor, feat!: / BREAKING CHANGE the major;
+# ci:, test:, build(deps): and chore: never cut a release on their own.
+#
+# rebuild-tag (a workflow_dispatch run) skips release-please and only rebuilds
+# and re-attaches that tag's package: for when the package job failed or timed
+# out, or release-please tagged the release but failed after it, and "Re-run
+# failed jobs" is not an option. A full re-run cannot do it, because
+# release-please then finds the release already tagged and skips packaging.
+# Run it from main, once the GitHub Release for the tag exists: the build
+# attaches to that release and fails without it.
+#
+# release-please runs on the caller's GITHUB_TOKEN, which has two consequences:
+#   - "Allow GitHub Actions to create and approve pull requests" must be on
+#     (Settings > Actions > General), or opening the release PR fails with a
+#     403.
+#   - Anything GITHUB_TOKEN creates triggers no workflows: CI does not run on
+#     the release PR, and the vX.Y.Z tag fires no `push: tags` workflow.
+#
+# The runner and timeouts come in as inputs rather than from vars: the caller
+# evaluates its own CI_RUNNER switch and passes the result.
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: Build and attach the package after a release. Off for installer-toolkit itself.
+        type: boolean
+        default: true
+      runs-on:
+        description: Runner label for both jobs; callers pass their CI_RUNNER switch.
+        type: string
+        default: ubuntu-latest
+      release-timeout-minutes:
+        description: Self-hosted jobs wait on the host job lock, and that wait counts.
+        type: number
+        default: 5
+      package-timeout-minutes:
+        type: number
+        default: 45
+      rebuild-tag:
+        description: Skip release-please and rebuild this existing release tag instead.
+        type: string
+        default: ''
+      php-version:
+        type: string
+        default: '8.5'
+      php-extensions:
+        type: string
+        default: bcmath, intl, gd, zip, sodium, sqlite3, pdo_sqlite, pdo_mysql
+      node-version:
+        type: string
+        default: '24'
+    secrets:
+      UPDATE_SIGNING_KEY:
+        required: false
+
+jobs:
+  release-please:
+    name: Release PR
+    # Push only, as before: a dispatch without rebuild-tag, or any other
+    # trigger a caller adds, never cuts a release.
+    if: github.event_name == 'push' && inputs.rebuild-tag == ''
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.release-timeout-minutes }}
+
+    # Serialised, so two quick merges do not race to rebuild and force-push
+    # the same release PR. Never cancelled: the tag and GitHub Release are one
+    # API call, but relabelling the PR from "autorelease: pending" to
+    # "autorelease: tagged" is a separate one after it, and a run cancelled in
+    # between leaves the next run failing on a duplicate release. On this job
+    # only, so later merges do not queue behind a long package build.
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+
+    permissions:
+      # Tags, releases and the release branch.
+      contents: write
+      pull-requests: write
+      # The autorelease: pending / tagged labels on the release PR.
+      issues: write
+
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+
+  package:
+    name: Package
+    needs: release-please
+    # !cancelled(): on a rebuild release-please is skipped, and a skipped need
+    # would otherwise skip this job too.
+    if: >-
+      !cancelled() && inputs.package && (
+        inputs.rebuild-tag != '' ||
+        (needs.release-please.result == 'success' && needs.release-please.outputs.release_created == 'true')
+      )
+    # ./ resolves to this repository at the same commit as this file, so a
+    # caller pinned to vX.Y.Z gets that version's build-package.yml too.
+    uses: ./.github/workflows/build-package.yml
+    with:
+      tag: ${{ inputs.rebuild-tag || needs.release-please.outputs.tag_name }}
+      runs-on: ${{ inputs.runs-on }}
+      timeout-minutes: ${{ inputs.package-timeout-minutes }}
+      php-version: ${{ inputs.php-version }}
+      php-extensions: ${{ inputs.php-extensions }}
+      node-version: ${{ inputs.node-version }}
+    permissions:
+      contents: write
+    secrets:
+      UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
