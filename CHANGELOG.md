@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.9.0](https://github.com/johneady/installer-toolkit/compare/v2.8.0...v2.9.0) (2026-10-29)
+
+
+### Features
+
+* shared release workflow for apps ([a824051](https://github.com/johneady/installer-toolkit/commit/a824051cdbd4f4a7914fbc933c1f3d7a9058f5fc))
+* shared release workflow for apps ([dfd2b45](https://github.com/johneady/installer-toolkit/commit/dfd2b45d6d371aedaeea1b345986ee124e7f3428))
+
 ## [2.8.0](https://github.com/johneady/installer-toolkit/compare/v2.7.0...v2.8.0) (2026-10-29)
 
 
