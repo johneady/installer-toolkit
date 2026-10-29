@@ -1,6 +1,8 @@
 # Keeps one "chore(main): release X.Y.Z" PR open on main, rebuilt from the
 # conventional commits merged since the last release. Merging that PR is the
 # release: it tags vX.Y.Z and publishes a GitHub Release with the changelog.
+# The job itself is release.yml, the same pipeline the apps call, with the
+# package build turned off: this repository ships through Composer, not zips.
 #
 # Nobody edits a version number by hand. The release PR bumps
 # .release-please-manifest.json and VERSION together (version-file in
@@ -9,47 +11,26 @@
 # the tag Composer resolves the release from. ci.yml's version job still
 # checks they agree, in case anything is edited or tagged by hand.
 #
-# fix: bumps the patch, feat: the minor, and feat!: / BREAKING CHANGE the
-# major. ci:, test:, build(deps): and chore: are left out of the changelog and
-# never cut a release on their own.
-#
-# This runs on the default GITHUB_TOKEN, which has two consequences:
-#   - "Allow GitHub Actions to create and approve pull requests" must be on
-#     (Settings > Actions > General), or opening the release PR fails with a
-#     403.
-#   - Anything GITHUB_TOKEN creates triggers no workflows, so ci.yml does not
-#     run on the release PR. It only changes VERSION, the manifest and
-#     CHANGELOG.md.
+# release.yml documents the bump rules and the GITHUB_TOKEN consequences: "Allow
+# GitHub Actions to create and approve pull requests" must be on, and ci.yml
+# does not run on the release PR.
 name: Release Please
 
 on:
   push:
     branches: [main]
 
-# Serialised, so two quick merges do not race to rebuild and force-push the
-# same release PR. Never cancelled: the tag and GitHub Release are one API
-# call, but relabelling the PR from "autorelease: pending" to "autorelease:
-# tagged" is a separate one after it, and a run cancelled in between leaves the
-# next run failing on a duplicate release.
-concurrency:
-  group: release-please
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
 jobs:
-  release-please:
-    name: Release PR
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
+  release:
+    # ./ runs release.yml from this same commit, so a change to it is used by
+    # this repository's next release before any app pins the new version.
+    uses: ./.github/workflows/release.yml
+    with:
+      package: false
     permissions:
-      # Tags, releases and the release branch.
       contents: write
       pull-requests: write
-      # The autorelease: pending / tagged labels on the release PR.
       issues: write
-
-    steps:
-      - uses: googleapis/release-please-action@v5

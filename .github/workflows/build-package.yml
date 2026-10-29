@@ -1,28 +1,18 @@
 # Builds an app's distributable package and attaches it to that app's GitHub
 # Release: the -full.zip, -demo.zip (when the app has a demo build) and the
-# signed .update. It is called from each app's release-please workflow once a
-# release has been cut:
-#
-#   package:
-#     needs: release-please
-#     if: needs.release-please.outputs.release_created == 'true'
-#     uses: johneady/installer-toolkit/.github/workflows/build-package.yml@vX.Y.Z
-#     with:
-#       tag: ${{ needs.release-please.outputs.tag_name }}
-#       runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-#     permissions:
-#       contents: write
-#     secrets: inherit
+# signed .update. release.yml calls it once a release has been cut; apps call
+# release.yml, not this file.
 #
 # The build runs `php artisan package:build` from the tag, so the installer and
 # updater come from the toolkit version that tag's composer.lock pins, not from
 # whatever this workflow's ref is. This file only owns the steps around it.
 #
-# Signing: the job runs in the caller repo's `release` environment, whose
-# UPDATE_SIGNING_KEY secret holds the Ed25519 private key. Restrict that
-# environment's deployment branches to main so pull_request and Dependabot
-# jobs, which share the self-hosted runners and run third-party package code,
-# can never read it. package:build fails rather than ship unsigned when the app
+# Signing: the key arrives as the UPDATE_SIGNING_KEY secret. The job also runs
+# in the caller repo's `release` environment, so on GitHub Pro/Team an
+# environment secret restricted to main takes precedence; a private repo on
+# GitHub Free ignores environment secrets, so there it must be a repository
+# secret, which only workflows that name it can read (Dependabot and fork PRs
+# never get it). package:build fails rather than ship unsigned when the app
 # sets signing_key_id and the secret is missing: the build step points
 # XDG_CONFIG_HOME at an empty directory, so the per-user key file fallback
 # (~/.config/installer-toolkit/signing.key, for local builds) can never pick up
