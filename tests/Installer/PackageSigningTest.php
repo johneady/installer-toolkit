@@ -236,3 +236,81 @@ test('generateManifest signature does not verify against a tampered checksum (bi
 
     expect(sodium_crypto_sign_verify_detached($signature, $tamperedPayload, $publicKey))->toBeFalse();
 });
+
+function writeDefaultSigningKey(string $privateKey): void
+{
+    $dir = getenv('XDG_CONFIG_HOME').'/installer-toolkit';
+    File::ensureDirectoryExists($dir);
+    file_put_contents($dir.'/signing.key', $privateKey."\n");
+}
+
+test('generateManifest falls back to the per-user default key file', function () {
+    $keypair = testKeypair();
+    [$stagingDir, $innerZipPath] = signingStagingDir();
+    writeDefaultSigningKey($keypair['private_key']);
+
+    try {
+        $command = signingFakeCommand(['slug' => 'fake-app', 'signing_key_id' => 'key-test']);
+        $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0');
+    } finally {
+        File::deleteDirectory(getenv('XDG_CONFIG_HOME'));
+    }
+
+    $manifest = json_decode(file_get_contents($manifestPath), true);
+    $payload = UpdateSignature::canonicalPayload('fake-app', '1.3.0', $manifest['minimum_version'], $manifest['checksum'], 'key-test');
+
+    expect(sodium_crypto_sign_verify_detached(
+        base64_decode($manifest['signature'], strict: true),
+        $payload,
+        base64_decode($keypair['public_key'], strict: true),
+    ))->toBeTrue();
+});
+
+test('UPDATE_SIGNING_KEY_FILE takes precedence over the per-user default key file', function () {
+    $fileKeypair = testKeypair();
+    $defaultKeypair = testKeypair();
+    [$stagingDir, $innerZipPath] = signingStagingDir();
+    writeDefaultSigningKey($defaultKeypair['private_key']);
+
+    $keyFile = $stagingDir.'/signing.key';
+    file_put_contents($keyFile, $fileKeypair['private_key']."\n");
+    config(['updates.signing.private_key_file' => $keyFile]);
+
+    try {
+        $command = signingFakeCommand(['slug' => 'fake-app', 'signing_key_id' => 'key-test']);
+        $manifestPath = $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0');
+    } finally {
+        File::deleteDirectory(getenv('XDG_CONFIG_HOME'));
+    }
+
+    $manifest = json_decode(file_get_contents($manifestPath), true);
+    $payload = UpdateSignature::canonicalPayload('fake-app', '1.3.0', $manifest['minimum_version'], $manifest['checksum'], 'key-test');
+    $signature = base64_decode($manifest['signature'], strict: true);
+
+    expect(sodium_crypto_sign_verify_detached($signature, $payload, base64_decode($fileKeypair['public_key'], strict: true)))->toBeTrue()
+        ->and(sodium_crypto_sign_verify_detached($signature, $payload, base64_decode($defaultKeypair['public_key'], strict: true)))->toBeFalse();
+});
+
+test('the default key file follows XDG_CONFIG_HOME, then ~/.config', function () {
+    $originalXdg = getenv('XDG_CONFIG_HOME');
+    $originalHome = getenv('HOME');
+
+    try {
+        putenv('XDG_CONFIG_HOME=/xdg');
+        $xdg = signingFakeCommand()->callProtected('defaultSigningKeyFile');
+
+        putenv('XDG_CONFIG_HOME');
+        putenv('HOME=/home/someone');
+        $home = signingFakeCommand()->callProtected('defaultSigningKeyFile');
+
+        putenv('HOME');
+        $none = signingFakeCommand()->callProtected('defaultSigningKeyFile');
+    } finally {
+        putenv("XDG_CONFIG_HOME={$originalXdg}");
+        putenv($originalHome === false ? 'HOME' : "HOME={$originalHome}");
+    }
+
+    expect($xdg)->toBe('/xdg/installer-toolkit/signing.key')
+        ->and($home)->toBe('/home/someone/.config/installer-toolkit/signing.key')
+        ->and($none)->toBeNull();
+});

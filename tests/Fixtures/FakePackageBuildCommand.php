@@ -3,6 +3,7 @@
 namespace InstallerToolkit\Tests\Fixtures;
 
 use InstallerToolkit\PackageBuildCommand;
+use Symfony\Component\Console\Input\ArrayInput;
 
 class FakePackageBuildCommand extends PackageBuildCommand
 {
@@ -21,6 +22,20 @@ class FakePackageBuildCommand extends PackageBuildCommand
 
         (new \ReflectionProperty($this, 'slug'))->setValue($this, $config['slug']);
         (new \ReflectionProperty($this, 'config'))->setValue($this, $config);
+
+        return $this;
+    }
+
+    /**
+     * Bind an input against the command's own definition so option() works
+     * (with signature defaults) outside a real run() cycle.
+     */
+    public function withInput(array $parameters = []): static
+    {
+        (new \ReflectionProperty($this, 'input'))->setValue(
+            $this,
+            new ArrayInput($parameters, $this->getDefinition()),
+        );
 
         return $this;
     }

@@ -15,6 +15,18 @@ abstract class TestCase extends BaseTestCase
         return [];
     }
 
+    /**
+     * Point the per-user signing key lookup at an empty directory, so a
+     * developer's real ~/.config/installer-toolkit/signing.key never signs a
+     * test build or turns an expected "no key" failure into a pass.
+     */
+    protected function setUp(): void
+    {
+        putenv('XDG_CONFIG_HOME='.sys_get_temp_dir().'/installer-toolkit-test-xdg-'.(getenv('TEST_TOKEN') ?: 'serial'));
+
+        parent::setUp();
+    }
+
     protected function defineEnvironment($app): void
     {
         $kernel = $app->make(Kernel::class);

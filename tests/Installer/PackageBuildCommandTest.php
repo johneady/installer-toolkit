@@ -358,3 +358,25 @@ test('shouldExclude drops a stale updater.php from the app checkout', function (
     expect($command->callProtected('shouldExclude', 'public/updater.php'))->toBeTrue()
         ->and($command->callProtected('shouldExclude', 'public/index.php'))->toBeFalse();
 });
+
+test('the toolkit defaults to this package, so builds use the version composer.lock pins', function () {
+    $toolkitDir = fakeCommand()->withInput()->callProtected('resolveToolkitDir');
+
+    expect(realpath($toolkitDir))->toBe(realpath(toolkitRoot()))
+        ->and(file_exists($toolkitDir.'/bin/build'))->toBeTrue();
+});
+
+test('--toolkit overrides the default and expands ~ against HOME', function () {
+    $original = getenv('HOME');
+    putenv('HOME=/home/someone');
+
+    try {
+        $absolute = fakeCommand()->withInput(['--toolkit' => '/opt/toolkit'])->callProtected('resolveToolkitDir');
+        $tilde = fakeCommand()->withInput(['--toolkit' => '~/php/installer-toolkit'])->callProtected('resolveToolkitDir');
+    } finally {
+        putenv($original === false ? 'HOME' : "HOME={$original}");
+    }
+
+    expect($absolute)->toBe('/opt/toolkit')
+        ->and($tilde)->toBe('/home/someone/php/installer-toolkit');
+});
