@@ -22,7 +22,8 @@ abstract class TestCase extends BaseTestCase
      */
     protected function setUp(): void
     {
-        putenv('XDG_CONFIG_HOME='.sys_get_temp_dir().'/installer-toolkit-test-xdg-'.(getenv('TEST_TOKEN') ?: 'serial'));
+        // Per process (pid), so two concurrent runs never share one directory.
+        putenv('XDG_CONFIG_HOME='.sys_get_temp_dir().'/installer-toolkit-test-xdg-'.getmypid());
 
         parent::setUp();
     }

@@ -6,8 +6,8 @@
 # .release-please-manifest.json and VERSION together (version-file in
 # release-please-config.json), so the VERSION that bin/build stamps into every
 # install.php/updater.php as INSTALLER_VERSION/UPDATER_VERSION always matches
-# the tag Composer resolves the release from. That is what the old tag-time
-# "VERSION matches tag" check in ci.yml enforced by hand.
+# the tag Composer resolves the release from. ci.yml's version job still
+# checks they agree, in case anything is edited or tagged by hand.
 #
 # fix: bumps the patch, feat: the minor, and feat!: / BREAKING CHANGE the
 # major. ci:, test:, build(deps): and chore: are left out of the changelog and

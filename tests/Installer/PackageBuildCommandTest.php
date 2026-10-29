@@ -373,10 +373,14 @@ test('--toolkit overrides the default and expands ~ against HOME', function () {
     try {
         $absolute = fakeCommand()->withInput(['--toolkit' => '/opt/toolkit'])->callProtected('resolveToolkitDir');
         $tilde = fakeCommand()->withInput(['--toolkit' => '~/php/installer-toolkit'])->callProtected('resolveToolkitDir');
+        $otherUser = fakeCommand()->withInput(['--toolkit' => '~alice/toolkit'])->callProtected('resolveToolkitDir');
     } finally {
         putenv($original === false ? 'HOME' : "HOME={$original}");
     }
 
     expect($absolute)->toBe('/opt/toolkit')
-        ->and($tilde)->toBe('/home/someone/php/installer-toolkit');
+        ->and($tilde)->toBe('/home/someone/php/installer-toolkit')
+        // Only "~" and "~/" mean HOME; "~alice" is left alone rather than
+        // glued onto HOME as "/home/someonealice".
+        ->and($otherUser)->toBe('~alice/toolkit');
 });

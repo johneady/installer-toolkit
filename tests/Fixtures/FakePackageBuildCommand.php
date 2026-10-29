@@ -32,10 +32,7 @@ class FakePackageBuildCommand extends PackageBuildCommand
      */
     public function withInput(array $parameters = []): static
     {
-        (new \ReflectionProperty($this, 'input'))->setValue(
-            $this,
-            new ArrayInput($parameters, $this->getDefinition()),
-        );
+        $this->setInput(new ArrayInput($parameters, $this->getDefinition()));
 
         return $this;
     }

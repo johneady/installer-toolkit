@@ -221,7 +221,7 @@ abstract class PackageBuildCommand extends Command
             return dirname(__DIR__);
         }
 
-        if (str_starts_with($toolkitOption, '~')) {
+        if ($toolkitOption === '~' || str_starts_with($toolkitOption, '~/')) {
             $home = getenv('HOME');
 
             if ($home === false || $home === '') {
@@ -756,9 +756,11 @@ abstract class PackageBuildCommand extends Command
         }
 
         $keyFile = (string) config('updates.signing.private_key_file', '');
+        $source = 'UPDATE_SIGNING_KEY_FILE';
 
         if ($keyFile === '') {
             $keyFile = $this->defaultSigningKeyFile();
+            $source = 'The per-user signing key file';
 
             if ($keyFile === null || ! file_exists($keyFile)) {
                 return '';
@@ -766,7 +768,7 @@ abstract class PackageBuildCommand extends Command
         }
 
         if (! is_readable($keyFile)) {
-            throw new \RuntimeException("UPDATE_SIGNING_KEY_FILE points to '{$keyFile}' but the file does not exist or is not readable.");
+            throw new \RuntimeException("{$source} '{$keyFile}' does not exist or is not readable.");
         }
 
         $contents = trim((string) file_get_contents($keyFile));
@@ -779,15 +781,15 @@ abstract class PackageBuildCommand extends Command
             return $contents;
         }
 
-        throw new \RuntimeException("UPDATE_SIGNING_KEY_FILE '{$keyFile}' does not contain an UPDATE_SIGNING_KEY entry or a bare key.");
+        throw new \RuntimeException("{$source} '{$keyFile}' does not contain an UPDATE_SIGNING_KEY entry or a bare key.");
     }
 
     /**
      * $XDG_CONFIG_HOME/installer-toolkit/signing.key, falling back to
      * ~/.config when XDG_CONFIG_HOME is unset. One file per machine, outside
      * every repo, so no project's .env has to reference it. Null when neither
-     * variable is set (e.g. a bare CI shell), which leaves the build unsigned
-     * unless UPDATE_SIGNING_KEY or UPDATE_SIGNING_KEY_FILE is set.
+     * variable is set. build-package.yml points XDG_CONFIG_HOME at an empty
+     * directory, so a CI build never falls back to a key file on the runner.
      */
     protected function defaultSigningKeyFile(): ?string
     {

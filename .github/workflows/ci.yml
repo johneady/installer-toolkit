@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 concurrency:
@@ -10,6 +11,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # bin/build stamps the VERSION file into every generated install.php and
+  # updater.php as INSTALLER_VERSION/UPDATER_VERSION, but Composer resolves
+  # releases from the git tag alone. release-please bumps VERSION, the manifest
+  # and the tag together; this catches them drifting apart anyway (a hand edit
+  # of VERSION, a hand-pushed tag), so customers never get a build labelled
+  # with a version they aren't running.
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: VERSION matches the release-please manifest and the tag
+        run: |
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          manifest_version="$(jq -r '."."' .release-please-manifest.json)"
+
+          if [ "$file_version" != "$manifest_version" ]; then
+            echo "::error::VERSION says '${file_version}' but .release-please-manifest.json says '${manifest_version}'. Don't edit VERSION by hand; release-please bumps both."
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]] && [ "$file_version" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::VERSION says '${file_version}' but the tag is '${GITHUB_REF_NAME}'."
+            exit 1
+          fi
+
+          echo "VERSION '${file_version}' is consistent."
+
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20

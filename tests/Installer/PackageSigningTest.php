@@ -314,3 +314,17 @@ test('the default key file follows XDG_CONFIG_HOME, then ~/.config', function ()
         ->and($home)->toBe('/home/someone/.config/installer-toolkit/signing.key')
         ->and($none)->toBeNull();
 });
+
+test('an unusable per-user default key file names itself, not UPDATE_SIGNING_KEY_FILE', function () {
+    [$stagingDir, $innerZipPath] = signingStagingDir();
+    writeDefaultSigningKey('not a key!');
+
+    try {
+        $command = signingFakeCommand(['signing_key_id' => 'key-test']);
+
+        expect(fn () => $command->callProtected('generateManifest', $stagingDir, $innerZipPath, '1.3.0'))
+            ->toThrow(RuntimeException::class, 'The per-user signing key file');
+    } finally {
+        File::deleteDirectory(getenv('XDG_CONFIG_HOME'));
+    }
+});

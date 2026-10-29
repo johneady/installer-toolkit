@@ -23,7 +23,10 @@
 # environment's deployment branches to main so pull_request and Dependabot
 # jobs, which share the self-hosted runners and run third-party package code,
 # can never read it. package:build fails rather than ship unsigned when the app
-# sets signing_key_id and the secret is missing.
+# sets signing_key_id and the secret is missing: the build step points
+# XDG_CONFIG_HOME at an empty directory, so the per-user key file fallback
+# (~/.config/installer-toolkit/signing.key, for local builds) can never pick up
+# a key lying on the runner instead.
 name: Build package
 
 on:
@@ -107,6 +110,7 @@ jobs:
       - name: Build package
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          XDG_CONFIG_HOME: ${{ runner.temp }}/no-signing-key-fallback
         run: php artisan package:build --output="$RUNNER_TEMP/package"
 
       # File names carry config('app.version'). A mismatch means the release
@@ -132,8 +136,13 @@ jobs:
 
       # curl rather than gh: the self-hosted runners have no gh CLI. -T streams
       # each file (the full and demo zips run to hundreds of MB) instead of
-      # reading it into memory. An asset already on the release with the same
-      # name is replaced, so a re-run is safe.
+      # reading it into memory.
+      #
+      # Each attempt first deletes any asset already carrying the name: one
+      # from an earlier run (so a re-run replaces it), or the "starter" asset
+      # GitHub keeps after an interrupted upload, which would make a plain
+      # retry fail with 422 already_exists. If every attempt fails the step
+      # fails, and re-running the job is safe.
       - name: Attach to release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,22 +150,35 @@ jobs:
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
           auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
 
-          release="$(curl -fsSL "${auth[@]}" "${api}/releases/tags/${TAG}")"
-          release_id="$(printf '%s' "$release" | php -r 'echo json_decode(stream_get_contents(STDIN))->id;')"
+          release_id="$(curl -fsSL "${auth[@]}" "${api}/releases/tags/${TAG}" | php -r 'echo json_decode(stream_get_contents(STDIN))->id;')"
 
-          for f in "$RUNNER_TEMP/package"/packages/*; do
+          delete_assets_named() {
+            curl -fsSL "${auth[@]}" "${api}/releases/${release_id}/assets?per_page=100" \
+              | php -r 'foreach (json_decode(stream_get_contents(STDIN)) as $a) { if ($a->name === $argv[1]) { echo $a->id, "\n"; } }' -- "$1" \
+              | while read -r id; do
+                  echo "Deleting existing asset $1 (${id})"
+                  curl -fsSL -X DELETE "${auth[@]}" "${api}/releases/assets/${id}"
+                done
+          }
+
+          for f in "$RUNNER_TEMP"/package/packages/*; do
             name="$(basename "$f")"
-            existing="$(printf '%s' "$release" | php -r 'foreach (json_decode(stream_get_contents(STDIN))->assets as $a) { if ($a->name === $argv[1]) { echo $a->id; } }' -- "$name")"
 
-            if [ -n "$existing" ]; then
-              echo "Replacing existing asset ${name}"
-              curl -fsSL -X DELETE "${auth[@]}" "${api}/releases/assets/${existing}"
-            fi
+            for attempt in 1 2 3; do
+              delete_assets_named "$name"
+              echo "Uploading ${name} ($(du -h "$f" | cut -f1)), attempt ${attempt}"
 
-            echo "Uploading ${name} ($(du -h "$f" | cut -f1))"
-            curl -fsSL --retry 3 -X POST "${auth[@]}" \
-              -H "Content-Type: application/octet-stream" \
-              -T "$f" \
-              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?name=${name}" \
-              -o /dev/null
+              if curl -fsSL -X POST "${auth[@]}" \
+                -H "Content-Type: application/octet-stream" \
+                -T "$f" \
+                "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?name=${name}" \
+                -o /dev/null; then
+                continue 2
+              fi
+
+              sleep 15
+            done
+
+            echo "::error::Could not upload ${name} after 3 attempts. Re-run the job to try again."
+            exit 1
           done
