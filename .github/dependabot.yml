@@ -1,0 +1,37 @@
+version: 2
+
+# Monthly, and ONE grouped PR per ecosystem -- the same shape as the apps that
+# consume this package. Every PR runs CI, and every rebase Dependabot makes when
+# a sibling PR merges runs it again; one PR per ecosystem per month has nothing
+# to cascade into.
+#
+# Security updates are unaffected: they are raised as soon as an advisory is
+# published, independently of this schedule and of these groups.
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 10
+    # This is a library, so `widen` rather than the apps' increase-if-necessary:
+    # when illuminate/* 14 ships, the PR adds `|^14.0` to the constraint
+    # instead of dropping ^11-^13, which would lock out every app still on an
+    # older Laravel.
+    versioning-strategy: widen
+    groups:
+      composer:
+        patterns:
+          - '*'
+
+  # Includes build-package.yml and release.yml, the reusable workflows the
+  # apps call -- bumping an action here bumps it for every caller on its next
+  # toolkit release. ci.yml does not run those workflows, so a green PR says
+  # nothing about them: check a major bump in them by hand.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
