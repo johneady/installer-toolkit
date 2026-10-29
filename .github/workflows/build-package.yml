@@ -7,13 +7,14 @@
 # updater come from the toolkit version that tag's composer.lock pins, not from
 # whatever this workflow's ref is. This file only owns the steps around it.
 #
-# Signing: the key arrives as the UPDATE_SIGNING_KEY secret. The job also runs
-# in the caller repo's `release` environment, so on GitHub Pro/Team an
-# environment secret restricted to main takes precedence; a private repo on
-# GitHub Free ignores environment secrets, so there it must be a repository
-# secret, which only workflows that name it can read (Dependabot and fork PRs
-# never get it). package:build fails rather than ship unsigned when the app
-# sets signing_key_id and the secret is missing: the build step points
+# Signing: the job runs in the caller repo's `release` environment, whose
+# UPDATE_SIGNING_KEY secret holds the Ed25519 private key. Restrict that
+# environment's deployment branches to main and keep the key only there, with
+# no repository-level copy: pull_request and Dependabot jobs, which share the
+# self-hosted runners and run third-party package code, then never see it, and
+# a job from any other branch is refused the environment before it starts.
+# package:build fails rather than ship unsigned when the app sets
+# signing_key_id and the secret is missing: the build step points
 # XDG_CONFIG_HOME at an empty directory, so the per-user key file fallback
 # (~/.config/installer-toolkit/signing.key, for local builds) can never pick up
 # a key lying on the runner instead.
