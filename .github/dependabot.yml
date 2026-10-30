@@ -12,7 +12,6 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    open-pull-requests-limit: 10
     # This is a library, so `widen` rather than the apps' increase-if-necessary:
     # when illuminate/* 14 ships, the PR adds `|^14.0` to the constraint
     # instead of dropping ^11-^13, which would lock out every app still on an
