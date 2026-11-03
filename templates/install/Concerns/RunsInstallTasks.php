@@ -928,8 +928,14 @@ require __DIR__ . '/../vendor/autoload.php';
 
 ob_start();
 
+// icons:cache and filament:optimize come from packages (Blade Icons,
+// Filament) an app may not use. A command the app does not register has
+// nothing to cache, so it is skipped rather than failed: a failure here
+// leaves the install unfinished for good, with install.php and the app zip
+// still in the document root and the restart action open to anyone.
 try {
-    \$exitCode = \$kernel->call(\$command, ['--no-interaction' => true], \$output);
+    \$skipped = ! array_key_exists(\$command, \$kernel->all());
+    \$exitCode = \$skipped ? 0 : \$kernel->call(\$command, ['--no-interaction' => true], \$output);
 } catch (Throwable \$e) {
     ob_end_clean();
     echo json_encode(['success' => false, 'message' => describeOptimizeFailure(\$command, \$e->getMessage())]);
@@ -1015,7 +1021,7 @@ if (\$command === 'config:cache') {
 echo json_encode([
     'success' => true,
     'done' => \$done,
-    'message' => \$done ? 'Completed.' : "Ran {\$command} (" . (\$index + 1) . '/' . count(\$commands) . ').',
+    'message' => \$done ? 'Completed.' : (\$skipped ? 'Skipped' : 'Ran') . " {\$command} (" . (\$index + 1) . '/' . count(\$commands) . ').',
 ]);
 OPTIMIZER_PHP;
 
