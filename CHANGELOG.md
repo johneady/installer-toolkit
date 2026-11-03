@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.2](https://github.com/johneady/installer-toolkit/compare/v2.9.1...v2.9.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* skip optimize commands the app does not register ([#21](https://github.com/johneady/installer-toolkit/issues/21)) ([3b6fd39](https://github.com/johneady/installer-toolkit/commit/3b6fd39e26a19e5788142dbdd44e447290f78c9f))
+
 ## [2.9.1](https://github.com/johneady/installer-toolkit/compare/v2.9.0...v2.9.1) (2026-10-29)
 
 
