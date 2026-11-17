@@ -1,7 +1,9 @@
 # The whole release pipeline for an app, so every app releases the same way
-# and a fix lands here once instead of in a copy per app. Each app's
-# .github/workflows/release-please.yml only calls it; the caller to copy is in
-# README.md (Building in CI). This repository calls it too, with package: false.
+# and a fix lands here once instead of in a copy per app. Each app calls it
+# from a release job in its ci.yml that needs the app's checks, so nothing is
+# tagged or packaged until they pass, and from a dispatch-only
+# release-please.yml for rebuilds; the callers to copy are in README.md
+# (Building in CI). This repository's ci.yml calls it too, with package: false.
 #
 # On a push to main, release-please keeps one "chore(main): release X.Y.Z" PR
 # open, rebuilt from the conventional commits merged since the last release.
