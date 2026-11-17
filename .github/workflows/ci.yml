@@ -6,8 +6,11 @@ on:
     tags: ['v*']
   pull_request:
 
+# A newer push cancels an older run on a branch or PR. On main every commit
+# gets its own group instead: a commit's run may cut a release, and the next
+# merge must not cancel it part-way through.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -117,3 +120,39 @@ jobs:
         run: |
           php -v | head -1
           for f in "$RUNNER_TEMP"/out/*.php; do php -l "$f"; done
+
+  # release-please keeps one "chore(main): release X.Y.Z" PR open on main,
+  # rebuilt from the conventional commits merged since the last release.
+  # Merging that PR is the release: it tags vX.Y.Z and publishes a GitHub
+  # Release with the changelog. The job is release.yml, the same pipeline the
+  # apps call, with the package build turned off: this repository ships
+  # through Composer, not zips.
+  #
+  # It used to run from release-please.yml on its own push trigger, in
+  # parallel with the jobs above, so a merge that broke main could still be
+  # tagged -- and Composer resolves releases from the tag alone. Here it waits
+  # for every job above. Push to main only: a v* tag run never releases.
+  #
+  # Nobody edits a version number by hand. The release PR bumps
+  # .release-please-manifest.json and VERSION together (version-file in
+  # release-please-config.json), so the VERSION that bin/build stamps into
+  # every install.php/updater.php as INSTALLER_VERSION/UPDATER_VERSION always
+  # matches the tag Composer resolves the release from. The version job above
+  # still checks they agree, in case anything is edited or tagged by hand.
+  #
+  # release.yml documents the bump rules and the GITHUB_TOKEN consequences:
+  # "Allow GitHub Actions to create and approve pull requests" must be on, and
+  # this file does not run on the release PR.
+  release:
+    name: Release
+    needs: [version, ci, legacy-php]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # ./ runs release.yml from this same commit, so a change to it is used by
+    # this repository's next release before any app pins the new version.
+    uses: ./.github/workflows/release.yml
+    with:
+      package: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write

@@ -55,14 +55,40 @@ php artisan package:build --toolkit=~/php/installer-toolkit
 
 ### Building in CI
 
-`.github/workflows/release.yml` is a reusable workflow that runs an app's whole release. On each push to `main`, release-please keeps a release PR open. Merging that PR tags `vX.Y.Z` and publishes a GitHub Release. The workflow then builds that tag with `build-package.yml` and attaches the full zip, demo zip and `.update` to the release. The app's `.github/workflows/release-please.yml` only calls it:
+`.github/workflows/release.yml` is a reusable workflow that runs an app's whole release. On each push to `main`, release-please keeps a release PR open. Merging that PR tags `vX.Y.Z` and publishes a GitHub Release. The workflow then builds that tag with `build-package.yml` and attaches the full zip, demo zip and `.update` to the release.
+
+Call it from a `release` job in the app's `.github/workflows/ci.yml` that `needs` the app's checks, not from a workflow of its own on `push`. Run on its own trigger, it runs in parallel with CI, so a merge that breaks `main` is still tagged and its signed `.update` still ships. If the app publishes a Docker image for releases in a `publish` job, add that to `needs` too, so a version is never released without its image:
+
+```yaml
+  release:
+    name: Release
+    needs: [checks, publish]
+    # publish is skipped on every commit that is not a release; a skipped need
+    # would otherwise skip this job, and with it the release PR's refresh.
+    if: >-
+      !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.checks.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    uses: johneady/installer-toolkit/.github/workflows/release.yml@v2.9.2
+    with:
+      runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      release-timeout-minutes: ${{ vars.CI_RUNNER && 60 || 5 }}
+      package-timeout-minutes: ${{ vars.CI_RUNNER && 120 || 45 }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    secrets: inherit
+```
+
+Without a `publish` job, use `needs: [checks]` and `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`. Give `ci.yml` a per-commit concurrency group on `main` (`ci-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}`), or a newer merge can cancel a release part-way through.
+
+Rebuilds go in a dispatch-only `.github/workflows/release-please.yml`:
 
 ```yaml
 name: Release Please
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -75,12 +101,13 @@ permissions:
 
 jobs:
   release:
-    uses: johneady/installer-toolkit/.github/workflows/release.yml@v2.9.1
+    uses: johneady/installer-toolkit/.github/workflows/release.yml@v2.9.2
     with:
       runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-      release-timeout-minutes: ${{ vars.CI_RUNNER && 60 || 5 }}
       package-timeout-minutes: ${{ vars.CI_RUNNER && 120 || 45 }}
       rebuild-tag: ${{ inputs.tag }}
+    # All three, though a rebuild only writes contents: GitHub checks every
+    # nested job's permissions at startup, even for jobs it skips.
     permissions:
       contents: write
       pull-requests: write
