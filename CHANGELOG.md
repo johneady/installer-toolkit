@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.0](https://github.com/johneady/installer-toolkit/compare/v2.9.2...v2.10.0) (2026-11-19)
+
+
+### Features
+
+* ship an app's guides and show them in its admin panel ([f6fa6ed](https://github.com/johneady/installer-toolkit/commit/f6fa6ed8ffe280bbac1c73c6bf232431fa72725c))
+* ship an app's guides and show them in its admin panel ([#25](https://github.com/johneady/installer-toolkit/issues/25)) ([fe0cb53](https://github.com/johneady/installer-toolkit/commit/fe0cb533f0b0a5baa4c03f5677ea39c8efe820ca))
+
 ## [2.9.2](https://github.com/johneady/installer-toolkit/compare/v2.9.1...v2.9.2) (2026-11-03)
 
 
