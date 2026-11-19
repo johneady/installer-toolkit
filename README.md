@@ -126,6 +126,28 @@ To rebuild a release whose package job failed, run the workflow by hand ("Run wo
 
 The signing key reaches the build as the `UPDATE_SIGNING_KEY` secret of the app repo's `release` environment, which the package job runs in. Limit that environment's deployment branches to `main` and keep the key **only** there. Pull request and Dependabot jobs run third-party package code, often on the same runners, and the branch rule is what keeps the key away from them. A repository-level copy has no branch restriction: any workflow on any branch could read it by naming it. GitHub's documentation says private repos on the Free plan can't use environments, but in practice these repos enforce both the branch rule and the environment secret.
 
+## In-app documentation
+
+An app can ship its Markdown guides (`docs/`) and `CHANGELOG.md` with each release and show them in its admin panel. Buyers then have the guides that match their installed version, with no separate docs site.
+
+1. Opt in from `package/package-config.php`. `package:build` leaves `docs/` and `CHANGELOG.md` out of the zip unless this is set, and with it set, `readme.html` tells the buyer where the guides are:
+
+   ```php
+   'include_docs' => true,
+   ```
+
+2. Publish the Filament page and its view, then adjust the panel, navigation, access and the `GUIDES` list (slug => file and menu label):
+
+   ```bash
+   php artisan vendor:publish --tag=docs-filament
+   ```
+
+   The view uses Tailwind classes, so the panel's theme must scan `resources/views/filament`.
+
+`InstallerToolkit\Docs\Documentation` does the rendering. Guides whose file is missing are left out of the menu. Headings get GitHub-style ids, so `#updating` links still land. Relative links to another guide's file (`stripe.md#keys`, `../CHANGELOG.md`) open that guide on the page. Raw HTML is stripped and unsafe links are dropped, because the changelog is written from commit messages.
+
+The updater never deletes files, so a guide removed in a later release stays on disk for installs that update to it. Take it out of `GUIDES` in the same release, or the page keeps showing the old copy.
+
 ## Update signing
 
 Update packages are signed with Ed25519 and verified **fail-closed**: an unsigned or badly signed package is rejected rather than trusted.
@@ -181,13 +203,14 @@ Releases are cut by [release-please](https://github.com/googleapis/release-pleas
 | --- | --- |
 | `src/` | Build commands and the update engine |
 | `src/Update/` | Signing, authorization, and update HTTP endpoints |
+| `src/Docs/` | Renders an app's shipped guides for its Documentation page |
 | `templates/` | Installer wizard views |
 | `stubs/` | Files copied into built packages |
 | `config/updates.php` | Update and signing configuration |
 | `readme.html` | Customer-facing install guide, packed into built zips |
 | `.github/workflows/release.yml` | Reusable release pipeline that apps call (release-please, then `build-package.yml`) |
 
-> `readme.html` is a shipped build artifact, not documentation for this repo. `package:build` fails if it is missing, and `[[MIN_PHP_VERSION]]` inside it is substituted at build time.
+> `readme.html` is a shipped build artifact, not documentation for this repo. `package:build` fails if it is missing. `[[MIN_PHP_VERSION]]` and `[[DOCS_NOTE]]` inside it are substituted at build time.
 
 ## Testing
 

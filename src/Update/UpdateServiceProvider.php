@@ -108,6 +108,14 @@ class UpdateServiceProvider extends ServiceProvider
             __DIR__.'/../../stubs/views/filament/pages/system-update.blade.php' => $this->app->resourcePath('views/filament/pages/system-update.blade.php'),
         ], 'update-filament');
 
+        // The in-app guides page (InstallerToolkit\Docs\Documentation). Not
+        // part of update-toolkit: it is only useful to an app that ships its
+        // docs ('include_docs' in package-config.php).
+        $this->publishes([
+            __DIR__.'/../../stubs/Filament/Pages/Documentation.php' => $this->app->path('Filament/Pages/Documentation.php'),
+            __DIR__.'/../../stubs/views/filament/pages/documentation.blade.php' => $this->app->resourcePath('views/filament/pages/documentation.blade.php'),
+        ], 'docs-filament');
+
         $this->publishes([
             __DIR__.'/../../config/updates.php' => $this->app->configPath('updates.php'),
             __DIR__.'/../../stubs/Filament/Pages/SystemUpdate.php' => $this->app->path('Filament/Pages/SystemUpdate.php'),

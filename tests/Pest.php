@@ -2,7 +2,7 @@
 
 use InstallerToolkit\Tests\TestCase;
 
-uses(TestCase::class)->in('Installer');
+uses(TestCase::class)->in('Installer', 'Docs');
 uses(InstallerToolkit\Tests\Update\TestCase::class)->in('Update');
 
 /*

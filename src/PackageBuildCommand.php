@@ -292,14 +292,20 @@ abstract class PackageBuildCommand extends Command
 
     protected function shouldExclude(string $relativePath): bool
     {
-        foreach ([...$this->excludeDirs, ...$this->extraExcludeDirs] as $dir) {
+        // include_docs lifts only the toolkit's own docs/ exclusion: an app's
+        // $extraExcludeDirs (docs/internal, say) still applies.
+        $excludeDirs = $this->shipsDocumentation() ? array_diff($this->excludeDirs, ['docs']) : $this->excludeDirs;
+
+        foreach ([...$excludeDirs, ...$this->extraExcludeDirs] as $dir) {
             if (str_starts_with($relativePath, $dir.'/') || $relativePath === $dir) {
                 return true;
             }
         }
 
         if (! str_contains($relativePath, '/')) {
-            if (! in_array($relativePath, $this->includeRootFiles)) {
+            $shipsChangelog = $relativePath === 'CHANGELOG.md' && $this->shipsDocumentation();
+
+            if (! $shipsChangelog && ! in_array($relativePath, $this->includeRootFiles)) {
                 return true;
             }
         }
@@ -339,6 +345,17 @@ abstract class PackageBuildCommand extends Command
         }
 
         return false;
+    }
+
+    /**
+     * Whether package-config.php opts in to shipping docs/ and CHANGELOG.md
+     * ('include_docs' => true), for the in-app guides page
+     * (InstallerToolkit\Docs\Documentation). Off by default, so an app that
+     * never publishes the page keeps its zip unchanged.
+     */
+    protected function shipsDocumentation(): bool
+    {
+        return ($this->config['include_docs'] ?? false) === true;
     }
 
     protected function installProductionDependencies(string $directory): void
