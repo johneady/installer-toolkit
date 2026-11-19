@@ -384,3 +384,28 @@ test('--toolkit overrides the default and expands ~ against HOME', function () {
         // glued onto HOME as "/home/someonealice".
         ->and($otherUser)->toBe('~alice/toolkit');
 });
+
+test('docs/ and CHANGELOG.md stay out of the zip unless package-config opts in', function () {
+    $command = fakeCommand();
+
+    expect($command->callProtected('shouldExclude', 'docs/README.md'))->toBeTrue()
+        ->and($command->callProtected('shouldExclude', 'CHANGELOG.md'))->toBeTrue();
+});
+
+test('include_docs ships docs/ and CHANGELOG.md, and nothing else extra', function () {
+    $command = fakeCommand(['include_docs' => true]);
+
+    expect($command->callProtected('shouldExclude', 'docs/README.md'))->toBeFalse()
+        ->and($command->callProtected('shouldExclude', 'docs/guides/stripe.md'))->toBeFalse()
+        ->and($command->callProtected('shouldExclude', 'CHANGELOG.md'))->toBeFalse()
+        ->and($command->callProtected('shouldExclude', 'README.md'))->toBeTrue()
+        ->and($command->callProtected('shouldExclude', 'tests/Feature/ExampleTest.php'))->toBeTrue();
+});
+
+test('include_docs still honours the app\'s own extraExcludeDirs inside docs/', function () {
+    $command = fakeCommand(['include_docs' => true]);
+    (new ReflectionProperty($command, 'extraExcludeDirs'))->setValue($command, ['docs/internal']);
+
+    expect($command->callProtected('shouldExclude', 'docs/internal/plan.md'))->toBeTrue()
+        ->and($command->callProtected('shouldExclude', 'docs/README.md'))->toBeFalse();
+});

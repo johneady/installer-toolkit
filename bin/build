@@ -189,6 +189,18 @@ if ($readmeMarkers < 1) {
     exit(1);
 }
 
+// Apps that ship their guides ('include_docs') get a pointer to the in-app
+// Documentation page; the rest get nothing in its place.
+$docsNote = ($config['include_docs'] ?? false) === true
+    ? "\n                    <p>Guides for setting up and running the application are in the admin panel under <strong>Documentation</strong>.</p>"
+    : '';
+$readmeVersioned = str_replace('[[DOCS_NOTE]]', $docsNote, $readmeVersioned, $docsMarkers);
+
+if ($docsMarkers < 1) {
+    echo "Error: Failed to substitute [[DOCS_NOTE]] marker in readme.html\n";
+    exit(1);
+}
+
 file_put_contents($packageDir.'/readme.html', $readmeVersioned);
 echo " done\n";
 

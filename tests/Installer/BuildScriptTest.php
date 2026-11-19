@@ -171,3 +171,26 @@ test('bin/build fails loudly when the app composer.json declares no php constrai
     File::deleteDirectory($projectDir);
     File::deleteDirectory($outputDir);
 });
+
+test('readme.html points at the Documentation page only when the app ships its docs', function (array $extraConfig, bool $mentionsDocs) {
+    $projectDir = storage_path('app/build-docs-'.uniqid());
+    $outputDir = storage_path('app/build-docs-output-'.uniqid());
+    File::ensureDirectoryExists($projectDir.'/package');
+
+    $config = ['name' => 'Fake App', 'slug' => 'fake-app', 'essential_seeders' => [], 'sample_seeders' => [], ...$extraConfig];
+    file_put_contents($projectDir.'/package/package-config.php', '<?php return '.var_export($config, true).';');
+    file_put_contents($projectDir.'/composer.json', json_encode(['require' => ['php' => '^8.3']]));
+
+    (new Process(['php', toolkitRoot().'/bin/build', $projectDir, $outputDir]))->mustRun();
+
+    $readme = file_get_contents($outputDir.'/readme.html');
+
+    expect($readme)->not->toContain('[[DOCS_NOTE]]')
+        ->and(str_contains($readme, 'under <strong>Documentation</strong>'))->toBe($mentionsDocs);
+
+    File::deleteDirectory($projectDir);
+    File::deleteDirectory($outputDir);
+})->with([
+    'include_docs on' => [['include_docs' => true], true],
+    'include_docs off' => [[], false],
+]);
