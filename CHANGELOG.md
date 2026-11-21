@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.11.0](https://github.com/johneady/installer-toolkit/compare/v2.10.0...v2.11.0) (2026-11-21)
+
+
+### Features
+
+* Implement recovery flow for interrupted updates ([c507570](https://github.com/johneady/installer-toolkit/commit/c507570b39db16b8bfdfc9477469ed69eae4d441))
+* Implement recovery flow for interrupted updates ([914b531](https://github.com/johneady/installer-toolkit/commit/914b53167f4a2e8653737e593310fd87081633a0))
+
 ## [2.10.0](https://github.com/johneady/installer-toolkit/compare/v2.9.2...v2.10.0) (2026-11-19)
 
 
