@@ -77,6 +77,7 @@ trait RendersUpdaterSteps
         $versionLabel = $version !== null ? 'v'.htmlspecialchars($version) : 'unknown';
         $historyHtml = $this->renderRecentResults();
         $errorsHtml = $this->renderErrors();
+        $interruptedHtml = $this->renderInterruptedUpdateNotice();
         $selfUrlJson = json_encode($this->selfUrl());
 
         $uploadSection = $criticalsPass
@@ -117,6 +118,8 @@ trait RendersUpdaterSteps
 
         $content = <<<HTML
         {$errorsHtml}
+
+        {$interruptedHtml}
 
         <div class="h-reqrow good" style="margin-bottom:20px;">
             <div class="icon">🏷️</div>
@@ -247,6 +250,95 @@ trait RendersUpdaterSteps
         HTML;
 
         $this->renderLayout('System Update', $content, 1);
+    }
+
+    /**
+     * The recovery notice shown at the top of the home screen when the
+     * on-disk update-in-progress marker says a run was interrupted — the
+     * site sits in maintenance mode and nothing resolves that on its own.
+     * Offers the two ways out: roll back to the run's own pre-update
+     * backup (only when the interrupted run completed one — an older
+     * backup surviving from a previous update is never offered, since
+     * restoring it would revert the site to that earlier state), or
+     * re-upload the same package to resume and finish — validation
+     * accepts it while the marker matches, and taskPrepare() takes the
+     * abandoned lock over.
+     */
+    private function renderInterruptedUpdateNotice(): string
+    {
+        if (! is_file($this->updateInProgressFile()) || $this->updateRunInProgress()) {
+            return '';
+        }
+
+        $icon = $this->statusIcon('warning', 16);
+
+        $version = $this->interruptedUpdateVersion();
+
+        if ($version === null) {
+            // The marker exists but is unreadable — offer no automated
+            // path, since neither the restore action nor resume validation
+            // can trust a corrupt marker. Operator-fixable by hand.
+            return <<<HTML
+            <div class="h-alert h-alert-warn" style="display:block; margin-bottom:20px;">
+                <div class="icon">{$icon}</div>
+                <div>
+                    <p class="t">Interrupted update detected</p>
+                    <p class="d">An update did not finish, but its recovery record (<code>storage/app/updater/update-in-progress.json</code>) is unreadable. Delete that file, then either re-upload the package or restore your files manually. If the site is down, deleting <code>storage/framework/down</code> brings it back.</p>
+                </div>
+            </div>
+            HTML;
+        }
+
+        $versionLabel = 'v'.htmlspecialchars($version);
+        $inMaintenance = file_exists($this->maintenanceFile());
+        $lockIsYoung = file_exists($this->lockFile())
+            && (time() - (int) filemtime($this->lockFile())) < self::LOCK_STALE_SECONDS;
+
+        $statusLine = $inMaintenance
+            ? 'The site is in <strong>maintenance mode</strong> until this is resolved.'
+            : 'The run stopped before the site was brought back up.';
+
+        $liveRunWarning = $lockIsYoung
+            ? ' If the update is still running in another window, let it finish instead of restoring.'
+            : '';
+
+        $backupId = $this->interruptedRunBackupId();
+
+        if ($backupId !== null) {
+            $selfUrl = $this->selfUrlEscaped();
+            $csrf = $this->csrfField();
+
+            $resolution = <<<HTML
+            <form method="post" action="{$selfUrl}" style="margin-top:12px;">
+                {$csrf}
+                <input type="hidden" name="action" value="restore-interrupted">
+                <button type="submit" class="h-btn h-btn-primary" style="margin-left:auto;">Restore Backup &amp; Bring the Site Back</button>
+            </form>
+            <p class="d" style="margin-top:8px;">To finish the update instead, upload the same package ({$versionLabel}) below — the updater will accept it and resume.</p>
+            HTML;
+        } elseif (($this->backupConfig()['enabled'] ?? true)) {
+            // Pipeline order is backup_files → … → extract, so a backup that
+            // never completed means extraction provably never started: the
+            // site's files are still the pre-update ones.
+            $resolution = <<<'HTML'
+            <p class="d" style="margin-top:8px;">No usable backup was completed before the run stopped, which means the update's files were never extracted either. Upload the same package below to finish the update, or delete <code>storage/framework/down</code> to bring the site back up unchanged.</p>
+            HTML;
+        } else {
+            $resolution = <<<'HTML'
+            <p class="d" style="margin-top:8px;">Backups are disabled in this application's configuration, so there is nothing to roll back to. Upload the same package below to finish the update.</p>
+            HTML;
+        }
+
+        return <<<HTML
+        <div class="h-alert h-alert-warn" style="display:block; margin-bottom:20px;">
+            <div class="icon">{$icon}</div>
+            <div>
+                <p class="t">Interrupted update detected</p>
+                <p class="d">An update to {$versionLabel} did not finish.{$liveRunWarning} {$statusLine}</p>
+                {$resolution}
+            </div>
+        </div>
+        HTML;
     }
 
     private function renderRecentResults(): string
@@ -380,6 +472,15 @@ trait RendersUpdaterSteps
 
     private function renderProgress(): void
     {
+        // A recovery restore seeded by handleRestoreInterrupted(): same
+        // screen chrome, but the only work is taskRestore(), driven in its
+        // batched loop just like the in-run Restore Backup button.
+        if (! empty($_SESSION['updater']['update']['restore_only'])) {
+            $this->renderRecoveryRestore();
+
+            return;
+        }
+
         $tasks = [
             'prepare' => 'Enabling maintenance mode',
             'backup_files' => 'Backing up application files',
@@ -576,6 +677,121 @@ trait RendersUpdaterSteps
         HTML;
 
         $this->renderLayout('Updating', $content, 3);
+    }
+
+    /**
+     * The restore-only progress screen for an interrupted-update recovery:
+     * one task, the batched restore loop from the main progress screen's
+     * Restore Backup button, minus the forward pipeline. When taskRestore()
+     * finishes it clears maintenance mode, the in-progress marker, and the
+     * lock, and the redirect lands on the home screen with the notice gone.
+     */
+    private function renderRecoveryRestore(): void
+    {
+        $selfUrlJson = json_encode($this->selfUrl());
+        $checkIconJson = json_encode($this->statusIcon('check'));
+        $xIcon = $this->statusIcon('x');
+
+        $content = <<<HTML
+        <p class="h-lede">Restoring the pre-update backup. <strong>Please do not close or refresh this page.</strong></p>
+
+        <div class="h-progress-card">
+            <div class="h-progress-card-head">
+                <div class="left">
+                    <div class="icn">♻️</div>
+                    <div>
+                        <h3>Restore Progress</h3>
+                        <p class="sub">Rolling back the interrupted update</p>
+                    </div>
+                </div>
+            </div>
+            <div class="h-tasklist" id="task-list">
+                <div class="h-task task-item" data-task="restore" data-status="active">
+                    <span class="icon task-icon"></span>
+                    <span class="label task-label">Restoring files, then database</span>
+                    <span class="msg task-message"></span>
+                </div>
+            </div>
+        </div>
+
+        <div id="update-error" class="h-hidden h-alert h-alert-bad">
+            <div class="icon">{$xIcon}</div>
+            <div>
+                <p class="t">Restore Failed</p>
+                <p class="d" id="error-message"></p>
+            </div>
+        </div>
+
+        <div class="h-actions h-hidden" id="update-actions">
+            <button type="button" class="h-btn h-btn-primary" id="retry-btn" style="margin-left:auto;">Retry Restore</button>
+        </div>
+
+        <script>
+            var SELF_URL = {$selfUrlJson};
+            var CHECK_ICON = {$checkIconJson};
+            var el = document.querySelector('.task-item[data-task="restore"]');
+
+            var SPINNER_SVG = '<svg class="h-spin" width="16" height="16" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+            function setTaskState(state, message) {
+                el.dataset.status = state;
+                el.className = 'h-task task-item' + (state !== 'pending' ? ' ' + state : '');
+                el.querySelector('.task-icon').innerHTML = state === 'done' ? CHECK_ICON : SPINNER_SVG;
+                el.querySelector('.task-message').textContent = message || '';
+            }
+
+            function parseJsonResponse(r) {
+                if (!r.ok) {
+                    return r.text().then(function(text) {
+                        throw new Error('Server returned HTTP ' + r.status + ': ' + text.substring(0, 500));
+                    });
+                }
+                return r.json();
+            }
+
+            function fail(message) {
+                setTaskState('error', '');
+                document.getElementById('update-error').classList.remove('h-hidden');
+                document.getElementById('error-message').textContent = message;
+                document.getElementById('update-actions').classList.remove('h-hidden');
+            }
+
+            // A failed restore keeps its phase/offset in the session, so a
+            // retry (or a plain page reload, which re-renders this screen)
+            // resumes from where it stopped rather than starting over.
+            document.getElementById('retry-btn').addEventListener('click', function() {
+                document.getElementById('update-error').classList.add('h-hidden');
+                document.getElementById('update-actions').classList.add('h-hidden');
+                restoreLoop();
+            });
+
+            function restoreLoop() {
+                setTaskState('active', '');
+                fetchWithCsrf(SELF_URL + '?ajax=update-task&task=restore')
+                    .then(parseJsonResponse)
+                    .then(function(data) {
+                        if (!data.success) {
+                            fail('Restore failed: ' + data.message);
+                            return;
+                        }
+                        setTaskState('active', data.message);
+                        if (data.task_done === false) {
+                            restoreLoop();
+                            return;
+                        }
+                        setTaskState('done', data.message || 'Restore complete.');
+                        window.location = SELF_URL + '?screen=home';
+                    })
+                    .catch(function(err) {
+                        fail('Restore failed: ' + err.message);
+                    });
+            }
+
+            restoreLoop();
+        </script>
+        HTML;
+
+        $this->renderLayout('Restoring', $content, 3);
     }
 
     // ------------------------------------------------------------------

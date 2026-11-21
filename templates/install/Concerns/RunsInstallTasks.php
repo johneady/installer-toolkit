@@ -380,7 +380,7 @@ APP_URL="{$this->escapeEnvValue($settings['app_url'])}"
 UPDATE_SLUG={$updateSlug}
 
 LOG_CHANNEL=stack
-LOG_STACK=single
+LOG_STACK=daily
 LOG_DEPRECATIONS_CHANNEL=null
 LOG_LEVEL=error
 

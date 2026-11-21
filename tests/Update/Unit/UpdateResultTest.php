@@ -27,3 +27,20 @@ it('returns null rather than "now" when finishedAt is an empty string', function
 
     expect($result->finishedAtDisplay())->toBeNull();
 });
+
+it('maps the run\'s database-backup outcome from the results journal', function (): void {
+    $result = UpdateResult::fromArray([
+        'status' => 'applied',
+        'backup_id' => '20260710-100000-ab12cd',
+        'backup_database' => 'Skipped (mysqldump failed: boom) — files-only backup.',
+    ]);
+
+    expect($result->backupId)->toBe('20260710-100000-ab12cd')
+        ->and($result->backupDatabase)->toBe('Skipped (mysqldump failed: boom) — files-only backup.');
+});
+
+it('leaves backupDatabase null for journals written before the field existed', function (): void {
+    $result = UpdateResult::fromArray(['status' => 'applied', 'backup_id' => '20260710-100000-ab12cd']);
+
+    expect($result->backupDatabase)->toBeNull();
+});

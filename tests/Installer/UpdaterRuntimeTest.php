@@ -230,13 +230,16 @@ function uploadUpdatePackage(PendingRequest $client, string $csrf, string $packa
 
 /**
  * Drive the update-task pipeline to completion (or until a task reports
- * failure), returning the failing task's response when one fails.
+ * failure), returning the failing task's response when one fails. Pass a
+ * subset of tasks to simulate a run interrupted partway through — the
+ * browser-session loss the interrupted-update recovery flow exists for.
  *
+ * @param  list<string>|null  $tasks
  * @return array{completed: list<string>, failure: ?array}
  */
-function runUpdateTaskPipeline(PendingRequest $client, string $csrf): array
+function runUpdateTaskPipeline(PendingRequest $client, string $csrf, ?array $tasks = null): array
 {
-    $tasks = ['prepare', 'backup_files', 'backup_db', 'extract', 'post_update', 'verify', 'finalize'];
+    $tasks ??= ['prepare', 'backup_files', 'backup_db', 'extract', 'post_update', 'verify', 'finalize'];
     $completed = [];
 
     foreach ($tasks as $task) {
@@ -275,6 +278,21 @@ function unlockUpdater(PendingRequest $client, array $sandbox): string
     postForm($client, '/updater.php', ['_csrf' => $csrf, 'token' => $recoveryToken], ['allow_redirects' => false]);
 
     return extractCsrfToken($client->get('/updater.php')->body());
+}
+
+/**
+ * A brand-new browser against the same running updater: its own cookie jar
+ * means its own PHP session, which is exactly what "the operator closed
+ * the browser mid-update and came back" leaves server-side — none of the
+ * run state the original session held.
+ *
+ * @return array{client: PendingRequest, csrf: string}
+ */
+function freshUpdaterSession(array $sandbox, array $served): array
+{
+    $client = Http::withOptions(['cookies' => new CookieJar, 'timeout' => 10])->baseUrl($served['baseUri']);
+
+    return ['client' => $client, 'csrf' => unlockUpdater($client, $sandbox)];
 }
 
 afterEach(function () {
@@ -434,6 +452,425 @@ test('a failing post_update task offers restore, and restore rolls the app back 
 
         $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-rolled_back.json');
         expect($resultFiles)->not->toBeEmpty();
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('an interrupted update shows a recovery notice, and a fresh session can restore the backup and leave maintenance mode', function () {
+    $sandbox = buildUpdaterSandbox('rt-interrupted', '3.0.0', [
+        'backup' => [
+            'enabled' => true,
+            'keep' => 3,
+            'include_vendor' => true,
+            'exclude' => [],
+            'database' => ['enabled' => false],
+        ],
+    ]);
+
+    file_put_contents($sandbox['appDir'].'/original.txt', 'pre-update content');
+
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $client = $served['client'];
+
+        // Session A drives the run through extract, then "closes the
+        // browser": every request from here on uses a fresh session.
+        $csrf = unlockUpdater($client, $sandbox);
+
+        $packagePath = storage_path('app/rt-interrupted-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-interrupted', '3.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $uploadResult = uploadUpdatePackage($client, $csrf, $packagePath);
+        expect($uploadResult['valid'] ?? false)->toBeTrue();
+
+        $reviewBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($reviewBody);
+
+        postForm($client, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+        $progressBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($progressBody);
+
+        $result = runUpdateTaskPipeline($client, $csrf, ['prepare', 'backup_files', 'backup_db', 'extract']);
+        expect($result['failure'])->toBeNull('Interrupted pipeline leg failed: '.json_encode($result['failure']));
+
+        // The interrupted run left the site down mid-update: maintenance
+        // mode on, the on-disk marker in place, the run's lock young.
+        expect(file_exists($sandbox['appDir'].'/storage/framework/down'))->toBeTrue()
+            ->and(file_exists($sandbox['appDir'].'/storage/app/updater/update-in-progress.json'))->toBeTrue()
+            ->and(file_exists($sandbox['appDir'].'/storage/app/updater/update.lock'))->toBeTrue()
+            ->and(file_get_contents($sandbox['appDir'].'/config/app.php'))->toContain("'version' => '3.1.0'");
+
+        // A fresh session reaches the home screen and is told what
+        // happened, with the rollback and resume paths both offered.
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $freshClient = $fresh['client'];
+
+        $homeBody = $freshClient->get('/updater.php')->body();
+        expect($homeBody)->toContain('Interrupted update detected')
+            ->and($homeBody)->toContain('maintenance mode')
+            ->and($homeBody)->toContain('restore-interrupted')
+            ->and($homeBody)->toContain('will accept it and resume');
+
+        $csrf = extractCsrfToken($homeBody);
+        $restore = postForm($freshClient, '/updater.php', ['_csrf' => $csrf, 'action' => 'restore-interrupted'], ['allow_redirects' => false]);
+        expect($restore->redirect())->toBeTrue();
+
+        $progressBody = $freshClient->get('/updater.php')->body();
+        expect($progressBody)->toContain('Restoring the pre-update backup');
+
+        $csrf = extractCsrfToken($progressBody);
+
+        $restoreDone = false;
+        for ($i = 0; $i < 50; $i++) {
+            $response = postForm($freshClient, '/updater.php?ajax=update-task&task=restore', ['_csrf' => $csrf])->json();
+            expect($response['success'] ?? false)->toBeTrue('Recovery restore failed: '.json_encode($response));
+
+            if (($response['task_done'] ?? false) === true) {
+                $restoreDone = true;
+                break;
+            }
+        }
+        expect($restoreDone)->toBeTrue();
+
+        // The rollback returned the app to its pre-update state and — the
+        // actual complaint — brought the site out of maintenance mode,
+        // clearing the marker and the abandoned lock along the way.
+        expect(file_get_contents($sandbox['appDir'].'/config/app.php'))->toContain("'version' => '3.0.0'")
+            ->and(trim((string) file_get_contents($sandbox['appDir'].'/original.txt')))->toBe('pre-update content')
+            ->and(file_exists($sandbox['appDir'].'/marker.txt'))->toBeFalse()
+            ->and(file_exists($sandbox['appDir'].'/storage/framework/down'))->toBeFalse()
+            ->and(file_exists($sandbox['appDir'].'/storage/app/updater/update.lock'))->toBeFalse()
+            ->and(file_exists($sandbox['appDir'].'/storage/app/updater/update-in-progress.json'))->toBeFalse();
+
+        $homeAfter = $freshClient->get('/updater.php?screen=home')->body();
+        expect($homeAfter)->not->toContain('Interrupted update detected');
+
+        $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-rolled_back.json');
+        expect($resultFiles)->not->toBeEmpty();
+
+        // The journal's "from" is the pre-update version recorded in the
+        // backup's metadata — not the version literal extraction already
+        // overwrote — so the admin panel shows v3.0.0 → v3.1.0 rolled back.
+        $journal = json_decode((string) file_get_contents($resultFiles[0]), true);
+        expect($journal['version_from'] ?? null)->toBe('3.0.0')
+            ->and($journal['version_to'] ?? null)->toBe('3.1.0');
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('an interrupted run that never completed its backup offers no rollback, even though older backups survive', function () {
+    $sandbox = buildUpdaterSandbox('rt-oldbackup', '6.0.0', [
+        'backup' => [
+            'enabled' => true,
+            'keep' => 3,
+            'include_vendor' => true,
+            'exclude' => [],
+            'database' => ['enabled' => false],
+        ],
+    ]);
+
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $client = $served['client'];
+
+        // A first update completes normally and leaves its backup behind
+        // (prune keeps the newest 3).
+        $firstPath = storage_path('app/rt-oldbackup-first-'.uniqid().'.update');
+        buildUpdaterRtPackage($firstPath, 'rt-oldbackup', '6.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $csrf = unlockUpdater($client, $sandbox);
+        $uploadResult = uploadUpdatePackage($client, $csrf, $firstPath);
+        expect($uploadResult['valid'] ?? false)->toBeTrue();
+
+        $reviewBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($reviewBody);
+        postForm($client, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+        $progressBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($progressBody);
+
+        $result = runUpdateTaskPipeline($client, $csrf);
+        expect($result['failure'])->toBeNull();
+
+        $oldBackups = glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR) ?: [];
+        expect($oldBackups)->not->toBeEmpty();
+
+        // A file added after the first update — rolling back to the old
+        // backup would delete it, which is exactly why the old backup must
+        // never be offered for the second run's recovery.
+        file_put_contents($sandbox['appDir'].'/keeper.txt', 'added between updates');
+
+        // Separate the old backup's creation time from the second run's
+        // marker timestamp — recovery qualifies a backup by comparing the
+        // two, and the test runs fast enough for them to land in the same
+        // second without this.
+        sleep(2);
+
+        // The second run dies right after prepare: marker written,
+        // maintenance mode on, but its own backup never started.
+        $client->get('/updater.php?screen=home');
+        $homeBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($homeBody);
+
+        $secondPath = storage_path('app/rt-oldbackup-second-'.uniqid().'.update');
+        buildUpdaterRtPackage($secondPath, 'rt-oldbackup', '6.2.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $uploadResult = uploadUpdatePackage($client, $csrf, $secondPath);
+        expect($uploadResult['valid'] ?? false)->toBeTrue();
+
+        $reviewBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($reviewBody);
+        postForm($client, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+        $progressBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($progressBody);
+
+        $result = runUpdateTaskPipeline($client, $csrf, ['prepare']);
+        expect($result['failure'])->toBeNull();
+
+        expect(file_exists($sandbox['appDir'].'/storage/app/updater/update-in-progress.json'))->toBeTrue()
+            ->and(file_exists($sandbox['appDir'].'/storage/framework/down'))->toBeTrue();
+
+        // The fresh session is told about the interruption, but offered no
+        // rollback: the only backup on disk predates the run.
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $freshClient = $fresh['client'];
+
+        $homeBody = $freshClient->get('/updater.php')->body();
+        expect($homeBody)->toContain('Interrupted update detected')
+            ->and($homeBody)->toContain('never extracted either')
+            ->and($homeBody)->not->toContain('restore-interrupted');
+
+        // A hand-crafted restore-interrupted POST is refused for the same
+        // reason rather than rolling back to the stale backup.
+        $csrf = extractCsrfToken($homeBody);
+        $response = postForm($freshClient, '/updater.php', ['_csrf' => $csrf, 'action' => 'restore-interrupted'], ['allow_redirects' => false]);
+        expect($response->redirect())->toBeFalse()
+            ->and($response->body())->toContain('No usable backup from the interrupted update');
+
+        // Nothing rolled back: the site still carries the first update's
+        // version, the keeper file, and the old backup.
+        expect(file_get_contents($sandbox['appDir'].'/config/app.php'))->toContain("'version' => '6.1.0'")
+            ->and(trim((string) file_get_contents($sandbox['appDir'].'/keeper.txt')))->toBe('added between updates')
+            ->and(glob($sandbox['appDir'].'/storage/app/updater/results/*-rolled_back.json'))->toBeEmpty();
+
+        @unlink($firstPath);
+        @unlink($secondPath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('a fresh session can resume an interrupted update by re-uploading the same package', function () {
+    $sandbox = buildUpdaterSandbox('rt-resume', '4.0.0', [
+        'backup' => [
+            'enabled' => true,
+            'keep' => 3,
+            'include_vendor' => true,
+            'exclude' => [],
+            'database' => ['enabled' => false],
+        ],
+    ]);
+
+    file_put_contents($sandbox['appDir'].'/original.txt', 'pre-update content');
+
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $client = $served['client'];
+
+        // Session A gets through extract, then disappears.
+        $csrf = unlockUpdater($client, $sandbox);
+
+        $packagePath = storage_path('app/rt-resume-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-resume', '4.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $uploadResult = uploadUpdatePackage($client, $csrf, $packagePath);
+        expect($uploadResult['valid'] ?? false)->toBeTrue();
+
+        $reviewBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($reviewBody);
+
+        postForm($client, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+        $progressBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($progressBody);
+
+        $result = runUpdateTaskPipeline($client, $csrf, ['prepare', 'backup_files', 'backup_db', 'extract']);
+        expect($result['failure'])->toBeNull();
+
+        expect(file_exists($sandbox['appDir'].'/storage/framework/down'))->toBeTrue();
+
+        // The fresh session re-uploads the exact same package: extraction
+        // already bumped the version literal to 4.1.0, so only the
+        // interrupted-run marker lets validation accept it — and the young
+        // abandoned lock must not block the resumed run's prepare.
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $freshClient = $fresh['client'];
+        $csrf = $fresh['csrf'];
+
+        $uploadResult = uploadUpdatePackage($freshClient, $csrf, $packagePath);
+        expect($uploadResult['valid'] ?? false)->toBeTrue()
+            ->and($uploadResult['version'] ?? null)->toBe('4.1.0');
+
+        $reviewBody = $freshClient->get('/updater.php')->body();
+        $csrf = extractCsrfToken($reviewBody);
+
+        postForm($freshClient, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+        $progressBody = $freshClient->get('/updater.php')->body();
+        $csrf = extractCsrfToken($progressBody);
+
+        $result = runUpdateTaskPipeline($freshClient, $csrf);
+        expect($result['failure'])->toBeNull('Resumed pipeline failed: '.json_encode($result['failure']))
+            ->and($result['completed'])->toBe(['prepare', 'backup_files', 'backup_db', 'extract', 'post_update', 'verify', 'finalize']);
+
+        // The resumed run finished the update and brought the site back.
+        expect(file_get_contents($sandbox['appDir'].'/config/app.php'))->toContain("'version' => '4.1.0'")
+            ->and(trim((string) file_get_contents($sandbox['appDir'].'/original.txt')))->toBe('pre-update content')
+            ->and(trim((string) file_get_contents($sandbox['appDir'].'/marker.txt')))->toBe('applied 4.1.0')
+            ->and(file_exists($sandbox['appDir'].'/storage/framework/down'))->toBeFalse()
+            ->and(file_exists($sandbox['appDir'].'/storage/app/updater/update.lock'))->toBeFalse()
+            ->and(file_exists($sandbox['appDir'].'/storage/app/updater/update-in-progress.json'))->toBeFalse();
+
+        $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-applied.json');
+        expect($resultFiles)->not->toBeEmpty();
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('the database backup requirement fails when the configured mysqldump binary cannot run', function () {
+    $sandbox = buildUpdaterSandbox('rt-mysqldump-missing', '1.0.0', [
+        'backup' => [
+            'enabled' => true,
+            'keep' => 3,
+            'include_vendor' => false,
+            'exclude' => [],
+            'database' => ['enabled' => true, 'mysqldump_path' => '/nonexistent/mysqldump'],
+        ],
+    ]);
+
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $client = $served['client'];
+
+        unlockUpdater($client, $sandbox);
+
+        $homeBody = $client->get('/updater.php')->body();
+
+        // The check must fail (as a warning, not a critical) and say what
+        // the consequence is — proc_open merely existing proves nothing
+        // about the binary itself.
+        expect($homeBody)->toContain('Database Backup (mysqldump)')
+            ->and($homeBody)->toContain('/nonexistent/mysqldump could not be executed')
+            ->and($homeBody)->toContain('files-only backup')
+            ->and($homeBody)->toContain('mysqldump_path');
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('the database backup requirement passes when the configured binary runs', function () {
+    // PHP_BINARY stands in for a working mysqldump: any executable that
+    // answers `--version` with exit 0 satisfies the probe.
+    $sandbox = buildUpdaterSandbox('rt-mysqldump-ok', '1.0.0', [
+        'backup' => [
+            'enabled' => true,
+            'keep' => 3,
+            'include_vendor' => false,
+            'exclude' => [],
+            'database' => ['enabled' => true, 'mysqldump_path' => PHP_BINARY],
+        ],
+    ]);
+
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $client = $served['client'];
+
+        unlockUpdater($client, $sandbox);
+
+        $homeBody = $client->get('/updater.php')->body();
+
+        expect($homeBody)->toContain('the database will be dumped before updating')
+            ->and($homeBody)->not->toContain('could not be executed');
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('a files-only database backup is recorded in the backup metadata and the results journal', function () {
+    $sandbox = buildUpdaterSandbox('rt-filesonly', '5.0.0', [
+        'backup' => [
+            'enabled' => true,
+            'keep' => 3,
+            'include_vendor' => true,
+            'exclude' => [],
+            'database' => ['enabled' => true, 'mysqldump_path' => '/nonexistent/mysqldump'],
+        ],
+    ]);
+
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $client = $served['client'];
+
+        $csrf = unlockUpdater($client, $sandbox);
+
+        $packagePath = storage_path('app/rt-filesonly-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-filesonly', '5.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $uploadResult = uploadUpdatePackage($client, $csrf, $packagePath);
+        expect($uploadResult['valid'] ?? false)->toBeTrue();
+
+        $reviewBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($reviewBody);
+
+        postForm($client, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+        $progressBody = $client->get('/updater.php')->body();
+        $csrf = extractCsrfToken($progressBody);
+
+        // The missing binary degrades the backup to files-only but must
+        // not block the update itself.
+        $result = runUpdateTaskPipeline($client, $csrf);
+        expect($result['failure'])->toBeNull('Pipeline with files-only backup failed: '.json_encode($result['failure']));
+
+        // The degrade is recorded on disk, not just scrolled away in the
+        // progress log: metadata.json says what the backup contains, and
+        // the results journal carries it to the admin panel.
+        $backupDirs = glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR) ?: [];
+        expect($backupDirs)->not->toBeEmpty();
+
+        $metadata = json_decode((string) file_get_contents($backupDirs[0].'/metadata.json'), true);
+        expect(is_array($metadata))->toBeTrue()
+            ->and((string) ($metadata['database'] ?? ''))->toContain('files-only backup');
+
+        $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-applied.json');
+        expect($resultFiles)->not->toBeEmpty();
+
+        $journal = json_decode((string) file_get_contents($resultFiles[0]), true);
+        expect(is_array($journal))->toBeTrue()
+            ->and((string) ($journal['backup_database'] ?? ''))->toContain('files-only backup');
 
         @unlink($packagePath);
     } finally {

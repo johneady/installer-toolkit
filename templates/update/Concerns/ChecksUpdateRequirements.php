@@ -74,18 +74,31 @@ trait ChecksUpdateRequirements
         ];
 
         // Database backup tooling — non-critical: a missing mysqldump means
-        // the update proceeds with a files-only backup.
+        // the update proceeds with a files-only backup. The check must
+        // actually run the configured binary, though — proc_open alone
+        // proves nothing on a server without the MySQL client tools
+        // installed, and discovering that mid-backup is far too late.
         $backup = $this->backupConfig();
         if (($backup['enabled'] ?? true) && ($backup['database']['enabled'] ?? true)) {
             $db = $this->databaseSettings();
 
             if (in_array($db['connection'], ['mysql', 'mariadb'], true)) {
-                $available = function_exists('proc_open');
+                $binary = (string) ($backup['database']['mysqldump_path'] ?? 'mysqldump');
+
+                if (! function_exists('proc_open')) {
+                    $available = false;
+                    $detail = 'proc_open is disabled — the update will run with a files-only backup.';
+                } else {
+                    $exitCode = $this->runProcess([$binary, '--version'], [], $stderr);
+                    $available = $exitCode === 0;
+                    $detail = $available
+                        ? "{$binary} runs — the database will be dumped before updating."
+                        : "{$binary} could not be executed — the update will run with a files-only backup. Install the MySQL client tools, or point backup.database.mysqldump_path in config/updates.php at the binary.";
+                }
+
                 $results[] = [
                     'name' => 'Database Backup (mysqldump)',
-                    'detail' => $available
-                        ? 'proc_open available — the database will be dumped before updating.'
-                        : 'proc_open is disabled — the update will run with a files-only backup.',
+                    'detail' => $detail,
                     'passed' => $available,
                     'critical' => false,
                 ];
