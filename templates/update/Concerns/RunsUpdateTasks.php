@@ -12,7 +12,11 @@
  * package after every file is already in place.
  *
  * On failure the browser offers a restore, which replays the pre-update
- * backup (files, deletions, database) the same batched way.
+ * backup (files, deletions, database) the same batched way. An operator
+ * whose browser session died mid-run reaches that same restore through
+ * the interrupted-update notice on the home screen — see
+ * HandlesUpdaterRequests::handleRestoreInterrupted(), which seeds this
+ * task from a fresh session.
  */
 trait RunsUpdateTasks
 {
@@ -96,7 +100,18 @@ trait RunsUpdateTasks
             $age = time() - (int) filemtime($lock);
             $ownLock = hash_equals((string) ($_SESSION['updater']['update']['lock_token'] ?? ''), trim((string) file_get_contents($lock)));
 
-            if (! $ownLock && $age < self::LOCK_STALE_SECONDS) {
+            // Resuming THE interrupted run is safe even over a young lock:
+            // the operator got here through the interrupted-update notice,
+            // which only appears when no run is alive in this session, and
+            // ValidatesUpdatePackage already accepted this exact package
+            // for this exact marker version. A same-version re-apply races
+            // the abandoned original convergently (same checksummed bytes),
+            // unlike a restore, which must not interleave with a live run.
+            $markerVersion = $this->interruptedUpdateVersion();
+            $resumingInterrupted = $markerVersion !== null
+                && $markerVersion === ($_SESSION['updater']['update']['version_to'] ?? null);
+
+            if (! $ownLock && ! $resumingInterrupted && $age < self::LOCK_STALE_SECONDS) {
                 throw new RuntimeException('Another update appears to be in progress (lock held for '.$age.'s). Wait for it to finish, or delete storage/app/updater/update.lock if it crashed.');
             }
         }
@@ -157,14 +172,20 @@ trait RunsUpdateTasks
 
     private function taskBackupDb(): array
     {
-        $update = $_SESSION['updater']['update'];
+        $update = &$_SESSION['updater']['update'];
         $backup = $this->backupConfig();
 
         if (! ($backup['enabled'] ?? true) || empty($update['backup_id'])) {
             return ['message' => 'Skipped (backups disabled).'];
         }
 
-        return ['message' => $this->backupDatabase($update['backup_id'])];
+        // Kept on the run (and written to the results journal at finalize)
+        // so a backup that silently degraded to files-only — missing
+        // mysqldump, failed dump — stays visible after the progress screen
+        // scrolls away.
+        $update['backup_db_status'] = $this->backupDatabase($update['backup_id']);
+
+        return ['message' => $update['backup_db_status']];
     }
 
     private function taskExtract(): array
@@ -346,6 +367,7 @@ trait RunsUpdateTasks
             'version_from' => $update['version_from'] ?? null,
             'version_to' => $update['version_to'] ?? null,
             'backup_id' => $update['backup_id'] ?? null,
+            'backup_database' => $update['backup_db_status'] ?? null,
             'started_at' => $update['started_at'] ?? null,
         ]);
 

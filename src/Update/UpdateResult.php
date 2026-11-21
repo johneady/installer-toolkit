@@ -27,6 +27,8 @@ final class UpdateResult
         public readonly ?string $failedTask = null,
         public readonly ?string $error = null,
         public readonly ?string $file = null,
+        /** Human-readable database-backup outcome of the run ("Database dumped (…)" / "… — files-only backup."), null when the journal predates the field. */
+        public readonly ?string $backupDatabase = null,
     ) {}
 
     /**
@@ -41,6 +43,7 @@ final class UpdateResult
             versionFrom: isset($data['version_from']) ? (string) $data['version_from'] : null,
             versionTo: isset($data['version_to']) ? (string) $data['version_to'] : null,
             backupId: isset($data['backup_id']) ? (string) $data['backup_id'] : null,
+            backupDatabase: isset($data['backup_database']) ? (string) $data['backup_database'] : null,
             failedTask: isset($data['failed_task']) ? (string) $data['failed_task'] : null,
             error: isset($data['error']) ? (string) $data['error'] : null,
             file: $file,

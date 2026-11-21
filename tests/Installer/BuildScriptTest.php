@@ -61,7 +61,11 @@ test('bin/build injects the app name and produces a syntactically valid install.
         // mod_rewrite is checked asynchronously, so the checking row and its
         // AJAX endpoint must both be present in the assembled installer.
         ->and($source)->toContain('id="mod-rewrite-row"')
-        ->and($source)->toContain('ajax=mod-rewrite');
+        ->and($source)->toContain('ajax=mod-rewrite')
+        // The generated .env must configure production-safe log rotation —
+        // LOG_STACK=single grows one unbounded file for the life of the
+        // install, and consuming apps' production checks flag it.
+        ->and($source)->toContain('LOG_STACK=daily');
 
     // The standalone updater is assembled alongside the installer and must
     // be equally self-contained and valid.

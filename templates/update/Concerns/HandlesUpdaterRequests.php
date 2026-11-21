@@ -124,13 +124,15 @@ trait HandlesUpdaterRequests
         switch ($action) {
             case 'start-update':
             case 'cancel-package':
-                // Both mutate or delete $_SESSION['updater']['package']/
+            case 'restore-interrupted':
+                // All three mutate or delete $_SESSION['updater']['package']/
                 // ['update'] state that an in-flight run depends on —
                 // start-update would clobber the run already underway,
-                // and cancel-package would delete the staged zip
-                // taskExtract() is actively reading (see
+                // cancel-package would delete the staged zip
+                // taskExtract() is actively reading, and restore-interrupted
+                // would hijack it into a rollback (see
                 // updateRunInProgress()'s docblock). The UI can't reach
-                // either action once a run has started
+                // any of these actions once a run has started
                 // (renderCurrentScreen() always shows the progress screen
                 // instead), so this only guards against a second tab or a
                 // hand-crafted direct request. Checked once here, at the
@@ -143,7 +145,9 @@ trait HandlesUpdaterRequests
                     return;
                 }
 
-                $action === 'start-update' ? $this->handleStartUpdate() : $this->handleCancelPackage();
+                $action === 'start-update'
+                    ? $this->handleStartUpdate()
+                    : ($action === 'restore-interrupted' ? $this->handleRestoreInterrupted() : $this->handleCancelPackage());
                 break;
             default:
                 $this->renderCurrentScreen();
@@ -207,6 +211,77 @@ trait HandlesUpdaterRequests
         }
 
         unset($_SESSION['updater']['package'], $_SESSION['updater']['upload']);
+
+        header('Location: '.$this->selfUrl());
+        exit;
+    }
+
+    /**
+     * Recovery for a run whose browser session was lost: the operator
+     * returns to the updater, sees the interrupted-update notice, and rolls
+     * the application back to the run's pre-update backup without the
+     * original session state. Seeds a restore-only run; the progress screen
+     * then drives taskRestore() exactly the way the in-run Restore Backup
+     * button does.
+     *
+     * The lock is taken over rather than respected: whoever reaches this
+     * action passed the token gate (filesystem-level proof, the same
+     * authority taskPrepare()'s error message grants for deleting the lock
+     * by hand), and the notice they clicked it from warns that a still-live
+     * run in another window should be left to finish. A lock abandoned by a
+     * closed browser is the common case this exists for.
+     */
+    private function handleRestoreInterrupted(): void
+    {
+        $interruptedVersion = $this->interruptedUpdateVersion();
+
+        if ($interruptedVersion === null) {
+            header('Location: '.$this->selfUrl());
+            exit;
+        }
+
+        $backupId = $this->interruptedRunBackupId();
+
+        if ($backupId === null) {
+            $this->errors[] = 'No usable backup from the interrupted update was found. Re-upload the same package to finish the update instead.';
+            $this->renderHome();
+
+            return;
+        }
+
+        $lockToken = bin2hex(random_bytes(16));
+        if (@file_put_contents($this->lockFile(), $lockToken) === false) {
+            $this->errors[] = 'Failed to write the update lock file.';
+            $this->renderHome();
+
+            return;
+        }
+
+        // The backup's metadata records the version the app ran when the
+        // backup was cataloged — the true "from" for the rollback — while
+        // currentVersion() may already read the interrupted run's target
+        // (extraction overwrites the literal mid-run). The journal row the
+        // admin panel shows must not claim v3.1.0 → v3.1.0.
+        $backupMetadata = json_decode((string) @file_get_contents($this->backupDir($backupId).'/metadata.json'), true);
+        $versionFrom = is_array($backupMetadata) && is_string($backupMetadata['version'] ?? null)
+            ? $backupMetadata['version']
+            : $this->currentVersion();
+
+        // The interrupted run's own lock token died with its session, so
+        // this run starts as the lock's owner from here on.
+        $_SESSION['updater']['update'] = [
+            'started' => true,
+            'finished' => false,
+            'started_at' => date('c'),
+            'version_from' => $versionFrom,
+            'version_to' => $interruptedVersion,
+            'completed_tasks' => ['prepare', 'backup_files'],
+            'backup_id' => $backupId,
+            'restore_phase' => 'files',
+            'restore_offset' => 0,
+            'lock_token' => $lockToken,
+            'restore_only' => true,
+        ];
 
         header('Location: '.$this->selfUrl());
         exit;

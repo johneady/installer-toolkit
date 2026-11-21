@@ -31,6 +31,47 @@ trait ManagesBackups
     }
 
     /**
+     * The newest backup on disk that belongs to the interrupted run itself
+     * — the only backup the recovery flow may roll back to. Backup ids
+     * start with their creation time (Ymd-His, server-local, same clock as
+     * the marker's started_at), so a backup created at or after the run
+     * started is the run's own; anything older survived from a previous
+     * update and restoring it would silently revert the site to that
+     * earlier state and delete files added since. Null when the run's
+     * backup never completed (or the marker is unreadable), which by
+     * pipeline order — backup_files → … → extract — also means extraction
+     * never started.
+     */
+    private function interruptedRunBackupId(): ?string
+    {
+        $marker = json_decode((string) @file_get_contents($this->updateInProgressFile()), true);
+        $startedAt = is_array($marker) ? strtotime((string) ($marker['started_at'] ?? '')) : false;
+
+        if ($startedAt === false) {
+            return null;
+        }
+
+        $dirs = glob($this->backupsDir().'/*', GLOB_ONLYDIR) ?: [];
+        rsort($dirs);
+
+        foreach ($dirs as $dir) {
+            $id = basename($dir);
+
+            if (preg_match('/^(\d{8}-\d{6})-[a-z0-9]+$/', $id, $m) !== 1 || ! is_file($dir.'/files.zip')) {
+                continue;
+            }
+
+            $createdAt = DateTime::createFromFormat('Ymd-His', $m[1]);
+
+            if ($createdAt !== false && $createdAt->getTimestamp() >= $startedAt) {
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * First backup call: enumerate everything to back up into a list file,
      * so subsequent batched calls can seek straight to their offset.
      * Returns the total file count.
@@ -136,13 +177,27 @@ trait ManagesBackups
     }
 
     /**
-     * Dump the database next to the files backup. MySQL/MariaDB uses
-     * mysqldump via proc_open (password passed through the environment, not
-     * argv); SQLite is a plain file copy. Returns a human-readable status —
-     * a missing tool degrades to a files-only backup rather than blocking
-     * the update.
+     * Dump the database next to the files backup, recording the outcome in
+     * the backup's metadata.json. MySQL/MariaDB uses mysqldump via proc_open
+     * (password passed through the environment, not argv); SQLite is a plain
+     * file copy. Returns a human-readable status — a missing tool degrades
+     * to a files-only backup rather than blocking the update, but never a
+     * silent one: metadata.json says exactly what the backup contains.
      */
     private function backupDatabase(string $backupId): string
+    {
+        $status = $this->dumpDatabase($backupId);
+
+        $metadataPath = $this->backupDir($backupId).'/metadata.json';
+        $metadata = is_file($metadataPath) ? json_decode((string) file_get_contents($metadataPath), true) : [];
+        $metadata = is_array($metadata) ? $metadata : [];
+        $metadata['database'] = $status;
+        @file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return $status;
+    }
+
+    private function dumpDatabase(string $backupId): string
     {
         $backup = $this->backupConfig();
 
