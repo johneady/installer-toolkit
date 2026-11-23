@@ -126,7 +126,11 @@ trait RunsUpdateTasks
         // survives a lost browser session, letting a re-upload of the same
         // version through validation to finish an interrupted run (see
         // updateInProgressFile()). Cleared at finalize and after a restore.
-        $this->writeUpdateInProgressMarker($_SESSION['updater']['update']['version_to'] ?? null);
+        $this->writeUpdateInProgressMarker(
+            $_SESSION['updater']['update']['version_to'] ?? null,
+            $_SESSION['updater']['update']['version_from'] ?? null,
+            $_SESSION['updater']['update']['resumes_started_at'] ?? null,
+        );
 
         $this->enableMaintenanceMode();
 
@@ -140,6 +144,12 @@ trait RunsUpdateTasks
 
         if (! ($backup['enabled'] ?? true)) {
             return ['message' => 'Skipped (backups disabled in config).'];
+        }
+
+        // A resumed run must not back up files the run it resumes already
+        // updated: the first run's pre-update backup is the one to keep.
+        if (! empty($update['backup_reused'])) {
+            return ['message' => 'Kept the backup taken before the interrupted run.'];
         }
 
         if (empty($update['backup_id'])) {
@@ -164,6 +174,10 @@ trait RunsUpdateTasks
 
         $update['backup_offset'] = $state['offset'];
 
+        if ($state['done']) {
+            $this->markBackupFilesComplete($update['backup_id']);
+        }
+
         return [
             'task_done' => $state['done'],
             'message' => "Backed up {$state['offset']}/{$state['total']} files",
@@ -177,6 +191,14 @@ trait RunsUpdateTasks
 
         if (! ($backup['enabled'] ?? true) || empty($update['backup_id'])) {
             return ['message' => 'Skipped (backups disabled).'];
+        }
+
+        // The run being resumed already dumped the database, before any
+        // migration could change it; a dump now might be of a migrated one.
+        if (isset($update['backup_db_reused'])) {
+            $update['backup_db_status'] = $update['backup_db_reused'];
+
+            return ['message' => 'Kept the interrupted run\'s database backup: '.$update['backup_db_reused']];
         }
 
         // Kept on the run (and written to the results journal at finalize)

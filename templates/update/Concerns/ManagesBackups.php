@@ -57,7 +57,11 @@ trait ManagesBackups
         foreach ($dirs as $dir) {
             $id = basename($dir);
 
-            if (preg_match('/^(\d{8}-\d{6})-[a-z0-9]+$/', $id, $m) !== 1 || ! is_file($dir.'/files.zip')) {
+            if (preg_match('/^(\d{8}-\d{6})-[a-z0-9]+$/', $id, $m) !== 1
+                || ! is_file($dir.'/files.zip')
+                // A backup from before this flag (v2.11.0) has no key: it
+                // only reached this list once its run had moved on.
+                || ($this->backupMetadata($id)['files_complete'] ?? true) !== true) {
                 continue;
             }
 
@@ -69,6 +73,35 @@ trait ManagesBackups
         }
 
         return null;
+    }
+
+    /**
+     * The backup's metadata.json, or an empty array when it is missing or
+     * unreadable.
+     *
+     * @return array<string, mixed>
+     */
+    private function backupMetadata(string $backupId): array
+    {
+        $metadata = json_decode((string) @file_get_contents($this->backupDir($backupId).'/metadata.json'), true);
+
+        return is_array($metadata) ? $metadata : [];
+    }
+
+    /**
+     * Record that every listed file is in the backup's archive: until then
+     * files.zip exists but holds only the batches written so far. Fails the
+     * backup step when it cannot be recorded, before extraction starts: a
+     * backup recovery would not trust must not be the only one.
+     */
+    private function markBackupFilesComplete(string $backupId): void
+    {
+        $metadata = $this->backupMetadata($backupId);
+        $metadata['files_complete'] = true;
+
+        if (@file_put_contents($this->backupDir($backupId).'/metadata.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) === false) {
+            throw new RuntimeException('Failed to record the backup as complete. Check free disk space and storage permissions.');
+        }
     }
 
     /**
@@ -119,6 +152,8 @@ trait ManagesBackups
             'version' => $this->currentVersion(),
             'created_at' => date('c'),
             'files_total' => $count,
+            // Set true by markBackupFilesComplete() once every file is in.
+            'files_complete' => false,
         ]));
 
         return $count;
@@ -188,11 +223,9 @@ trait ManagesBackups
     {
         $status = $this->dumpDatabase($backupId);
 
-        $metadataPath = $this->backupDir($backupId).'/metadata.json';
-        $metadata = is_file($metadataPath) ? json_decode((string) file_get_contents($metadataPath), true) : [];
-        $metadata = is_array($metadata) ? $metadata : [];
+        $metadata = $this->backupMetadata($backupId);
         $metadata['database'] = $status;
-        @file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        @file_put_contents($this->backupDir($backupId).'/metadata.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
         return $status;
     }

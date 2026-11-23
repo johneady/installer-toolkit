@@ -196,6 +196,10 @@ trait HandlesUpdaterRequests
             'completed_tasks' => [],
         ];
 
+        if ($this->interruptedUpdateVersion() === $package['version']) {
+            $this->resumeInterruptedRun($_SESSION['updater']['update']);
+        }
+
         header('Location: '.$this->selfUrl());
         exit;
     }
@@ -257,15 +261,7 @@ trait HandlesUpdaterRequests
             return;
         }
 
-        // The backup's metadata records the version the app ran when the
-        // backup was cataloged — the true "from" for the rollback — while
-        // currentVersion() may already read the interrupted run's target
-        // (extraction overwrites the literal mid-run). The journal row the
-        // admin panel shows must not claim v3.1.0 → v3.1.0.
-        $backupMetadata = json_decode((string) @file_get_contents($this->backupDir($backupId).'/metadata.json'), true);
-        $versionFrom = is_array($backupMetadata) && is_string($backupMetadata['version'] ?? null)
-            ? $backupMetadata['version']
-            : $this->currentVersion();
+        $versionFrom = $this->interruptedRunVersionFrom($backupId);
 
         // The interrupted run's own lock token died with its session, so
         // this run starts as the lock's owner from here on.
@@ -285,6 +281,59 @@ trait HandlesUpdaterRequests
 
         header('Location: '.$this->selfUrl());
         exit;
+    }
+
+    /**
+     * Carry the interrupted run's state into the run resuming it: where it
+     * started, when (so a second cut-off still finds the same backup), and
+     * its pre-update backup, which the resumed run keeps instead of backing
+     * up files the first run already updated.
+     *
+     * The backup is kept only once its database step is recorded too: that
+     * is the earliest the first run can have started extracting, and short
+     * of it the site is still the pre-update one, so the resumed run backs
+     * up afresh into its own folder rather than one a run still alive in
+     * another window may be writing. The database step's outcome is kept
+     * as it is, even a files-only one: a dump taken now could be of a
+     * database the first run already migrated.
+     *
+     * @param  array<string, mixed>  $update
+     */
+    private function resumeInterruptedRun(array &$update): void
+    {
+        $backupId = $this->interruptedRunBackupId();
+
+        $update['version_from'] = $this->interruptedRunVersionFrom($backupId);
+
+        $startedAt = $this->interruptedUpdateMarkerField('started_at');
+        $update['resumes_started_at'] = $startedAt !== null && strtotime($startedAt) !== false ? $startedAt : null;
+
+        $databaseStatus = $backupId === null ? null : ($this->backupMetadata($backupId)['database'] ?? null);
+
+        if (! is_string($databaseStatus)) {
+            return;
+        }
+
+        $update['backup_id'] = $backupId;
+        $update['backup_reused'] = true;
+        $update['backup_db_reused'] = $databaseStatus;
+    }
+
+    /**
+     * The version the site ran before the interrupted run began: what its
+     * marker recorded, else (a marker from v2.11.0, which had no such field)
+     * what its backup's metadata says, else the version on disk. Not simply
+     * currentVersion(): extraction overwrites that literal mid-run, and the
+     * journal row the admin panel shows, the done page and a rollback must
+     * not claim v3.1.0 → v3.1.0.
+     */
+    private function interruptedRunVersionFrom(?string $backupId): string
+    {
+        $backupVersion = $backupId === null ? null : ($this->backupMetadata($backupId)['version'] ?? null);
+
+        return $this->interruptedUpdateMarkerField('version_from')
+            ?? (is_string($backupVersion) ? $backupVersion : null)
+            ?? $this->currentVersion();
     }
 
     /**
