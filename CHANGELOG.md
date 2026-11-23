@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.1](https://github.com/johneady/installer-toolkit/compare/v2.11.0...v2.11.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* **updater:** resume an interrupted update from its own backup and starting version ([0ded50f](https://github.com/johneady/installer-toolkit/commit/0ded50f810b0659a99ba5a9ba1fe3cba193dcd3b))
+
 ## [2.11.0](https://github.com/johneady/installer-toolkit/compare/v2.10.0...v2.11.0) (2026-11-21)
 
 
