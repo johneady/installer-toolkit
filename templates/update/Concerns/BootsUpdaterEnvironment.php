@@ -47,11 +47,19 @@ trait BootsUpdaterEnvironment
         return $this->updaterStorageDir().'/update-in-progress.json';
     }
 
-    private function writeUpdateInProgressMarker(?string $versionTo): void
+    /**
+     * $versionFrom is the version the site ran before the update began, and
+     * $startedAt when that first run started (null: now). A resumed run
+     * passes on both from the run it resumes, so however many times it is
+     * cut off, the marker still names the starting version and still points
+     * interruptedRunBackupId() at the first run's pre-update backup.
+     */
+    private function writeUpdateInProgressMarker(?string $versionTo, ?string $versionFrom, ?string $startedAt): void
     {
         @file_put_contents($this->updateInProgressFile(), json_encode([
             'version_to' => $versionTo,
-            'started_at' => date('c'),
+            'version_from' => $versionFrom,
+            'started_at' => $startedAt ?? date('c'),
         ]));
     }
 
@@ -100,6 +108,20 @@ trait BootsUpdaterEnvironment
 
         return is_array($marker) && is_string($marker['version_to'] ?? null)
             ? $marker['version_to']
+            : null;
+    }
+
+    /**
+     * A field of the interrupted run's marker, or null when there is no
+     * marker or it lacks the field (version_from: markers written by
+     * v2.11.0).
+     */
+    private function interruptedUpdateMarkerField(string $field): ?string
+    {
+        $marker = json_decode((string) @file_get_contents($this->updateInProgressFile()), true);
+
+        return is_array($marker) && is_string($marker[$field] ?? null)
+            ? $marker[$field]
             : null;
     }
 

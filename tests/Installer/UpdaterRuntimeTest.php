@@ -295,6 +295,31 @@ function freshUpdaterSession(array $sandbox, array $served): array
     return ['client' => $client, 'csrf' => unlockUpdater($client, $sandbox)];
 }
 
+/**
+ * Upload a package, start its run, and return the progress screen's CSRF
+ * token, ready for runUpdateTaskPipeline().
+ */
+function startUpdateRun(PendingRequest $client, string $csrf, string $packagePath): string
+{
+    $uploadResult = uploadUpdatePackage($client, $csrf, $packagePath);
+    expect($uploadResult['valid'] ?? false)->toBeTrue('Upload refused: '.json_encode($uploadResult));
+
+    $csrf = extractCsrfToken($client->get('/updater.php')->body());
+    postForm($client, '/updater.php', ['_csrf' => $csrf, 'action' => 'start-update'], ['allow_redirects' => false]);
+
+    return extractCsrfToken($client->get('/updater.php')->body());
+}
+
+const UPDATER_RT_FILES_ONLY_BACKUP = [
+    'backup' => [
+        'enabled' => true,
+        'keep' => 5,
+        'include_vendor' => true,
+        'exclude' => [],
+        'database' => ['enabled' => false],
+    ],
+];
+
 afterEach(function () {
     File::deleteDirectory(storage_path('app'));
 });
@@ -747,6 +772,173 @@ test('a fresh session can resume an interrupted update by re-uploading the same 
 
         $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-applied.json');
         expect($resultFiles)->not->toBeEmpty();
+
+        // Both the journal and the done page start from the version the site
+        // ran before session A, not the literal extraction already bumped.
+        $journal = json_decode((string) file_get_contents($resultFiles[0]), true);
+        expect($journal['version_from'] ?? null)->toBe('4.0.0')
+            ->and($journal['version_to'] ?? null)->toBe('4.1.0')
+            ->and($freshClient->get('/updater.php')->body())->toContain('updated from v4.0.0 to <strong>v4.1.0</strong>');
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('a run cut off twice still reports the version it started from once resumed', function () {
+    $sandbox = buildUpdaterSandbox('rt-resume-twice', '4.0.0', UPDATER_RT_FILES_ONLY_BACKUP);
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $packagePath = storage_path('app/rt-resume-twice-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-resume-twice', '4.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        // Sessions A and B each get through extract, then disappear; B is a
+        // resume, so its own backup holds the already-updated 4.1.0 files.
+        foreach ([0, 1] as $session) {
+            $fresh = freshUpdaterSession($sandbox, $served);
+            $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+            $result = runUpdateTaskPipeline($fresh['client'], $csrf, ['prepare', 'backup_files', 'backup_db', 'extract']);
+            expect($result['failure'])->toBeNull();
+        }
+
+        // Neither resume backed up the half-updated files: the first run's
+        // backup is the only one.
+        expect(glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR))->toHaveCount(1);
+
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+        $result = runUpdateTaskPipeline($fresh['client'], $csrf);
+        expect($result['failure'])->toBeNull('Resumed pipeline failed: '.json_encode($result['failure']));
+
+        $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-applied.json');
+        $journal = json_decode((string) file_get_contents($resultFiles[0]), true);
+        expect($journal['version_from'] ?? null)->toBe('4.0.0')
+            ->and($fresh['client']->get('/updater.php')->body())->toContain('updated from v4.0.0 to <strong>v4.1.0</strong>');
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('restoring a run cut off twice goes back to the version before the first run', function () {
+    $sandbox = buildUpdaterSandbox('rt-restore-twice', '4.0.0', UPDATER_RT_FILES_ONLY_BACKUP);
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $packagePath = storage_path('app/rt-restore-twice-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-restore-twice', '4.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        foreach ([0, 1] as $session) {
+            $fresh = freshUpdaterSession($sandbox, $served);
+            $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+            expect(runUpdateTaskPipeline($fresh['client'], $csrf, ['prepare', 'backup_files', 'backup_db', 'extract'])['failure'])->toBeNull();
+        }
+
+        $fresh = freshUpdaterSession($sandbox, $served);
+        postForm($fresh['client'], '/updater.php', ['_csrf' => $fresh['csrf'], 'action' => 'restore-interrupted'], ['allow_redirects' => false]);
+        $csrf = extractCsrfToken($fresh['client']->get('/updater.php')->body());
+
+        for ($i = 0; $i < 50; $i++) {
+            $response = postForm($fresh['client'], '/updater.php?ajax=update-task&task=restore', ['_csrf' => $csrf])->json();
+            expect($response['success'] ?? false)->toBeTrue('Recovery restore failed: '.json_encode($response));
+
+            if (($response['task_done'] ?? false) === true) {
+                break;
+            }
+        }
+
+        // The resumed run kept the first run's backup rather than backing up
+        // files that run had already updated, so the restore really goes
+        // back to 4.0.0, and the journal says so.
+        $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-rolled_back.json');
+        $journal = json_decode((string) file_get_contents($resultFiles[0]), true);
+        expect(file_get_contents($sandbox['appDir'].'/config/app.php'))->toContain("'version' => '4.0.0'")
+            ->and(file_exists($sandbox['appDir'].'/marker.txt'))->toBeFalse()
+            ->and($journal['version_from'] ?? null)->toBe('4.0.0')
+            ->and($journal['version_to'] ?? null)->toBe('4.1.0');
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('a backup cut off partway is neither offered for restore nor kept by the resumed run', function () {
+    $sandbox = buildUpdaterSandbox('rt-partial-backup', '4.0.0', UPDATER_RT_FILES_ONLY_BACKUP);
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $packagePath = storage_path('app/rt-partial-backup-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-partial-backup', '4.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+        expect(runUpdateTaskPipeline($fresh['client'], $csrf, ['prepare', 'backup_files'])['failure'])->toBeNull();
+
+        // As the archive stands mid-way: files.zip on disk, never finished.
+        $backups = glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR);
+        $metadataPath = $backups[0].'/metadata.json';
+        $metadata = json_decode((string) file_get_contents($metadataPath), true);
+        $metadata['files_complete'] = false;
+        file_put_contents($metadataPath, json_encode($metadata));
+
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $home = $fresh['client']->get('/updater.php')->body();
+        expect($home)->toContain('Interrupted update detected')
+            ->and($home)->not->toContain('Restore Backup &amp; Bring the Site Back');
+
+        $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+        expect(runUpdateTaskPipeline($fresh['client'], $csrf)['failure'])->toBeNull();
+
+        expect(glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR))->toHaveCount(2)
+            ->and(file_get_contents($sandbox['appDir'].'/config/app.php'))->toContain("'version' => '4.1.0'");
+
+        @unlink($packagePath);
+    } finally {
+        $served['process']->stop(3);
+        File::deleteDirectory($sandbox['sandbox']);
+    }
+});
+
+test('resuming a run whose marker predates version_from takes it from the run\'s backup', function () {
+    $sandbox = buildUpdaterSandbox('rt-resume-legacy', '4.0.0', UPDATER_RT_FILES_ONLY_BACKUP);
+    $served = serveUpdaterSandbox($sandbox);
+
+    try {
+        $packagePath = storage_path('app/rt-resume-legacy-'.uniqid().'.update');
+        buildUpdaterRtPackage($packagePath, 'rt-resume-legacy', '4.1.0', UPDATER_RT_SUCCEEDING_HOOK);
+
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+        expect(runUpdateTaskPipeline($fresh['client'], $csrf, ['prepare', 'backup_files', 'backup_db', 'extract'])['failure'])->toBeNull();
+
+        // What v2.11.0 wrote: a marker with no version_from, a backup with
+        // no files_complete.
+        $markerPath = $sandbox['appDir'].'/storage/app/updater/update-in-progress.json';
+        $marker = json_decode((string) file_get_contents($markerPath), true);
+        unset($marker['version_from']);
+        file_put_contents($markerPath, json_encode($marker));
+
+        $backups = glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR);
+        $metadataPath = $backups[0].'/metadata.json';
+        $metadata = json_decode((string) file_get_contents($metadataPath), true);
+        unset($metadata['files_complete']);
+        file_put_contents($metadataPath, json_encode($metadata));
+
+        $fresh = freshUpdaterSession($sandbox, $served);
+        $csrf = startUpdateRun($fresh['client'], $fresh['csrf'], $packagePath);
+        expect(runUpdateTaskPipeline($fresh['client'], $csrf)['failure'])->toBeNull();
+
+        $resultFiles = glob($sandbox['appDir'].'/storage/app/updater/results/*-applied.json');
+        $journal = json_decode((string) file_get_contents($resultFiles[0]), true);
+        expect($journal['version_from'] ?? null)->toBe('4.0.0')
+            ->and(glob($sandbox['appDir'].'/storage/app/updater/backups/*', GLOB_ONLYDIR))->toHaveCount(1);
 
         @unlink($packagePath);
     } finally {
